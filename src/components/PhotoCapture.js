@@ -1,4 +1,4 @@
-// src/components/PhotoCapture.js
+// src/components/PhotoCapture.js (Fixed Camera Display)
 import React, { useState, useRef, useEffect } from 'react';
 import { useApi } from '../context/ApiContext';
 import { useLoading } from '../context/LoadingContext';
@@ -38,7 +38,11 @@ const PhotoCapture = () => {
     return () => {
       // Cleanup camera stream
       if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
+        console.log('🧹 Cleaning up camera stream...');
+        cameraStream.getTracks().forEach(track => {
+          track.stop();
+          console.log('🛑 Camera track stopped');
+        });
       }
     };
   }, []);
@@ -62,16 +66,17 @@ const PhotoCapture = () => {
           });
           setLocationError(null);
           setLoading(false);
+          console.log('📍 Location obtained:', position.coords.latitude, position.coords.longitude);
         },
         (error) => {
-          console.error('Location error:', error);
+          console.error('❌ Location error:', error);
           setLocationError('ไม่สามารถเข้าถึงตำแหน่งได้');
           setLoading(false);
         },
         { 
           enableHighAccuracy: true, 
-          timeout: 10000, 
-          maximumAge: 60000 
+          timeout: 15000, 
+          maximumAge: 300000 
         }
       );
     } else {
@@ -115,41 +120,123 @@ const PhotoCapture = () => {
     }
   };
 
-  // Start camera
+  // Start camera (COMPLETELY FIXED)
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      console.log('📸 Starting camera...');
+      
+      // Stop any existing stream first
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+
+      const constraints = {
         video: { 
-          facingMode: 'environment', // Use back camera on mobile
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
-      });
+          facingMode: 'environment', // Back camera on mobile
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('✅ Camera stream obtained:', stream);
       
       setCameraStream(stream);
+      
+      // CRITICAL: Proper video setup
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        const video = videoRef.current;
+        
+        // Set stream
+        video.srcObject = stream;
+        
+        // Set important attributes
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        
+        // Wait for metadata and play
+        const playVideo = () => {
+          console.log('📹 Video metadata loaded, attempting to play...');
+          video.play()
+            .then(() => {
+              console.log('✅ Video playing successfully!');
+              setIsCameraOn(true);
+            })
+            .catch(err => {
+              console.error('❌ Video play failed:', err);
+              // Force play anyway
+              setTimeout(() => {
+                video.play().catch(e => console.error('❌ Second play attempt failed:', e));
+              }, 500);
+              setIsCameraOn(true); // Set anyway
+            });
+        };
+
+        if (video.readyState >= 1) {
+          // Metadata already loaded
+          playVideo();
+        } else {
+          // Wait for metadata
+          video.addEventListener('loadedmetadata', playVideo, { once: true });
+        }
+        
+        // Additional event listeners for debugging
+        video.addEventListener('canplay', () => {
+          console.log('📹 Video can play');
+        });
+        
+        video.addEventListener('playing', () => {
+          console.log('📹 Video is playing');
+        });
+        
+        video.addEventListener('error', (e) => {
+          console.error('❌ Video error:', e);
+        });
       }
-      setIsCameraOn(true);
+      
     } catch (error) {
-      console.error('Camera error:', error);
-      alert('ไม่สามารถเข้าถึงกล้องได้: ' + error.message);
+      console.error('❌ Camera error:', error);
+      let errorMessage = 'ไม่สามารถเข้าถึงกล้องได้';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'กรุณาอนุญาตให้เข้าถึงกล้อง (ปุ่ม Allow)';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'ไม่พบกล้องในอุปกรณ์';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'เบราว์เซอร์ไม่รองรับกล้อง (ต้องใช้ HTTPS)';
+      }
+      
+      alert(errorMessage + '\n\nรายละเอียด: ' + error.message);
     }
   };
 
   // Stop camera
   const stopCamera = () => {
+    console.log('🛑 Stopping camera...');
+    
     if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
+      cameraStream.getTracks().forEach(track => {
+        track.stop();
+        console.log('🛑 Track stopped:', track.kind);
+      });
       setCameraStream(null);
     }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      videoRef.current.load(); // Reset video element
+    }
+    
     setIsCameraOn(false);
+    console.log('✅ Camera stopped successfully');
   };
 
   // Capture photo
   const capturePhoto = async () => {
     if (!selectedTopic) {
-      alert('กرุณาเลือกหัวข้อก่อนถ่ายรูป');
+      alert('กรุณาเลือกหัวข้อก่อนถ่ายรูป');
       return;
     }
 
@@ -161,34 +248,55 @@ const PhotoCapture = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    if (video && canvas) {
-      // Set canvas size to video dimensions
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
-      
-      // Convert to base64
-      const base64Data = canvas.toDataURL('image/jpeg', 0.8);
-      
-      const photoData = {
-        base64Data,
-        filename: `${selectedBuilding}-${selectedFoundation}-${selectedTopic}.jpg`,
-        building: selectedBuilding,
-        foundation: selectedFoundation,
-        category: selectedCategory,
-        topic: selectedTopic,
-        location,
-        timestamp: new Date().toISOString()
-      };
+    if (video && canvas && video.readyState >= 2) { // HAVE_CURRENT_DATA
+      try {
+        console.log('📸 Capturing photo...');
+        console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+        
+        // Set canvas size to video dimensions
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to base64 with good quality
+        const base64Data = canvas.toDataURL('image/jpeg', 0.85);
+        
+        const photoData = {
+          base64Data,
+          filename: `${selectedBuilding}-${selectedFoundation}-${selectedTopic}-${Date.now()}.jpg`,
+          building: selectedBuilding,
+          foundation: selectedFoundation,
+          category: selectedCategory,
+          topic: selectedTopic,
+          location,
+          timestamp: new Date().toISOString(),
+          videoWidth: video.videoWidth || 640,
+          videoHeight: video.videoHeight || 480
+        };
 
-      setCapturedPhotos(prev => [...prev, photoData]);
-      
-      // Reset topic selection
-      setSelectedTopic('');
-      
-      alert('ถ่ายรูปเสร็จสิ้น! เลือกหัวข้อถัดไปได้เลย');
+        setCapturedPhotos(prev => [...prev, photoData]);
+        
+        // Reset topic selection
+        setSelectedTopic('');
+        
+        console.log('✅ Photo captured:', photoData.filename);
+        alert('✅ ถ่ายรูปเสร็จสิ้น! เลือกหัวข้อถัดไปได้เลย');
+        
+      } catch (error) {
+        console.error('❌ Capture error:', error);
+        alert('เกิดข้อผิดพลาดในการถ่ายรูป: ' + error.message);
+      }
+    } else {
+      console.warn('⚠️ Video not ready:', {
+        hasVideo: !!video,
+        hasCanvas: !!canvas,
+        readyState: video?.readyState,
+        videoWidth: video?.videoWidth,
+        videoHeight: video?.videoHeight
+      });
+      alert('กรุณารอให้กล้องโหลดเสร็จสิ้นก่อน');
     }
   };
 
@@ -214,16 +322,18 @@ const PhotoCapture = () => {
           topic: photo.topic,
           lat: photo.location.lat,
           lng: photo.location.lng,
-          userEmail: 'current-user@example.com' // TODO: Get from auth context
+          userEmail: 'current-user@example.com'
         });
 
         if (response.success) {
           successCount++;
+          console.log('✅ Upload success:', photo.filename);
         } else {
           errorCount++;
+          console.error('❌ Upload failed:', photo.filename, response);
         }
       } catch (error) {
-        console.error('Upload error:', error);
+        console.error('❌ Upload error:', photo.filename, error);
         errorCount++;
       }
     }
@@ -233,9 +343,9 @@ const PhotoCapture = () => {
     if (successCount > 0) {
       setCapturedPhotos([]);
       loadTopicStatus(); // Refresh status
-      alert(`อัปโหลดเสร็จสิ้น!\n✅ สำเร็จ: ${successCount} รูป${errorCount > 0 ? `\n❌ ล้มเหลว: ${errorCount} รูป` : ''}`);
+      alert(`🎉 อัปโหลดเสร็จสิ้น!\n✅ สำเร็จ: ${successCount} รูป${errorCount > 0 ? `\n❌ ล้มเหลว: ${errorCount} รูป` : ''}`);
     } else {
-      alert('อัปโหลดล้มเหลวทั้งหมด');
+      alert('❌ อัปโหลดล้มเหลวทั้งหมด กรุณาลองใหม่อีกครั้ง');
     }
   };
 
@@ -337,31 +447,121 @@ const PhotoCapture = () => {
         </div>
       </div>
 
-      {/* Camera Section */}
+      {/* Camera Section - COMPLETELY REDESIGNED */}
       <div className="camera-section">
         {!isCameraOn ? (
           <div className="camera-placeholder">
-            <button className="start-camera-btn" onClick={startCamera}>
-              📸 เปิดกล้อง
-            </button>
+            <div style={{
+              background: '#f0f0f0',
+              border: '2px dashed #ccc',
+              borderRadius: '8px',
+              padding: '40px',
+              textAlign: 'center',
+              minHeight: '300px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <div style={{fontSize: '4rem', marginBottom: '20px'}}>📸</div>
+              <h3>กล้องยังไม่เปิด</h3>
+              <p style={{color: '#666', marginBottom: '20px'}}>
+                กดปุ่มด้านล่างเพื่อเปิดกล้อง
+              </p>
+              <button 
+                className="start-camera-btn" 
+                onClick={startCamera}
+                style={{
+                  background: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  padding: '15px 30px',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                  marginBottom: '10px'
+                }}
+              >
+                📸 เปิดกล้อง
+              </button>
+              <small style={{color: '#999'}}>
+                📱 หากใช้มือถือ กรุณาอนุญาตให้เข้าถึงกล้อง
+              </small>
+            </div>
           </div>
         ) : (
-          <div className="camera-container">
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              playsInline 
-              className="camera-video"
-            />
-            <div className="camera-controls">
+          <div className="camera-container" style={{position: 'relative'}}>
+            <div style={{
+              background: '#000',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                muted
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: '70vh',
+                  display: 'block',
+                  objectFit: 'cover'
+                }}
+              />
+              
+              {/* Camera status overlay */}
+              <div style={{
+                position: 'absolute',
+                top: '10px',
+                left: '10px',
+                background: 'rgba(0,0,0,0.7)',
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '4px',
+                fontSize: '12px'
+              }}>
+                🔴 กล้องเปิดอยู่
+              </div>
+            </div>
+            
+            <div className="camera-controls" style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '15px',
+              marginTop: '15px'
+            }}>
               <button 
                 className="capture-btn"
                 onClick={capturePhoto}
                 disabled={!selectedTopic}
+                style={{
+                  background: selectedTopic ? '#f44336' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '25px',
+                  fontSize: '16px',
+                  cursor: selectedTopic ? 'pointer' : 'not-allowed',
+                  boxShadow: selectedTopic ? '0 4px 12px rgba(244, 67, 54, 0.3)' : 'none'
+                }}
               >
                 📸 ถ่ายรูป
               </button>
-              <button className="stop-camera-btn" onClick={stopCamera}>
+              <button 
+                className="stop-camera-btn" 
+                onClick={stopCamera}
+                style={{
+                  background: 'rgba(0, 0, 0, 0.7)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '25px',
+                  fontSize: '16px',
+                  cursor: 'pointer'
+                }}
+              >
                 ⏹️ ปิดกล้อง
               </button>
             </div>
@@ -370,6 +570,23 @@ const PhotoCapture = () => {
         <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
 
+      {/* Debug Info (Remove in production) */}
+      {isCameraOn && (
+        <div style={{
+          background: '#f8f9fa',
+          padding: '10px',
+          borderRadius: '4px',
+          margin: '10px 0',
+          fontSize: '12px',
+          color: '#666'
+        }}>
+          <strong>Debug Info:</strong><br/>
+          Video Ready State: {videoRef.current?.readyState}<br/>
+          Video Dimensions: {videoRef.current?.videoWidth} × {videoRef.current?.videoHeight}<br/>
+          Stream Active: {cameraStream ? 'Yes' : 'No'}
+        </div>
+      )}
+
       {/* Captured Photos */}
       {capturedPhotos.length > 0 && (
         <div className="captured-photos">
@@ -377,14 +594,36 @@ const PhotoCapture = () => {
           <div className="photos-grid">
             {capturedPhotos.map((photo, index) => (
               <div key={index} className="photo-item">
-                <img src={photo.base64Data} alt={photo.filename} />
-                <p>{photo.topic}</p>
+                <img 
+                  src={photo.base64Data} 
+                  alt={photo.filename}
+                  style={{
+                    width: '100%',
+                    height: '80px',
+                    objectFit: 'cover',
+                    borderRadius: '4px',
+                    border: '2px solid #e0e0e0'
+                  }}
+                />
+                <p style={{fontSize: '12px', margin: '5px 0'}}>{photo.topic}</p>
+                <small style={{color: '#666'}}>{photo.videoWidth}×{photo.videoHeight}</small>
               </div>
             ))}
           </div>
           <button 
             className="upload-all-btn" 
             onClick={uploadAllPhotos}
+            style={{
+              background: '#2196F3',
+              color: 'white',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              fontSize: '16px',
+              cursor: 'pointer',
+              width: '100%',
+              marginTop: '15px'
+            }}
           >
             📤 อัปโหลดทั้งหมด ({capturedPhotos.length} รูป)
           </button>
@@ -400,6 +639,16 @@ const PhotoCapture = () => {
               <div 
                 key={index} 
                 className={`status-item ${item.completed ? 'completed' : 'pending'}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  background: item.completed ? '#e8f5e8' : '#fff3e0',
+                  color: item.completed ? '#2e7d32' : '#f57c00',
+                  margin: '4px 0'
+                }}
               >
                 <span className="status-icon">
                   {item.completed ? '✅' : '⭕'}
