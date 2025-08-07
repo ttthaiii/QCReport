@@ -1,0 +1,28 @@
+{
+  "name": "functions",
+  "description": "QC Photo & Report Cloud Functions",
+  "scripts": {
+    "lint": "echo 'Linting skipped'",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "build": "echo 'Build completed - no transpilation needed'"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "firebase-admin": "^11.10.1",
+    "firebase-functions": "^6.4.0",
+    "googleapis": "^126.0.1",
+    "dayjs": "^1.11.13",
+    "axios": "^1.5.0",
+    "sharp": "^0.32.6"
+  },
+  "private": true
+}
