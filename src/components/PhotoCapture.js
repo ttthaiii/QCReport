@@ -35,6 +35,7 @@ const PhotoCapture = () => {
   useEffect(() => {
     loadTopics();
     getCurrentLocation();
+    checkCameraPermission();
     return () => {
       // Cleanup camera stream
       if (cameraStream) {
@@ -46,6 +47,34 @@ const PhotoCapture = () => {
       }
     };
   }, []);
+
+  // Check camera permission
+  const checkCameraPermission = async () => {
+    try {
+      if (navigator.permissions) {
+        const permission = await navigator.permissions.query({ name: 'camera' });
+        console.log('📷 Camera permission status:', permission.state);
+        
+        permission.addEventListener('change', () => {
+          console.log('📷 Camera permission changed to:', permission.state);
+        });
+      }
+      
+      // Check if mediaDevices is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('⚠️ getUserMedia is not supported');
+        return;
+      }
+      
+      // Check available devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      console.log('📷 Available video devices:', videoDevices.length);
+      
+    } catch (error) {
+      console.warn('⚠️ Could not check camera permission:', error);
+    }
+  };
 
   // Load topic status when selection changes
   useEffect(() => {
@@ -148,6 +177,9 @@ const PhotoCapture = () => {
       if (videoRef.current) {
         const video = videoRef.current;
         
+        // Clear any previous source
+        video.srcObject = null;
+        
         // Set stream
         video.srcObject = stream;
         
@@ -155,10 +187,16 @@ const PhotoCapture = () => {
         video.autoplay = true;
         video.playsInline = true;
         video.muted = true;
+        video.controls = false;
+        
+        // Add CSS class for proper styling
+        video.className = 'camera-video';
         
         // Wait for metadata and play
         const playVideo = () => {
           console.log('📹 Video metadata loaded, attempting to play...');
+          console.log('📹 Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+          
           video.play()
             .then(() => {
               console.log('✅ Video playing successfully!');
@@ -166,11 +204,14 @@ const PhotoCapture = () => {
             })
             .catch(err => {
               console.error('❌ Video play failed:', err);
-              // Force play anyway
+              // Force play after short delay
               setTimeout(() => {
-                video.play().catch(e => console.error('❌ Second play attempt failed:', e));
+                video.play().catch(e => {
+                  console.error('❌ Second play attempt failed:', e);
+                  console.log('📹 Trying to set camera as on anyway...');
+                  setIsCameraOn(true); // Set anyway to show UI
+                });
               }, 500);
-              setIsCameraOn(true); // Set anyway
             });
         };
 
@@ -180,6 +221,14 @@ const PhotoCapture = () => {
         } else {
           // Wait for metadata
           video.addEventListener('loadedmetadata', playVideo, { once: true });
+          
+          // Fallback timeout
+          setTimeout(() => {
+            if (!isCameraOn && video.srcObject) {
+              console.log('⚠️ Timeout - forcing camera on state');
+              setIsCameraOn(true);
+            }
+          }, 3000);
         }
         
         // Additional event listeners for debugging
@@ -194,6 +243,14 @@ const PhotoCapture = () => {
         video.addEventListener('error', (e) => {
           console.error('❌ Video error:', e);
         });
+        
+        video.addEventListener('loadstart', () => {
+          console.log('📹 Video load started');
+        });
+        
+        video.addEventListener('loadeddata', () => {
+          console.log('📹 Video data loaded');
+        });
       }
       
     } catch (error) {
@@ -206,6 +263,8 @@ const PhotoCapture = () => {
         errorMessage = 'ไม่พบกล้องในอุปกรณ์';
       } else if (error.name === 'NotSupportedError') {
         errorMessage = 'เบราว์เซอร์ไม่รองรับกล้อง (ต้องใช้ HTTPS)';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = 'กล้องถูกใช้งานโดยแอปพลิเคชันอื่น';
       }
       
       alert(errorMessage + '\n\nรายละเอียด: ' + error.message);
@@ -490,77 +549,41 @@ const PhotoCapture = () => {
             </div>
           </div>
         ) : (
-          <div className="camera-container" style={{position: 'relative'}}>
-            <div style={{
-              background: '#000',
-              borderRadius: '8px',
-              overflow: 'hidden',
-              position: 'relative'
-            }}>
+          <div className="camera-container">
+            <div className="camera-video-wrapper">
               <video 
                 ref={videoRef} 
                 autoPlay 
                 playsInline 
                 muted
-                style={{
-                  width: '100%',
-                  height: 'auto',
-                  maxHeight: '70vh',
-                  display: 'block',
-                  objectFit: 'cover'
-                }}
+                className="camera-video"
               />
               
               {/* Camera status overlay */}
-              <div style={{
-                position: 'absolute',
-                top: '10px',
-                left: '10px',
-                background: 'rgba(0,0,0,0.7)',
-                color: 'white',
-                padding: '5px 10px',
-                borderRadius: '4px',
-                fontSize: '12px'
-              }}>
+              <div className="camera-status-overlay">
                 🔴 กล้องเปิดอยู่
               </div>
+              
+              {/* Video loading indicator */}
+              {cameraStream && !videoRef.current?.videoWidth && (
+                <div className="video-loading-overlay">
+                  <div className="loading-spinner"></div>
+                  <p>กำลังโหลดกล้อง...</p>
+                </div>
+              )}
             </div>
             
-            <div className="camera-controls" style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '15px',
-              marginTop: '15px'
-            }}>
+            <div className="camera-controls-bottom">
               <button 
                 className="capture-btn"
                 onClick={capturePhoto}
                 disabled={!selectedTopic}
-                style={{
-                  background: selectedTopic ? '#f44336' : '#ccc',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '25px',
-                  fontSize: '16px',
-                  cursor: selectedTopic ? 'pointer' : 'not-allowed',
-                  boxShadow: selectedTopic ? '0 4px 12px rgba(244, 67, 54, 0.3)' : 'none'
-                }}
               >
-                📸 ถ่ายรูป
+                📸 ถ่ายรูป {selectedTopic ? `(${selectedTopic})` : ''}
               </button>
               <button 
                 className="stop-camera-btn" 
                 onClick={stopCamera}
-                style={{
-                  background: 'rgba(0, 0, 0, 0.7)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '25px',
-                  fontSize: '16px',
-                  cursor: 'pointer'
-                }}
               >
                 ⏹️ ปิดกล้อง
               </button>
@@ -580,10 +603,13 @@ const PhotoCapture = () => {
           fontSize: '12px',
           color: '#666'
         }}>
-          <strong>Debug Info:</strong><br/>
-          Video Ready State: {videoRef.current?.readyState}<br/>
-          Video Dimensions: {videoRef.current?.videoWidth} × {videoRef.current?.videoHeight}<br/>
-          Stream Active: {cameraStream ? 'Yes' : 'No'}
+          <strong>🔧 Camera Debug Info:</strong><br/>
+          Video Ready State: {videoRef.current?.readyState || 'N/A'}<br/>
+          Video Dimensions: {videoRef.current?.videoWidth || 0} × {videoRef.current?.videoHeight || 0}<br/>
+          Stream Active: {cameraStream ? 'Yes' : 'No'}<br/>
+          Stream Tracks: {cameraStream?.getTracks().length || 0}<br/>
+          Video Source: {videoRef.current?.srcObject ? 'Set' : 'Not Set'}<br/>
+          Video Paused: {videoRef.current?.paused ? 'Yes' : 'No'}
         </div>
       )}
 
