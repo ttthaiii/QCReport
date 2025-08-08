@@ -648,10 +648,54 @@ body {
   position: relative;
 }
 
+.camera-video-wrapper {
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  min-height: 300px;
+}
+
 .camera-video {
   width: 100%;
-  max-height: 400px;
+  height: auto;
+  max-height: 70vh;
+  min-height: 300px;
+  display: block;
   object-fit: cover;
+  background: #000;
+}
+
+.camera-status-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10;
+}
+
+.video-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  z-index: 5;
+}
+
+.video-loading-overlay p {
+  margin-top: 10px;
+  font-size: 14px;
 }
 
 .camera-controls {
@@ -663,19 +707,28 @@ body {
   gap: 1rem;
 }
 
+.camera-controls-bottom {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 15px;
+  padding: 15px;
+}
+
 .capture-btn {
   background: #f44336;
   color: white;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 50px;
-  font-size: 1rem;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 0.3s;
   box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+  font-weight: 500;
 }
 
-.capture-btn:hover {
+.capture-btn:hover:not(:disabled) {
   background: #d32f2f;
   transform: scale(1.05);
 }
@@ -684,17 +737,19 @@ body {
   background: #ccc;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .stop-camera-btn {
   background: rgba(0, 0, 0, 0.7);
   color: white;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 50px;
-  font-size: 1rem;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 0.3s;
+  font-weight: 500;
 }
 
 .stop-camera-btn:hover {
@@ -1536,5 +1591,238 @@ body {
 
   .loading-spinner {
     animation: none;
+  }
+}
+
+/* Loading Spinner สำหรับกล้อง */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e3e3e3;
+  border-top: 4px solid #2196F3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Camera Section Improvements */
+.camera-section {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  margin-bottom: 2rem;
+}
+
+/* Video Element Styling */
+.camera-video {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  min-height: 300px;
+  object-fit: cover;
+  background: #000;
+  border-radius: 8px;
+}
+
+/* Camera Container */
+.camera-container {
+  position: relative;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Camera Placeholder */
+.camera-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  background: #f5f5f5;
+  border: 2px dashed #ccc;
+  border-radius: 12px;
+  flex-direction: column;
+}
+
+/* Error State */
+.camera-error {
+  background: #ffebee;
+  border: 1px solid #f44336;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  color: #c62828;
+  text-align: center;
+}
+
+/* Camera Status Overlay */
+.camera-status {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10;
+}
+
+/* Camera Controls */
+.camera-controls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 20px;
+  padding: 0 20px;
+}
+
+/* Button Styles */
+.capture-btn {
+  background: #f44336;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+  min-width: 120px;
+}
+
+.capture-btn:hover:not(:disabled) {
+  background: #d32f2f;
+  transform: scale(1.05);
+}
+
+.capture-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.stop-camera-btn, .start-camera-btn {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-width: 120px;
+}
+
+.start-camera-btn {
+  background: #4CAF50;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.start-camera-btn:hover {
+  background: #45a049;
+  transform: translateY(-2px);
+}
+
+.stop-camera-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+/* Debug Info Styling */
+.debug-info {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin: 15px 0;
+  font-size: 14px;
+  color: #666;
+  border: 1px solid #dee2e6;
+  font-family: monospace;
+}
+
+.debug-info strong {
+  color: #333;
+}
+
+/* Video Loading State */
+.video-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  z-index: 5;
+}
+
+/* Mobile Responsive for Camera */
+@media (max-width: 768px) {
+  .camera-controls {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .capture-btn, .stop-camera-btn, .start-camera-btn {
+    width: 100%;
+    max-width: 200px;
+  }
+  
+  .camera-video {
+    min-height: 250px;
+  }
+  
+  .debug-info {
+    font-size: 12px;
+    padding: 10px;
+  }
+}
+
+/* Camera Permission Notice */
+.camera-permission-notice {
+  background: #e3f2fd;
+  border: 1px solid #2196F3;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  color: #1976D2;
+  text-align: center;
+}
+
+/* Video Ready State */
+.video-ready {
+  opacity: 1;
+  transition: opacity 0.3s ease-in;
+}
+
+.video-loading {
+  opacity: 0.5;
+}
+
+/* Camera Section Animation */
+.camera-section {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
