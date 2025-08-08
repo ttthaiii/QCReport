@@ -648,10 +648,54 @@ body {
   position: relative;
 }
 
+.camera-video-wrapper {
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  min-height: 300px;
+}
+
 .camera-video {
   width: 100%;
-  max-height: 400px;
+  height: auto;
+  max-height: 70vh;
+  min-height: 300px;
+  display: block;
   object-fit: cover;
+  background: #000;
+}
+
+.camera-status-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10;
+}
+
+.video-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  z-index: 5;
+}
+
+.video-loading-overlay p {
+  margin-top: 10px;
+  font-size: 14px;
 }
 
 .camera-controls {
@@ -663,19 +707,28 @@ body {
   gap: 1rem;
 }
 
+.camera-controls-bottom {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 15px;
+  padding: 15px;
+}
+
 .capture-btn {
   background: #f44336;
   color: white;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 50px;
-  font-size: 1rem;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 0.3s;
   box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+  font-weight: 500;
 }
 
-.capture-btn:hover {
+.capture-btn:hover:not(:disabled) {
   background: #d32f2f;
   transform: scale(1.05);
 }
@@ -684,17 +737,19 @@ body {
   background: #ccc;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .stop-camera-btn {
   background: rgba(0, 0, 0, 0.7);
   color: white;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 50px;
-  font-size: 1rem;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 0.3s;
+  font-weight: 500;
 }
 
 .stop-camera-btn:hover {
