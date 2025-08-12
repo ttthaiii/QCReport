@@ -1,6 +1,11 @@
-const { getSheetsClient } = require('../services/google-auth');
+const { getSheetsClient: createSheetsClient } = require('../services/google-auth');
 
 const SHEETS_ID = '1ez_Dox16jf9lr5TEsLL5BEOfKZDNGkVD31YSBtx3Qa8';
+
+// Export getSheetsClient function
+function getSheetsClient() {
+  return createSheetsClient();
+}
 
 // สร้าง Unique ID
 function generateUniqueId() {
@@ -64,7 +69,7 @@ async function logPhoto(photoData) {
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:I', // เปลี่ยนจาก A:H เป็น A:I
+      range: 'Master_Photos_Log!A:I',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
@@ -103,7 +108,7 @@ async function logReport(reportData) {
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Final_Reports_Log!A:H', // เปลี่ยนจาก A:G เป็น A:H
+      range: 'Final_Reports_Log!A:H',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
@@ -121,6 +126,7 @@ async function logReport(reportData) {
 }
 
 module.exports = {
+  getSheetsClient,  // เพิ่มการ export function นี้
   getQCTopics,
   logPhoto,
   logReport

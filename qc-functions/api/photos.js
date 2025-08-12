@@ -1,12 +1,12 @@
 const { getDriveClient } = require('../services/google-auth');
 const { Readable } = require('stream');
 
-// อัปโหลดรูปไป Google Drive (แบบง่าย - ไม่สร้าง folder)
+// อัปโหลดรูปไป Google Shared Drive
 async function uploadPhoto(photoData) {
   try {
     const { imageBuffer, filename, building, foundation, category } = photoData;
     
-    console.log(`Starting simple upload: ${filename}`);
+    console.log(`Starting upload to shared drive: ${filename}`);
     
     // สร้าง readable stream จาก buffer
     const stream = new Readable();
@@ -24,24 +24,43 @@ async function uploadPhoto(photoData) {
       throw new Error('Drive access denied');
     }
     
-    // อัปโหลดไฟล์ลง root (ไม่ระบุ parents)
-    console.log('Uploading file to root...');
+    // SOLUTION 1: อัปโหลดไปยัง Shared Drive
+    const SHARED_DRIVE_ID = '0AAtwqQRo9hyoUk9PVA'; // Your actual Shared Drive ID
+    const FOLDER_ID = '1abU3Kp24IjOyu6wMxQ-TFcoPirhoum2o'; // Your folder inside Shared Drive
+    
+    console.log('Uploading file to shared drive folder...');
     const response = await drive.files.create({
       requestBody: {
         name: filename,
+        parents: [FOLDER_ID], // อัปโหลดไปยัง folder ใน Shared Drive
         description: `QC Photo: ${building}-${foundation}-${category}`
       },
       media: {
         mimeType: 'image/jpeg',
         body: stream
       },
+      supportsAllDrives: true, // สำคัญ: รองรับ Shared Drive
       fields: 'id, name, webViewLink, webContentLink'
     });
     
     const file = response.data;
-    console.log(`Upload successful: ${file.id}`);
+    console.log(`Upload successful to shared drive: ${file.id}`);
     
-    // ไม่ต้องทำ public permission ก่อน
+    // ตั้งค่า permission (ถ้าต้องการ)
+    try {
+      await drive.permissions.create({
+        fileId: file.id,
+        supportsAllDrives: true,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone'
+        }
+      });
+      console.log('Permission set to public');
+    } catch (permError) {
+      console.log('Permission setting failed:', permError.message);
+      // ไม่เป็นปัญหาร้ายแรง
+    }
     
     return {
       fileId: file.id,

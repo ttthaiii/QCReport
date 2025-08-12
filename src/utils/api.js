@@ -79,6 +79,12 @@ export const api = {
   // Upload photo to Drive + log to Sheets
   uploadPhoto: uploadPhotoFile,
   
+  // Generate PDF Report
+  generateReport: (data) => apiCall('/generate-report', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  
   // Log photo (legacy)
   logPhoto: (data) => apiCall('/log-photo', {
     method: 'POST',
