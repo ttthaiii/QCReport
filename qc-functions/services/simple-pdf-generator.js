@@ -1,5 +1,5 @@
 // แทนที่ไฟล์ qc-functions/services/simple-pdf-generator.js
-// ใช้ HTML to PDF ที่รองรับภาษาไทยบน Firebase Functions
+// ปรับปรุงให้ 1 หน้า = 2 รูป เท่านั้น พร้อม logo นอกกรอบ
 
 const puppeteer = require('puppeteer');
 const { getDriveClient } = require('./google-auth');
@@ -13,6 +13,7 @@ async function generateSimplePDF(reportData) {
     const { building, foundation, category, photos, projectName } = reportData;
     
     console.log('Starting HTML to PDF generation with Thai support...');
+    console.log(`Total photos: ${photos.length}`);
     
     // สร้าง HTML template
     const htmlContent = generateThaiHTMLTemplate({
@@ -83,22 +84,29 @@ async function generateSimplePDF(reportData) {
   }
 }
 
-// สร้าง HTML Template ภาษาไทยที่สวยงาม
+// สร้าง HTML Template ภาษาไทยที่สวยงาม - 2 รูปต่อหน้าเท่านั้น
 function generateThaiHTMLTemplate({ building, foundation, category, photos, projectName }) {
   
-  // สร้าง photo grids (2 รูปต่อหน้า)
-  const photoPages = [];
+  // แบ่งรูปเป็นหน้าๆ ละ 2 รูป
   const photosPerPage = 2;
+  const totalPages = Math.ceil(photos.length / photosPerPage);
   
-  for (let i = 0; i < photos.length; i += photosPerPage) {
-    const pagePhotos = photos.slice(i, i + photosPerPage);
-    const currentPage = Math.floor(i / photosPerPage) + 1;
-    const totalPages = Math.ceil(photos.length / photosPerPage);
+  console.log(`Creating ${totalPages} pages for ${photos.length} photos`);
+  
+  // สร้างหน้าต่างๆ
+  const pages = [];
+  for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+    const startIndex = pageIndex * photosPerPage;
+    const endIndex = Math.min(startIndex + photosPerPage, photos.length);
+    const pagePhotos = photos.slice(startIndex, endIndex);
     
-    let photoHTML = '';
+    console.log(`Page ${pageIndex + 1}: photos ${startIndex + 1}-${endIndex} (${pagePhotos.length} photos)`);
+    
+    // สร้าง HTML สำหรับรูปในหน้านี้
+    let photosHTML = '';
     pagePhotos.forEach((photo, index) => {
-      const photoNumber = i + index + 1;
-      photoHTML += `
+      const photoNumber = startIndex + index + 1;
+      photosHTML += `
         <div class="photo-container">
           <div class="photo-header">
             <span class="photo-number">${photoNumber}. ${photo.topic}</span>
@@ -114,15 +122,29 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
       `;
     });
     
-    photoPages.push({
-      currentPage,
-      totalPages,
-      photoHTML
+    // ถ้าหน้านี้มีแค่ 1 รูป ให้เพิ่ม spacer เพื่อให้เต็ม 2 รูป
+    if (pagePhotos.length === 1) {
+      photosHTML += `
+        <div class="photo-container spacer">
+          <div class="photo-header">
+            <span class="photo-number">2. </span>
+          </div>
+          <div class="photo-content">
+            <div class="no-image">-</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    pages.push({
+      pageNumber: pageIndex + 1,
+      totalPages: totalPages,
+      photosHTML: photosHTML
     });
   }
   
-  // สร้าง HTML pages
-  const pagesHTML = photoPages.map(page => `
+  // สร้าง HTML สำหรับทุกหน้า
+  const pagesHTML = pages.map(page => `
     <div class="page">
       <!-- Logo นอกกรอบ -->
       <div class="external-logo">
@@ -158,16 +180,15 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
             </div>
             <div class="info-row">
               <span class="label">แผ่นที่:</span>
-              <span class="value">${page.currentPage}/${page.totalPages}</span>
+              <span class="value">${page.pageNumber}/${page.totalPages}</span>
             </div>
           </div>
         </div>
-        <div class="note">หมายเหตุ: รูปที่ถ่ายทุกรูปให้ใช้แอป Time Stamp Camera</div>
       </div>
       
-      <!-- Photos -->
+      <!-- Photos (2 รูปต่อหน้า) -->
       <div class="photos-container">
-        ${page.photoHTML}
+        ${page.photosHTML}
       </div>
     </div>
   `).join('');
@@ -196,24 +217,26 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         }
         
         .page {
-          width: 100%;
-          min-height: 297mm;
+          width: 210mm;
+          height: 297mm;
           page-break-after: always;
           position: relative;
-          padding: 0;
+          padding: 8mm; /* ลด margin จาก 15mm เป็น 8mm */
+          padding-top: 15mm; /* เผื่อที่สำหรับ logo */
           display: flex;
           flex-direction: column;
+          box-sizing: border-box;
         }
         
         .page:last-child {
           page-break-after: avoid;
         }
         
-        /* Logo นอกกรอบ */
+        /* Logo นอกกรอบ - ด้านบนขวา */
         .external-logo {
           position: absolute;
-          top: -25px;
-          right: 0;
+          top: 5mm;
+          right: 8mm;
           font-family: 'Sarabun', sans-serif;
           font-size: 14px;
           font-weight: 600;
@@ -230,16 +253,16 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         }
         
         .header {
-          border: 3px solid #000;
-          margin-bottom: 20px;
-          margin-top: 25px;
+          border: 2px solid #000; /* ลดจาก 3px เป็น 2px */
+          margin-bottom: 8mm; /* ลดจาก 15mm เป็น 8mm */
+          flex-shrink: 0;
         }
         
         .header-title {
           border-bottom: 2px solid #000;
           text-align: center;
-          padding: 15px;
-          font-size: 20px;
+          padding: 6mm; /* ลดจาก 10mm เป็น 6mm */
+          font-size: 18px; /* ลดจาก 20px เป็น 18px */
           font-weight: 600;
           background: white;
           color: black;
@@ -247,9 +270,10 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         
         .header-content {
           display: flex;
-          padding: 15px 20px;
-          gap: 30px;
+          padding: 5mm 8mm; /* ลดจาก 8mm 10mm เป็น 5mm 8mm */
+          gap: 15mm; /* ลดจาก 20mm เป็น 15mm */
           background: white;
+          line-height: 1.3; /* เพิ่ม line-height ให้กระชับ */
         }
         
         .left-column, .right-column {
@@ -257,66 +281,76 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         }
         
         .info-row {
-          margin-bottom: 8px;
+          margin-bottom: 3mm; /* ลดจาก 6mm เป็น 3mm */
           display: flex;
           align-items: baseline;
         }
         
         .label {
           font-weight: 500;
-          min-width: 80px;
-          margin-right: 10px;
+          min-width: 22mm; /* ลดจาก 25mm เป็น 22mm */
+          margin-right: 4mm; /* ลดจาก 5mm เป็น 4mm */
+          font-size: 13px;
         }
         
         .value {
           font-weight: 400;
+          font-size: 13px;
         }
         
-        .note {
-          padding: 8px 20px;
-          font-size: 12px;
-          color: #666;
-          font-style: italic;
-          border-top: 1px solid #ddd;
-          text-align: right;
-        }
-        
+        /* Photos Container - 2 รูปต่อหน้า */
         .photos-container {
           display: flex;
           flex-direction: column;
-          gap: 25px;
+          gap: 6mm; /* ลดจาก 8mm เป็น 6mm */
+          flex: 1;
+          height: calc(297mm - 15mm - 8mm - 60mm); /* ปรับให้เหมาะกับ padding และ header ใหม่ */
         }
         
         .photo-container {
           border: 2px solid #000;
-          break-inside: avoid;
-          margin-bottom: 15px;
+          height: calc(50% - 3mm); /* แบ่งครึ่งหน้า ลบ gap */
+          display: flex;
+          flex-direction: column;
+          page-break-inside: avoid;
+        }
+        
+        .photo-container.spacer {
+          opacity: 0.3; /* จางๆ สำหรับช่องว่าง */
         }
         
         .photo-header {
           border-bottom: 2px solid #000;
-          padding: 10px 15px;
-          font-size: 16px;
+          padding: 3mm 5mm; /* ลดจาก 4mm 6mm เป็น 3mm 5mm */
+          font-size: 14px; /* ลดจาก 16px เป็น 14px */
           font-weight: 500;
           text-align: center;
           background: white;
           color: black;
+          flex-shrink: 0;
         }
         
         .photo-content {
-          height: 320px;
+          flex: 1;
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
           background: #f9f9f9;
+          min-height: 0;
+          /* กำหนดขนาดรูปให้เป็น 12.5×8.4 cm */
+          width: 100%;
+          height: 84mm; /* 8.4 cm */
         }
         
         .photo-content img {
-          max-width: 100%;
-          max-height: 100%;
-          object-fit: contain;
+          width: 125mm; /* 12.5 cm */
+          height: 84mm; /* 8.4 cm */
+          object-fit: contain; /* รักษาสัดส่วน ไม่บิดเบือน */
+          object-position: center;
           display: block;
+          border: 1px solid #ddd;
+          background: white;
         }
         
         .no-image {
@@ -333,10 +367,20 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
           
           .page {
             page-break-after: always;
+            margin: 0;
+            padding: 8mm;
+            padding-top: 15mm;
           }
           
           .page:last-child {
             page-break-after: avoid;
+          }
+          
+          /* กำหนดขนาดรูปแน่นอนใน print */
+          .photo-content img {
+            width: 125mm !important; /* 12.5 cm */
+            height: 84mm !important; /* 8.4 cm */
+            object-fit: contain !important;
           }
         }
       </style>
@@ -372,7 +416,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
       requestBody: {
         name: filename,
         parents: [FOLDER_ID],
-        description: 'QC Report PDF - Thai Language HTML'
+        description: 'QC Report PDF - 2 Photos Per Page Format'
       },
       media: {
         mimeType: 'application/pdf',
@@ -382,7 +426,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
       fields: 'id, name, webViewLink, webContentLink'
     });
     
-    console.log(`Thai HTML PDF uploaded: ${response.data.id}`);
+    console.log(`2-Photos-Per-Page PDF uploaded: ${response.data.id}`);
     
     return {
       fileId: response.data.id,
@@ -393,7 +437,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
     };
     
   } catch (error) {
-    console.error('Error uploading Thai HTML PDF:', error);
+    console.error('Error uploading 2-Photos-Per-Page PDF:', error);
     throw error;
   }
 }
