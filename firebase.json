@@ -22,18 +22,8 @@
   },
   "functions": [
     {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules/**",
-        ".git/**",
-        "*.log",
-        ".env*"
-      ]
-    },
-    {
       "source": "qc-functions",
-      "codebase": "qc-functions",
+      "codebase": "default",
       "ignore": [
         "node_modules",
         ".git",

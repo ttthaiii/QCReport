@@ -18,10 +18,21 @@ const Reports = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState(null);
 
+  // 🔥 NEW: Progress tracking for all categories
+  const [categoryProgress, setCategoryProgress] = useState({});
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+
   useEffect(() => {
     loadQCTopics();
     loadMasterData();
   }, []);
+
+  // 🔥 Load progress when building/foundation changes
+  useEffect(() => {
+    if (formData.building && formData.foundation && Object.keys(qcTopics).length > 0) {
+      loadAllCategoryProgress();
+    }
+  }, [formData.building, formData.foundation, qcTopics]);
 
   const loadMasterData = async () => {
     setIsLoadingMasterData(true);
@@ -93,6 +104,68 @@ const Reports = () => {
     }
   };
 
+  // 🔥 NEW: Load progress for all categories
+  const loadAllCategoryProgress = async () => {
+    if (!formData.building || !formData.foundation || Object.keys(qcTopics).length === 0) return;
+    
+    setIsLoadingProgress(true);
+    setCategoryProgress({});
+    
+    try {
+      console.log(`Loading progress for all categories: ${formData.building}-${formData.foundation}`);
+      
+      const progressPromises = Object.keys(qcTopics).map(async (category) => {
+        try {
+          const response = await api.getCompletedTopics({
+            building: formData.building,
+            foundation: formData.foundation,
+            category: category
+          });
+          
+          const completedTopics = response.success ? new Set(response.data.completedTopics || []) : new Set();
+          const totalTopics = qcTopics[category] || [];
+          const completed = totalTopics.filter(topic => completedTopics.has(topic)).length;
+          const total = totalTopics.length;
+          const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+          
+          return {
+            category,
+            completed,
+            total,
+            percentage,
+            completedTopics: Array.from(completedTopics),
+            remainingTopics: totalTopics.filter(topic => !completedTopics.has(topic))
+          };
+        } catch (error) {
+          console.error(`Error loading progress for ${category}:`, error);
+          return {
+            category,
+            completed: 0,
+            total: qcTopics[category]?.length || 0,
+            percentage: 0,
+            completedTopics: [],
+            remainingTopics: qcTopics[category] || []
+          };
+        }
+      });
+      
+      const results = await Promise.all(progressPromises);
+      
+      const progressMap = {};
+      results.forEach(result => {
+        progressMap[result.category] = result;
+      });
+      
+      setCategoryProgress(progressMap);
+      console.log('Category progress loaded:', progressMap);
+      
+    } catch (error) {
+      console.error('Error loading category progress:', error);
+    } finally {
+      setIsLoadingProgress(false);
+    }
+  };
+
   const generateReport = async () => {
     if (!formData.building || !formData.foundation || !formData.category) {
       alert('กรุณาเลือกข้อมูลให้ครบถ้วน');
@@ -121,6 +194,20 @@ const Reports = () => {
     }
   };
 
+  // 🔥 Helper function to get progress summary
+  const getOverallProgress = () => {
+    const categories = Object.keys(categoryProgress);
+    if (categories.length === 0) return { completed: 0, total: 0, percentage: 0 };
+    
+    const totalCompleted = categories.reduce((sum, cat) => sum + categoryProgress[cat].completed, 0);
+    const totalTopics = categories.reduce((sum, cat) => sum + categoryProgress[cat].total, 0);
+    const percentage = totalTopics > 0 ? Math.round((totalCompleted / totalTopics) * 100) : 0;
+    
+    return { completed: totalCompleted, total: totalTopics, percentage };
+  };
+
+  const overallProgress = getOverallProgress();
+
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>📋 สร้างรายงาน QC</h1>
@@ -148,6 +235,7 @@ const Reports = () => {
             console.log('Current master data state:', masterData);
             console.log('Current form data:', formData);
             console.log('QC Topics:', qcTopics);
+            console.log('Category Progress:', categoryProgress);
             loadMasterData(); // โหลดใหม่
           }}
           style={{
@@ -212,33 +300,6 @@ const Reports = () => {
 
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              หมวดงาน:
-            </label>
-            <select 
-              value={formData.category}
-              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-              style={{ 
-                width: '100%', 
-                padding: '8px 12px',
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px'
-              }}
-            >
-              <option value="">เลือกหมวดงาน...</option>
-              {Object.keys(qcTopics).map(category => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-            {isLoadingMasterData && (
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                กำลังโหลด...
-              </div>
-            )}            
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
               ฐานราก:
             </label>
             <select 
@@ -260,10 +321,94 @@ const Reports = () => {
               ))}
             </select>
           </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              หมวดงาน:
+            </label>
+            <select 
+              value={formData.category}
+              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+              style={{ 
+                width: '100%', 
+                padding: '8px 12px',
+                fontSize: '14px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px'
+              }}
+            >
+              <option value="">เลือกหมวดงาน...</option>
+              {Object.keys(qcTopics).map(category => {
+                const progress = categoryProgress[category];
+                const progressText = progress ? ` (${progress.completed}/${progress.total})` : '';
+                return (
+                  <option key={category} value={category}>
+                    {category}{progressText}
+                  </option>
+                );
+              })}
+            </select>
+            {isLoadingProgress && (
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                กำลังโหลดสถานะ...
+              </div>
+            )}            
+          </div>
         </div>
 
+        {/* 🔥 Overall Progress Summary */}
+        {/*formData.building && formData.foundation && Object.keys(categoryProgress).length > 0 && (
+          <div style={{ 
+            marginBottom: '20px',
+            padding: '15px',
+            backgroundColor: '#e3f2fd',
+            borderRadius: '6px',
+            border: '1px solid #1976d2'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: '10px'
+            }}>
+              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1565c0' }}>
+                📊 สถานะรวม: {overallProgress.completed}/{overallProgress.total} หัวข้อ ({overallProgress.percentage}%)
+              </span>
+              <button
+                onClick={loadAllCategoryProgress}
+                disabled={isLoadingProgress}
+                style={{
+                  padding: '5px 10px',
+                  fontSize: '12px',
+                  backgroundColor: '#1976d2',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  opacity: isLoadingProgress ? 0.6 : 1
+                }}
+              >
+                🔄 อัปเดต
+              </button>
+            </div>
+            <div style={{ 
+              height: '8px',
+              backgroundColor: '#bbdefb',
+              borderRadius: '4px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${overallProgress.percentage}%`,
+                backgroundColor: overallProgress.percentage === 100 ? '#4caf50' : '#2196f3',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+        )}
+
         {/* Loading Master Data */}
-        {isLoadingMasterData && (
+        {/*isLoadingMasterData && (
           <div style={{ 
             marginBottom: '15px', 
             textAlign: 'center', 
@@ -278,7 +423,7 @@ const Reports = () => {
         )}
 
         {/* Data Summary */}
-        {!isLoadingMasterData && masterData.buildings.length > 0 && (
+        {/*!isLoadingMasterData && masterData.buildings.length > 0 && (
           <div style={{ 
             marginBottom: '15px',
             padding: '10px',
@@ -327,42 +472,96 @@ const Reports = () => {
             {isGenerating ? '🔄 กำลังสร้างรายงาน...' : '📋 สร้างรายงาน PDF'}
           </button>
         </div>
-        
-        {/* Topics Preview */}
-        {formData.category && qcTopics[formData.category] && (
-          <div style={{ marginTop: '20px' }}>
-            <h4 style={{ color: '#495057', marginBottom: '10px' }}>
-              หัวข้อในหมวด "{formData.category}":
-            </h4>
-            <div style={{ 
-              backgroundColor: 'white',
-              padding: '15px',
-              borderRadius: '4px',
-              border: '1px solid #dee2e6',
-              maxHeight: '200px',
-              overflowY: 'auto'
-            }}>
-              {qcTopics[formData.category].map((topic, index) => (
+      </div>
+
+      {/* Topics Preview for Selected Category */}
+      {formData.category && qcTopics[formData.category] && (
+        <div style={{ 
+          marginBottom: '20px',
+          padding: '20px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '8px',
+          border: '1px solid #dee2e6'
+        }}>
+          <h4 style={{ color: '#495057', marginBottom: '15px', marginTop: 0 }}>
+            📝 หัวข้อในหมวด "{formData.category}":
+          </h4>
+          
+          {categoryProgress[formData.category] && (
+            <div style={{ marginBottom: '15px' }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '5px'
+              }}>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1565c0' }}>
+                  ความครบถ้วน: {categoryProgress[formData.category].completed}/{categoryProgress[formData.category].total} ({categoryProgress[formData.category].percentage}%)
+                </span>
+              </div>
+              <div style={{ 
+                height: '6px',
+                backgroundColor: '#bbdefb',
+                borderRadius: '3px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${categoryProgress[formData.category].percentage}%`,
+                  backgroundColor: categoryProgress[formData.category].percentage === 100 ? '#4caf50' : '#2196f3',
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+            </div>
+          )}
+          
+          <div style={{ 
+            backgroundColor: 'white',
+            padding: '15px',
+            borderRadius: '4px',
+            border: '1px solid #dee2e6',
+            maxHeight: '200px',
+            overflowY: 'auto'
+          }}>
+            {qcTopics[formData.category].map((topic, index) => {
+              const isCompleted = categoryProgress[formData.category]?.completedTopics.includes(topic);
+              
+              return (
                 <div key={index} style={{ 
                   padding: '5px 0',
                   borderBottom: index < qcTopics[formData.category].length - 1 ? '1px solid #e9ecef' : 'none',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
                 }}>
-                  {index + 1}. {topic}
+                  <span style={{ 
+                    color: isCompleted ? '#28a745' : '#6c757d',
+                    fontSize: '12px',
+                    minWidth: '16px'
+                  }}>
+                    {isCompleted ? '✅' : '⏳'}
+                  </span>
+                  <span style={{ 
+                    color: isCompleted ? '#28a745' : '#495057',
+                    fontWeight: isCompleted ? '500' : 'normal'
+                  }}>
+                    {index + 1}. {topic}
+                  </span>
                 </div>
-              ))}
-              <div style={{ 
-                marginTop: '10px', 
-                fontSize: '12px', 
-                color: '#6c757d',
-                fontStyle: 'italic'
-              }}>
-                รวม {qcTopics[formData.category].length} หัวข้อ
-              </div>
+              );
+            })}
+            <div style={{ 
+              marginTop: '10px', 
+              fontSize: '12px', 
+              color: '#6c757d',
+              fontStyle: 'italic'
+            }}>
+              รวม {qcTopics[formData.category].length} หัวข้อ
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Generated Report Info */}
       {generatedReport && (
@@ -462,8 +661,9 @@ const Reports = () => {
       }}>
         <h4 style={{ marginTop: 0, color: '#856404' }}>📝 วิธีการใช้งาน</h4>
         <ol style={{ color: '#856404', fontSize: '14px', lineHeight: '1.6', marginBottom: '10px' }}>
-          <li>เลือก <strong>อาคาร</strong>, <strong>ฐานราก</strong>, และ <strong>หมวดงาน</strong> จาก dropdown</li>
-          <li>ระบบจะแสดงหัวข้อทั้งหมดในหมวดงานที่เลือก</li>
+          <li>เลือก <strong>อาคาร</strong> และ <strong>ฐานราก</strong> → ระบบจะแสดงสถานะทุกหมวดงาน</li>
+          <li>ดูสถานะความครบถ้วน: <strong>✅ ถ่ายครบ</strong> | <strong>🔄 ถ่ายบางส่วน</strong> | <strong>⚠️ ยังไม่ถ่าย</strong></li>
+          <li>เลือก <strong>หมวดงาน</strong> ที่ต้องการสร้างรายงาน</li>
           <li>กดปุ่ม <strong>"สร้างรายงาน PDF"</strong></li>
           <li>ระบบจะค้นหารูปทั้งหมดที่ตรงตามเงื่อนไข</li>
           <li>สร้าง PDF รายงานและอัปโหลดไป Google Drive</li>
@@ -477,7 +677,11 @@ const Reports = () => {
           borderRadius: '4px',
           fontSize: '13px'
         }}>
-          <strong>💡 หมายเหตุ:</strong> ข้อมูลอาคารและฐานรากจะแสดงตามที่ได้บันทึกไว้ในระบบ หากไม่พบข้อมูล กรุณาไปเพิ่มในหน้า "ถ่ายรูป QC" ก่อน
+          <strong>💡 เคล็ดลับ:</strong> 
+          <br />• <strong>สถานะรวม</strong> แสดงความครบถ้วนของทุกหมวดงานรวมกัน
+          <br />• <strong>สถานะแต่ละหมวด</strong> แสดงรายละเอียดว่าหมวดไหนถ่ายครบ เหลือหัวข้อไหนบ้าง
+          <br />• กด <strong>"🔄 อัปเดต"</strong> เพื่อโหลดสถานะล่าสุด
+          <br />• ข้อมูลจะอัปเดตอัตโนมัติเมื่อเปลี่ยนอาคารหรือฐานราก
         </div>
       </div>
     </div>

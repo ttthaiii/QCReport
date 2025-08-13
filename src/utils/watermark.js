@@ -1,4 +1,6 @@
-// Add watermark to image with multi-line location
+// แทนที่ไฟล์ src/utils/watermark.js
+// แก้ไขให้รองรับ Portrait และ Landscape อัตโนมัติ
+
 export function addWatermark(imageFile, watermarkText, location = '') {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
@@ -7,42 +9,39 @@ export function addWatermark(imageFile, watermarkText, location = '') {
     
     img.onload = () => {
       try {
-        // Set canvas size (12.5cm x 8.4cm = ~1476x992px at 300 DPI)
-        const targetWidth = 1476;
-        const targetHeight = 992;
+        // 🔥 ใช้ขนาดจริงของรูป แทนที่จะบังคับขนาด
+        const originalWidth = img.width;
+        const originalHeight = img.height;
+        
+        // กำหนดขนาดเป้าหมายตามอัตราส่วนเดิม
+        let targetWidth, targetHeight;
+        
+        // ตรวจสอบว่าเป็น Portrait หรือ Landscape
+        if (originalHeight > originalWidth) {
+          // Portrait (แนวตั้ง) - มือถือส่วนใหญ่
+          targetHeight = 1920; // Full HD height
+          targetWidth = Math.round((originalWidth / originalHeight) * targetHeight);
+        } else {
+          // Landscape (แนวนอน)
+          targetWidth = 1920; // Full HD width  
+          targetHeight = Math.round((originalHeight / originalWidth) * targetWidth);
+        }
+        
+        console.log(`Original: ${originalWidth}x${originalHeight}`);
+        console.log(`Target: ${targetWidth}x${targetHeight}`);
         
         canvas.width = targetWidth;
         canvas.height = targetHeight;
-        
-        // Draw image (scaled to fit)
-        const imgAspect = img.width / img.height;
-        const canvasAspect = targetWidth / targetHeight;
-        
-        let drawWidth, drawHeight, offsetX, offsetY;
-        
-        if (imgAspect > canvasAspect) {
-          // Image is wider - fit to height
-          drawHeight = targetHeight;
-          drawWidth = drawHeight * imgAspect;
-          offsetX = (targetWidth - drawWidth) / 2;
-          offsetY = 0;
-        } else {
-          // Image is taller - fit to width
-          drawWidth = targetWidth;
-          drawHeight = drawWidth / imgAspect;
-          offsetX = 0;
-          offsetY = (targetHeight - drawHeight) / 2;
-        }
         
         // Fill background with white
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, targetWidth, targetHeight);
         
-        // Draw image
-        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+        // Draw image (maintain aspect ratio)
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
         
-        // Add watermark with multi-line location
-        const fontSize = Math.floor(targetWidth / 45); // ลดขนาดฟอนต์เล็กลง
+        // 🔥 Responsive watermark size
+        const fontSize = Math.floor(Math.min(targetWidth, targetHeight) / 50);
         ctx.font = `${fontSize}px Arial, sans-serif`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
@@ -74,7 +73,7 @@ export function addWatermark(imageFile, watermarkText, location = '') {
           } else {
             reject(new Error('Failed to create blob from canvas'));
           }
-        }, 'image/jpeg', 0.9);
+        }, 'image/jpeg', 0.9); // เพิ่มคุณภาพเป็น 0.9
         
       } catch (error) {
         reject(error);

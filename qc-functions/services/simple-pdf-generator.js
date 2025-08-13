@@ -1,464 +1,313 @@
 // แทนที่ไฟล์ qc-functions/services/simple-pdf-generator.js
-// ปรับปรุงให้ 1 หน้า = 2 รูป เท่านั้น พร้อม logo นอกกรอบ
+// สร้าง PDF แบบมืออาชีพสำหรับ Firebase Functions
 
-const puppeteer = require('puppeteer');
+// ⚠️ FIREBASE FUNCTIONS COMPATIBLE VERSION
+// ใช้ pdf2pic + jsPDF แทน Canvas เพราะ Firebase Functions ไม่รองรับ Canvas
+
+const { jsPDF } = require('jspdf');
+
+// เพิ่ม Thai font support
+require('jspdf/dist/jspdf.plugin.standard_fonts_metrics.js');
+require('jspdf/dist/jspdf.plugin.split_text_to_size.js');
 const { getDriveClient } = require('./google-auth');
 const { Readable } = require('stream');
 
-// สร้าง PDF ด้วย HTML to PDF (รองรับภาษาไทย 100%)
+// สร้าง PDF ด้วย jsPDF (Firebase Functions Compatible)
 async function generateSimplePDF(reportData) {
-  let browser = null;
-  
   try {
     const { building, foundation, category, photos, projectName } = reportData;
     
-    console.log('Starting HTML to PDF generation with Thai support...');
+    console.log('Starting FIREBASE-COMPATIBLE PDF generation...');
     console.log(`Total photos: ${photos.length}`);
     
-    // สร้าง HTML template
-    const htmlContent = generateThaiHTMLTemplate({
-      building,
-      foundation,
-      category,
-      photos,
-      projectName: projectName || 'Escent Nakhon si'
+    // 🔥 ตรวจสอบและจำกัดจำนวนรูป - เฉพาะฐานรากต้อง 12 รูป (2 หน้า x 6 รูป)
+    let processedPhotos = photos;
+    if (category === 'ฐานราก') {
+      if (photos.length > 12) {
+        console.log(`Warning: ฐานราก has ${photos.length} photos, limiting to first 12`);
+        processedPhotos = photos.slice(0, 12);
+      } else if (photos.length < 12) {
+        console.log(`Warning: ฐานราก has only ${photos.length}/12 photos`);
+        // เพิ่มรูปว่างเพื่อให้ครบ 12 รูป
+        const emptyPhotos = Array(12 - photos.length).fill(null).map((_, index) => ({
+          id: `empty-${index}`,
+          topic: `หัวข้อที่ ${photos.length + index + 1}`,
+          imageBase64: null
+        }));
+        processedPhotos = [...photos, ...emptyPhotos];
+      }
+    }
+    
+    console.log('Creating FIREBASE-COMPATIBLE PDF...');
+    
+    // สร้าง PDF ด้วย jsPDF (A4 size)
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
     });
     
-    console.log('HTML template created, launching Puppeteer...');
+    const photosPerPage = 6;
+    const totalPages = category === 'ฐานราก' ? 2 : Math.ceil(processedPhotos.length / photosPerPage);
     
-    // Launch browser สำหรับ Firebase Functions
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=TranslateUI',
-        '--disable-extensions',
-        '--disable-plugins'
-      ],
-      timeout: 30000
-    });
+    for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+      if (pageIndex > 0) {
+        doc.addPage();
+      }
+      
+      const pagePhotos = processedPhotos.slice(pageIndex * photosPerPage, (pageIndex + 1) * photosPerPage);
+      
+      // เพิ่มรูปว่างถ้าไม่ครบ 6 รูป
+      while (pagePhotos.length < photosPerPage) {
+        pagePhotos.push({
+          id: `empty-${pagePhotos.length}`,
+          topic: `หัวข้อที่ ${(pageIndex * photosPerPage) + pagePhotos.length + 1}`,
+          imageBase64: null
+        });
+      }
+      
+      await drawFirebasePage(doc, {
+        building,
+        foundation,
+        category,
+        projectName: projectName || 'Escent Nakhon si',
+        pageNumber: pageIndex + 1,
+        totalPages,
+        photos: pagePhotos
+      });
+    }
     
-    console.log('Browser launched, creating PDF...');
+    // สร้าง PDF buffer
+    const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
     
-    const page = await browser.newPage();
-    
-    // ตั้งค่าหน้า
-    await page.setContent(htmlContent, { 
-      waitUntil: 'networkidle0',
-      timeout: 30000
-    });
-    
-    // สร้าง PDF
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      margin: {
-        top: '15mm',
-        right: '15mm',
-        bottom: '15mm',
-        left: '15mm'
-      },
-      printBackground: true,
-      timeout: 30000
-    });
-    
-    await browser.close();
-    browser = null;
-    
-    console.log('PDF generated successfully with Thai support');
+    console.log('FIREBASE-COMPATIBLE PDF created successfully! 🎉');
     return pdfBuffer;
     
   } catch (error) {
-    console.error('Error generating HTML to PDF:', error);
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeError) {
-        console.error('Error closing browser:', closeError);
-      }
-    }
+    console.error('Error generating FIREBASE-COMPATIBLE PDF:', error);
     throw error;
   }
 }
 
-// สร้าง HTML Template ภาษาไทยที่สวยงาม - 2 รูปต่อหน้าเท่านั้น
-function generateThaiHTMLTemplate({ building, foundation, category, photos, projectName }) {
+// วาดหน้า PDF สำหรับ Firebase Functions
+async function drawFirebasePage(doc, pageData) {
+  const { building, foundation, category, projectName, pageNumber, totalPages, photos } = pageData;
   
-  const photosPerPage = 6;
-  const totalPages = Math.ceil(photos.length / photosPerPage);
+  // 🎨 FIREBASE-COMPATIBLE HEADER
+  drawFirebaseHeader(doc, {
+    building,
+    foundation,
+    category,
+    projectName,
+    pageNumber,
+    totalPages
+  });
   
-  console.log(`Creating ${totalPages} pages for ${photos.length} photos (6 photos per page - 2×3 grid)`);
+  // 🖼️ FIREBASE-COMPATIBLE PHOTOS GRID
+  await drawFirebasePhotosGrid(doc, {
+    photos,
+    pageNumber
+  });
+}
+
+// 🎨 วาด Header แบบ Firebase Compatible
+function drawFirebaseHeader(doc, data) {
+  const { building, foundation, category, projectName, pageNumber, totalPages } = data;
   
-  const pages = [];
-  for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-    const startIndex = pageIndex * photosPerPage;
-    const endIndex = Math.min(startIndex + photosPerPage, photos.length);
-    const pagePhotos = photos.slice(startIndex, endIndex);
-    
-    console.log(`Page ${pageIndex + 1}: photos ${startIndex + 1}-${endIndex} (${pagePhotos.length} photos)`);
-    
-    // สร้าง HTML สำหรับรูปในหน้านี้ - 2×3 grid (2 columns, 3 rows)
-    let photosHTML = '';
-    
-    // สร้าง 3 แถว
-    for (let row = 0; row < 3; row++) {
-      photosHTML += '<div class="photo-row">';
+  // === LOGO SECTION ===
+  // CENTRAL PATTANA (ปรับให้ไม่ซ้อนกัน)
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  
+  // วัดความกว้างและจัดตำแหน่ง
+  const pattanaText = 'PATTANA';
+  const pattanaWidth = doc.getTextWidth(pattanaText);
+  const pageWidth = 210; // A4 width in mm
+  
+  // PATTANA (สีส้ม/ทอง - ใช้สีเทาแทนใน jsPDF)
+  doc.setTextColor(169, 169, 169); // สีเทา
+  doc.text(pattanaText, pageWidth - 20, 15, { align: 'right' });
+  
+  // CENTRAL (สีเข้ม)
+  doc.setTextColor(0, 0, 0); // สีดำ
+  doc.text('CENTRAL', pageWidth - 20 - pattanaWidth - 5, 15, { align: 'right' });
+  
+  // === MAIN HEADER BOX ===
+  const headerY = 25;
+  const headerHeight = 50;
+  const margin = 15;
+  
+  // กรอบใหญ่
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(0, 0, 0);
+  doc.rect(margin, headerY, pageWidth - (margin * 2), headerHeight);
+  
+  // === TITLE SECTION ===
+  const titleHeight = 15;
+  
+  // กรอบ title
+  doc.rect(margin, headerY, pageWidth - (margin * 2), titleHeight);
+  
+  // ข้อความ title - ใช้ Helvetica สำหรับภาษาไทย
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('รูปถ่ายประกอบการตรวจสอบ', pageWidth / 2, headerY + 10, { align: 'center' });
+  
+  // === INFO SECTION ===
+  const infoY = headerY + titleHeight;
+  const infoHeight = headerHeight - titleHeight;
+  
+  // เส้นแบ่งกลาง
+  doc.line(pageWidth / 2, infoY, pageWidth / 2, infoY + infoHeight);
+  
+  // === TEXT CONTENT ===
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  
+  const leftX = margin + 5;
+  const rightX = pageWidth / 2 + 5;
+  const lineHeight = 8;
+  const startY = infoY + 8;
+  
+  // Left column
+  doc.text(`โครงการ: ${projectName}`, leftX, startY);
+  doc.text(`อาคาร: ${building}`, leftX, startY + lineHeight);
+  doc.text(`หมวดงาน: ${category}`, leftX, startY + lineHeight * 2);
+  
+  // Right column
+  doc.text(`วันที่: ${getCurrentThaiDate()}`, rightX, startY);
+  doc.text(`ฐานรากเบอร์: ${foundation}`, rightX, startY + lineHeight);
+  doc.text(`แผ่นที่: ${pageNumber}/${totalPages}`, rightX, startY + lineHeight * 2);
+}
+
+// 🖼️ วาด Photos Grid แบบ Firebase Compatible
+async function drawFirebasePhotosGrid(doc, data) {
+  const { photos, pageNumber } = data;
+  
+  // === GRID CALCULATIONS ===
+  const gridStartY = 85;
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const margin = 15;
+  
+  const availableWidth = pageWidth - (margin * 2);
+  const availableHeight = pageHeight - gridStartY - 20;
+  
+  // 2 columns x 3 rows
+  const photoWidth = (availableWidth - 10) / 2;  // 10mm gap between columns
+  const photoHeight = (availableHeight - 20) / 3; // 20mm total gaps for 3 rows
+  const captionHeight = 15;
+  const actualPhotoHeight = photoHeight - captionHeight;
+  
+  console.log(`Grid dimensions: ${photoWidth}x${actualPhotoHeight}mm per photo`);
+  
+  // === DRAW PHOTOS ===
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 2; col++) {
+      const photoIndex = row * 2 + col;
+      const globalPhotoNumber = (pageNumber - 1) * 6 + photoIndex + 1;
       
-      // สร้าง 2 คอลัมน์ในแต่ละแถว
-      for (let col = 0; col < 2; col++) {
-        const photoIndex = row * 2 + col;
-        const globalPhotoNumber = startIndex + photoIndex + 1;
+      if (photoIndex < photos.length) {
+        const photo = photos[photoIndex];
         
-        if (photoIndex < pagePhotos.length) {
-          const photo = pagePhotos[photoIndex];
-          photosHTML += `
-            <div class="photo-container">
-              <div class="photo-content">
-                ${photo.imageBase64 ? `
-                  <img src="data:image/jpeg;base64,${photo.imageBase64}" alt="${photo.topic}" />
-                ` : `
-                  <div class="no-image">ไม่พบรูปภาพ</div>
-                `}
-              </div>
-              <div class="photo-header">
-                ${globalPhotoNumber}. ${photo.topic}
-              </div>
-            </div>
-          `;
-        } else {
-          // ช่องว่างสำหรับรูปที่ไม่มี
-          photosHTML += `
-            <div class="photo-container spacer">
-              <div class="photo-content">
-                <div class="no-image">-</div>
-              </div>
-              <div class="photo-header">
-                ${globalPhotoNumber}. 
-              </div>
-            </div>
-          `;
-        }
+        const x = margin + col * (photoWidth + 5);
+        const y = gridStartY + row * (photoHeight + 5);
+        
+        await drawFirebasePhotoFrame(doc, {
+          x,
+          y,
+          width: photoWidth,
+          height: actualPhotoHeight,
+          captionHeight,
+          photo,
+          photoNumber: globalPhotoNumber
+        });
       }
-      
-      photosHTML += '</div>'; // ปิด photo-row
     }
-    
-    pages.push({
-      pageNumber: pageIndex + 1,
-      totalPages: totalPages,
-      photosHTML: photosHTML
-    });
+  }
+}
+
+// 🎨 วาดกรอบรูป Firebase Compatible
+async function drawFirebasePhotoFrame(doc, frameData) {
+  const { x, y, width, height, captionHeight, photo, photoNumber } = frameData;
+  
+  // === PHOTO BORDER ===
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(200, 200, 200);
+  doc.rect(x, y, width, height);
+  
+  // === PHOTO CONTENT ===
+  if (photo.imageBase64) {
+    try {
+      // ใน jsPDF เราใส่รูปได้โดยตรงจาก base64
+      const imageData = `data:image/jpeg;base64,${photo.imageBase64}`;
+      
+      // คำนวณขนาดรูปให้พอดีกับกรอบ
+      const padding = 2;
+      const imgX = x + padding;
+      const imgY = y + padding;
+      const imgWidth = width - (padding * 2);
+      const imgHeight = height - (padding * 2);
+      
+      doc.addImage(imageData, 'JPEG', imgX, imgY, imgWidth, imgHeight);
+      
+    } catch (imageError) {
+      console.error('Error adding image:', imageError);
+      // แสดงข้อความแทนรูป
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text('ไม่พบรูปภาพ', x + width/2, y + height/2, { align: 'center' });
+    }
+  } else {
+    // ไม่มีรูป - แสดงข้อความ
+    doc.setFontSize(8);
+    doc.setTextColor(128, 128, 128);
+    doc.text('ไม่พบรูปภาพ', x + width/2, y + height/2, { align: 'center' });
   }
   
-  // สร้าง HTML สำหรับทุกหน้า
-  const pagesHTML = pages.map(page => `
-    <div class="page">
-      <!-- Logo นอกกรอบ -->
-      <div class="external-logo">
-        <span class="central">CENTRAL</span><span class="pattana">PATTANA</span>
-      </div>
-      
-      <!-- Header -->
-      <div class="header">
-        <div class="header-title">รูปถ่ายประกอบการตรวจสอบ</div>
-        <div class="header-content">
-          <div class="left-column">
-            <div class="info-row">
-              <span class="label">โครงการ:</span>
-              <span class="value">${projectName}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">อาคาร:</span>
-              <span class="value">${building}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">หมวดงาน:</span>
-              <span class="value">${category}</span>
-            </div>
-          </div>
-          <div class="right-column">
-            <div class="info-row">
-              <span class="label">วันที่:</span>
-              <span class="value">${getCurrentThaiDate()}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">ฐานรากเบอร์:</span>
-              <span class="value">${foundation}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">แผ่นที่:</span>
-              <span class="value">${page.pageNumber}/${page.totalPages}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Photos Grid (6 รูปต่อหน้า - 2×3) -->
-      <div class="photos-container">
-        ${page.photosHTML}
-      </div>
-    </div>
-  `).join('');
+  // === CAPTION ===
+  const captionY = y + height;
   
-  return `
-    <!DOCTYPE html>
-    <html lang="th">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
-        
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-        
-        body {
-          font-family: 'Sarabun', 'TH Sarabun New', Arial, sans-serif;
-          font-size: 14px;
-          line-height: 1.2;
-          color: #000;
-          background: white;
-        }
-        
-        .page {
-          width: 210mm;
-          height: 297mm;
-          page-break-after: always;
-          position: relative;
-          padding: 8mm;
-          padding-top: 12mm;
-          display: flex;
-          flex-direction: column;
-          box-sizing: border-box;
-        }
-        
-        .page:last-child {
-          page-break-after: avoid;
-        }
-        
-        /* Logo นอกกรอบ */
-        .external-logo {
-          position: absolute;
-          top: 4mm;
-          right: 8mm;
-          font-family: 'Sarabun', sans-serif;
-          font-size: 12px;
-          font-weight: 600;
-          letter-spacing: 0.5px;
-          z-index: 10;
-        }
-        
-        .external-logo .central {
-          color: #2C3E50;
-        }
-        
-        .external-logo .pattana {
-          color: #D4AF37;
-        }
-        
-        .header {
-          border: 2px solid #000;
-          margin-bottom: 5mm;
-          flex-shrink: 0;
-        }
-        
-        .header-title {
-          border-bottom: 2px solid #000;
-          text-align: center;
-          padding: 3mm;
-          font-size: 16px;
-          font-weight: 600;
-          background: white;
-          color: black;
-        }
-        
-        .header-content {
-          display: flex;
-          padding: 3mm 5mm;
-          gap: 10mm;
-          background: white;
-          line-height: 1.2;
-        }
-        
-        .left-column, .right-column {
-          flex: 1;
-        }
-        
-        .info-row {
-          margin-bottom: 1.5mm;
-          display: flex;
-          align-items: baseline;
-        }
-        
-        .label {
-          font-weight: 500;
-          min-width: 18mm;
-          margin-right: 3mm;
-          font-size: 12px;
-        }
-        
-        .value {
-          font-weight: 400;
-          font-size: 12px;
-        }
-        
-        /* Photos Container - 2×3 Grid Layout */
-        .photos-container {
-          display: flex;
-          flex-direction: column;
-          gap: 4mm;
-          flex: 1;
-          height: calc(297mm - 12mm - 8mm - 30mm);
-        }
-        
-        /* Photo Row - แถวละ 2 รูป */
-        .photo-row {
-          display: flex;
-          gap: 4mm;
-          height: calc(33.333% - 2.67mm);
-          min-height: 0;
-        }
-        
-        /* 🔥 Photo Container - หัวข้ออยู่ด้านล่าง */
-        .photo-container {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          page-break-inside: avoid;
-          min-width: 0;
-          border: none;
-        }
-        
-        .photo-container.spacer {
-          opacity: 0.3;
-        }
-        
-        /* 🔥 Photo Content - รูปอยู่ด้านบน */
-        .photo-content {
-          flex: 1; /* ให้รูปใช้พื้นที่หลัก */
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-          background: white;
-          min-height: 0;
-          padding: 2mm;
-        }
-        
-        .photo-content img {
-          max-width: 100%;
-          max-height: 100%;
-          width: auto;
-          height: auto;
-          object-fit: contain;
-          object-position: center;
-          display: block;
-          border: none;
-          background: white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          border-radius: 2px;
-        }
-        
-        /* 🔥 Photo Header - หัวข้ออยู่ด้านล่าง */
-        .photo-header {
-          padding: 2mm 0;
-          font-size: 11px;
-          font-weight: 500;
-          text-align: center;
-          background: white;
-          color: black;
-          flex-shrink: 0; /* ไม่ให้ยุบตัว */
-          height: 10mm;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          word-wrap: break-word;
-          overflow: hidden;
-          border: none;
-          /* เพิ่ม border-top เพื่อแยกจากรูป */
-          border-top: 1px solid #e0e0e0;
-          margin-top: 1mm;
-        }
-        
-        .no-image {
-          color: #999;
-          font-size: 12px;
-          text-align: center;
-        }
-        
-        @media print {
-          body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          
-          .page {
-            page-break-after: always;
-            margin: 0;
-            padding: 8mm;
-            padding-top: 12mm;
-          }
-          
-          .page:last-child {
-            page-break-after: avoid;
-          }
-          
-          .photo-content img {
-            max-width: 100% !important;
-            max-height: 100% !important;
-            object-fit: contain !important;
-            border: none !important;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
-          }
-          
-          .header-title {
-            font-size: 14px !important;
-            padding: 2.5mm !important;
-          }
-          
-          .label, .value {
-            font-size: 11px !important;
-          }
-          
-          .photo-header {
-            font-size: 10px !important;
-            padding: 1.5mm 0 !important;
-            height: 8mm !important;
-          }
-          
-          .header-content {
-            padding: 2.5mm 4mm !important;
-          }
-          
-          .info-row {
-            margin-bottom: 1mm !important;
-          }
-          
-          .photos-container {
-            gap: 3mm !important;
-          }
-          
-          .photo-row {
-            gap: 3mm !important;
-          }
-          
-          .photo-content {
-            padding: 1.5mm !important;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      ${pagesHTML}
-    </body>
-    </html>
-  `;
+  // Caption border
+  doc.setLineWidth(0.2);
+  doc.setDrawColor(230, 230, 230);
+  doc.line(x, captionY, x + width, captionY);
+  
+  // Caption text
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  
+  const captionText = `${photoNumber}. ${photo.topic}`;
+  
+  // แบ่งข้อความถ้ายาวเกินไป
+  const maxWidth = width - 4;
+  const textWidth = doc.getTextWidth(captionText);
+  
+  if (textWidth > maxWidth) {
+    // ตัดข้อความให้พอดี
+    const words = captionText.split(' ');
+    let line1 = '';
+    let line2 = '';
+    
+    for (let word of words) {
+      const testLine = line1 + word + ' ';
+      if (doc.getTextWidth(testLine) > maxWidth && line1 !== '') {
+        line2 = words.slice(words.indexOf(word)).join(' ');
+        break;
+      } else {
+        line1 = testLine;
+      }
+    }
+    
+    doc.text(line1.trim(), x + width/2, captionY + 5, { align: 'center' });
+    if (line2) {
+      doc.text(line2, x + width/2, captionY + 10, { align: 'center' });
+    }
+  } else {
+    doc.text(captionText, x + width/2, captionY + 7, { align: 'center' });
+  }
 }
 
 // วันที่ปัจจุบันภาษาไทย
@@ -485,7 +334,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
       requestBody: {
         name: filename,
         parents: [FOLDER_ID],
-        description: 'QC Report PDF - 2 Photos Per Page Format'
+        description: 'QC Report PDF - Firebase Functions Compatible (jsPDF)'
       },
       media: {
         mimeType: 'application/pdf',
@@ -495,7 +344,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
       fields: 'id, name, webViewLink, webContentLink'
     });
     
-    console.log(`2-Photos-Per-Page PDF uploaded: ${response.data.id}`);
+    console.log(`FIREBASE PDF uploaded: ${response.data.id}`);
     
     return {
       fileId: response.data.id,
@@ -506,7 +355,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
     };
     
   } catch (error) {
-    console.error('Error uploading 2-Photos-Per-Page PDF:', error);
+    console.error('Error uploading FIREBASE PDF:', error);
     throw error;
   }
 }

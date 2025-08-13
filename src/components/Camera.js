@@ -306,84 +306,106 @@ const Camera = () => {
     }
   };
 
-  const startCamera = async () => {
-    try {
-      console.log('Starting camera...');
-      if (stream) {
-        console.log('Stopping existing stream before starting new one...');
-        stream.getTracks().forEach(track => track.stop());
-        setStream(null);
-      }
-      
-      setIsCameraOn(true);
-      
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 640 },   
-          height: { ideal: 480 },
-          frameRate: { ideal: 15, max: 30 }
-        }
-      });
-      
-      console.log('MediaStream obtained:', mediaStream.id);
-      setStream(mediaStream);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        
-        return new Promise((resolve, reject) => {
-          const video = videoRef.current;
-          
-          const onLoadedData = () => {
-            console.log('Video loaded and ready');
-            video.removeEventListener('loadeddata', onLoadedData);
-            video.removeEventListener('error', onError);
-            resolve();
-          };
-          
-          const onError = (error) => {
-            console.error('Video error:', error);
-            video.removeEventListener('loadeddata', onLoadedData);
-            video.removeEventListener('error', onError);
-            reject(error);
-          };
-          
-          video.addEventListener('loadeddata', onLoadedData);
-          video.addEventListener('error', onError);
-          
-          setTimeout(() => {
-            video.removeEventListener('loadeddata', onLoadedData);
-            video.removeEventListener('error', onError);
-            
-            if (video.readyState >= 2) {
-              console.log('Camera ready after timeout check');
-              resolve();
-            } else {
-              console.log('Camera timeout, but trying to continue...');
-              resolve();
-            }
-          }, 10000);
-        });
-      }
-      
-    } catch (error) {
-      console.error('Error starting camera:', error);
-      setIsCameraOn(false);
+const startCamera = async () => {
+  try {
+    console.log('Starting camera...');
+    if (stream) {
+      console.log('Stopping existing stream before starting new one...');
+      stream.getTracks().forEach(track => track.stop());
       setStream(null);
-      
-      if (error.name === 'NotAllowedError') {
-        alert('กรุณาอนุญาตการใช้งานกล้องในเบราว์เซอร์');
-      } else if (error.name === 'NotFoundError') {
-        alert('ไม่พบกล้องในอุปกรณ์');
-      } else if (error.name === 'NotReadableError') {
-        alert('กล้องถูกใช้งานโดยแอปอื่นอยู่');
-      } else {
-        alert('ไม่สามารถเปิดกล้องได้: ' + error.message);
-      }
-      throw error;
     }
-  };
+    
+    setIsCameraOn(true);
+    
+    // 🔥 ปรับปรุงการตั้งค่ากล้อง
+    const constraints = {
+      video: { 
+        facingMode: 'environment', // กล้องหลัง
+        width: { 
+          min: 640,
+          ideal: 1920,    // เพิ่มความละเอียด
+          max: 4096 
+        },
+        height: { 
+          min: 480,
+          ideal: 1080,    // เพิ่มความละเอียด
+          max: 2160 
+        },
+        frameRate: { 
+          ideal: 30,      // เพิ่ม frame rate
+          max: 60 
+        },
+        aspectRatio: { ideal: 16/9 } // กำหนด aspect ratio
+      }
+    };
+    
+    const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    
+    console.log('MediaStream obtained:', mediaStream.id);
+    
+    // ตรวจสอบความละเอียดจริงที่ได้
+    const videoTrack = mediaStream.getVideoTracks()[0];
+    const settings = videoTrack.getSettings();
+    console.log('Actual camera settings:', settings);
+    
+    setStream(mediaStream);
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = mediaStream;
+      
+      return new Promise((resolve, reject) => {
+        const video = videoRef.current;
+        
+        const onLoadedData = () => {
+          console.log('Video loaded and ready');
+          console.log(`Video dimensions: ${video.videoWidth}x${video.videoHeight}`);
+          video.removeEventListener('loadeddata', onLoadedData);
+          video.removeEventListener('error', onError);
+          resolve();
+        };
+        
+        const onError = (error) => {
+          console.error('Video error:', error);
+          video.removeEventListener('loadeddata', onLoadedData);
+          video.removeEventListener('error', onError);
+          reject(error);
+        };
+        
+        video.addEventListener('loadeddata', onLoadedData);
+        video.addEventListener('error', onError);
+        
+        setTimeout(() => {
+          video.removeEventListener('loadeddata', onLoadedData);
+          video.removeEventListener('error', onError);
+          
+          if (video.readyState >= 2) {
+            console.log('Camera ready after timeout check');
+            resolve();
+          } else {
+            console.log('Camera timeout, but trying to continue...');
+            resolve();
+          }
+        }, 10000);
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error starting camera:', error);
+    setIsCameraOn(false);
+    setStream(null);
+    
+    if (error.name === 'NotAllowedError') {
+      alert('กรุณาอนุญาตการใช้งานกล้องในเบราว์เซอร์');
+    } else if (error.name === 'NotFoundError') {
+      alert('ไม่พบกล้องในอุปกรณ์');
+    } else if (error.name === 'NotReadableError') {
+      alert('กล้องถูกใช้งานโดยแอปอื่นอยู่');
+    } else {
+      alert('ไม่สามารถเปิดกล้องได้: ' + error.message);
+    }
+    throw error;
+  }
+};
 
   const stopCamera = () => {
     console.log('Stopping camera...');
@@ -406,91 +428,96 @@ const Camera = () => {
   };
 
   // 🔥 NEW: Capture Photo and Auto Reset Camera
-  const capturePhotoAndReset = async () => {
-    if (!videoRef.current || !canvasRef.current || !isCameraOn || !selectedTopic) {
-      console.log('Cannot capture: missing requirements');
-      return;
-    }
+const capturePhotoAndReset = async () => {
+  if (!videoRef.current || !canvasRef.current || !isCameraOn || !selectedTopic) {
+    console.log('Cannot capture: missing requirements');
+    return;
+  }
+  
+  const video = videoRef.current;
+  
+  if (video.readyState < 2) {
+    console.log('Video not ready yet, but trying anyway...');
+  }
+  
+  setIsCapturing(true);
+  
+  try {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
     
-    const video = videoRef.current;
+    // 🔥 ใช้ความละเอียดจริงของ video
+    const videoWidth = video.videoWidth || video.clientWidth;
+    const videoHeight = video.videoHeight || video.clientHeight;
     
-    if (video.readyState < 2) {
-      console.log('Video not ready yet, but trying anyway...');
-    }
+    console.log(`Video actual size: ${videoWidth}x${videoHeight}`);
     
-    setIsCapturing(true);
+    // ตั้ง canvas ตามขนาดจริงของ video
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
     
-    try {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
+    console.log(`Canvas size: ${canvas.width}x${canvas.height}`);
+    
+    // วาดรูปด้วยขนาดเต็ม
+    ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+    
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        console.error('Failed to create blob from canvas');
+        alert('ไม่สามารถสร้างรูปภาพได้ กรุณาลองอีกครั้ง');
+        setIsCapturing(false);
+        return;
+      }
       
-      const targetWidth = 800;
-      const targetHeight = 600;
+      console.log('Blob created successfully, size:', blob.size);
       
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      
-      console.log(`Canvas size: ${canvas.width}x${canvas.height}`);
-      
-      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
-      
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          console.error('Failed to create blob from canvas');
-          alert('ไม่สามารถสร้างรูปภาพได้ กรุณาลองอีกครั้ง');
-          setIsCapturing(false);
-          return;
-        }
+      try {
+        const watermarkText = formatThaiDateTime();
+        const location = currentLocation || 'กำลังหาตำแหน่ง...';
+        const watermarkedBlob = await addWatermark(blob, watermarkText, location);
         
-        console.log('Blob created successfully, size:', blob.size);
+        // สร้าง photo object และเก็บไว้ในคลังรูป
+        const photoData = {
+          id: Date.now() + Math.random(),
+          blob: watermarkedBlob,
+          url: URL.createObjectURL(watermarkedBlob),
+          building: formData.building,
+          foundation: formData.foundation,
+          category: formData.category,
+          topic: selectedTopic,
+          location: currentLocation,
+          timestamp: new Date().toISOString()
+        };
         
-        try {
-          const watermarkText = formatThaiDateTime();
-          const location = currentLocation || 'กำลังหาตำแหน่ง...';
-          const watermarkedBlob = await addWatermark(blob, watermarkText, location);
-          
-          // 🔥 สร้าง photo object และเก็บไว้ในคลังรูป
-          const photoData = {
-            id: Date.now() + Math.random(),
-            blob: watermarkedBlob,
-            url: URL.createObjectURL(watermarkedBlob),
-            building: formData.building,
-            foundation: formData.foundation,
-            category: formData.category,
-            topic: selectedTopic,
-            location: currentLocation,
-            timestamp: new Date().toISOString()
-          };
-          
-          // เพิ่มลงใน array (เก็บสะสม)
-          setCapturedPhotos(prev => [...prev, photoData]);
-          
-          // อัปเดต completed topics
-          setCompletedTopics(prev => new Set([...prev, selectedTopic]));
-          
-          console.log(`Photo captured for topic: ${selectedTopic}`);
-          
-          // 🔥 Auto Reset Camera State (ไม่ลบรูป)
-          stopCamera();
-          setSelectedTopic('');
-          setCaptureMode(false);
-          setIsCapturing(false);
-          
-          // แสดงข้อความสำเร็จ
-          alert(`✅ ถ่ายรูป "${selectedTopic}" เรียบร้อย!\n\n📷 รูปทั้งหมด: ${capturedPhotos.length + 1} รูป`);
-          
-        } catch (error) {
-          console.error('Error adding watermark:', error);
-          setIsCapturing(false);
-        }
-      }, 'image/jpeg', 0.8);
-      
-    } catch (error) {
-      console.error('Error capturing photo:', error);
-      alert('เกิดข้อผิดพลาดในการถ่ายรูป');
-      setIsCapturing(false);
-    }
-  };
+        // เพิ่มลงใน array (เก็บสะสม)
+        setCapturedPhotos(prev => [...prev, photoData]);
+        
+        // อัปเดต completed topics
+        setCompletedTopics(prev => new Set([...prev, selectedTopic]));
+        
+        console.log(`Photo captured for topic: ${selectedTopic}`);
+        
+        // Auto Reset Camera State (ไม่ลบรูป)
+        stopCamera();
+        setSelectedTopic('');
+        setCaptureMode(false);
+        setIsCapturing(false);
+        
+        // แสดงข้อความสำเร็จ
+        alert(`✅ ถ่ายรูป "${selectedTopic}" เรียบร้อย!\n\n📷 รูปทั้งหมด: ${capturedPhotos.length + 1} รูป`);
+        
+      } catch (error) {
+        console.error('Error adding watermark:', error);
+        setIsCapturing(false);
+      }
+    }, 'image/jpeg', 0.95); // เพิ่มคุณภาพเป็น 0.95
+    
+  } catch (error) {
+    console.error('Error capturing photo:', error);
+    alert('เกิดข้อผิดพลาดในการถ่ายรูป');
+    setIsCapturing(false);
+  }
+};
 
   // 🔥 NEW: Cancel Capture (back to topic selection)
   const cancelCapture = () => {
@@ -562,7 +589,7 @@ const Camera = () => {
   const clearAllPhotos = () => {
     if (capturedPhotos.length === 0) return;
     
-    if (confirm(`ต้องการลบรูปทั้งหมด ${capturedPhotos.length} รูป?`)) {
+    if (window.confirm(`ต้องการลบรูปทั้งหมด ${capturedPhotos.length} รูป?`)) {
       capturedPhotos.forEach(photo => {
         URL.revokeObjectURL(photo.url);
       });
