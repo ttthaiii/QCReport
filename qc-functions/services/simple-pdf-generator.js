@@ -1,34 +1,62 @@
 // แทนที่ไฟล์ qc-functions/services/simple-pdf-generator.js
-// สร้าง PDF แบบมืออาชีพสำหรับ Firebase Functions
+// PDF Generator พร้อม Thai Font
 
-// ⚠️ FIREBASE FUNCTIONS COMPATIBLE VERSION
-// ใช้ pdf2pic + jsPDF แทน Canvas เพราะ Firebase Functions ไม่รองรับ Canvas
-
-const { jsPDF } = require('jspdf');
-
-// เพิ่ม Thai font support
-require('jspdf/dist/jspdf.plugin.standard_fonts_metrics.js');
-require('jspdf/dist/jspdf.plugin.split_text_to_size.js');
+const PDFDocument = require('pdfkit');
 const { getDriveClient } = require('./google-auth');
 const { Readable } = require('stream');
+const fs = require('fs');
+const path = require('path');
 
-// สร้าง PDF ด้วย jsPDF (Firebase Functions Compatible)
+// ตรวจสอบและโหลด Thai Font (ปิดชั่วคราว)
+function setupThaiFont(doc) {
+  try {
+    // ปิดการใช้ Thai Font ชั่วคราวเพื่อให้ PDF สร้างได้
+    console.log('⚠️ Thai font disabled temporarily - using Helvetica fallback');
+    return false;
+    
+    // โค้ดเดิม (comment ไว้)
+    /*
+    const fontPath = path.join(__dirname, '../fonts/THSarabunNew.ttf');
+    
+    if (fs.existsSync(fontPath)) {
+      console.log('✅ Loading THSarabunNew font...');
+      doc.registerFont('ThaiFont', fontPath);
+      doc.registerFont('ThaiFontBold', fontPath);
+      return true;
+    } else {
+      console.log('❌ Thai font not found at:', fontPath);
+      return false;
+    }
+    */
+  } catch (error) {
+    console.error('Error loading Thai font:', error.message);
+    return false;
+  }
+}
+
+// เลือก font ที่เหมาะสม
+function selectFont(doc, style = 'normal', hasThaiFont = false) {
+  if (hasThaiFont) {
+    return style === 'bold' ? 'ThaiFontBold' : 'ThaiFont';
+  } else {
+    return style === 'bold' ? 'Helvetica-Bold' : 'Helvetica';
+  }
+}
+
+// สร้าง PDF ด้วย Thai Font Support
 async function generateSimplePDF(reportData) {
   try {
     const { building, foundation, category, photos, projectName } = reportData;
     
-    console.log('Starting FIREBASE-COMPATIBLE PDF generation...');
+    console.log('Starting PDF generation with Thai Font support...');
     console.log(`Total photos: ${photos.length}`);
     
-    // 🔥 ตรวจสอบและจำกัดจำนวนรูป - เฉพาะฐานรากต้อง 12 รูป (2 หน้า x 6 รูป)
+    // ประมวลผลรูป
     let processedPhotos = photos;
     if (category === 'ฐานราก') {
       if (photos.length > 12) {
-        console.log(`Warning: ฐานราก has ${photos.length} photos, limiting to first 12`);
         processedPhotos = photos.slice(0, 12);
       } else if (photos.length < 12) {
-        console.log(`Warning: ฐานราก has only ${photos.length}/12 photos`);
-        // เพิ่มรูปว่างเพื่อให้ครบ 12 รูป
         const emptyPhotos = Array(12 - photos.length).fill(null).map((_, index) => ({
           id: `empty-${index}`,
           topic: `หัวข้อที่ ${photos.length + index + 1}`,
@@ -38,17 +66,26 @@ async function generateSimplePDF(reportData) {
       }
     }
     
-    console.log('Creating FIREBASE-COMPATIBLE PDF...');
-    
-    // สร้าง PDF ด้วย jsPDF (A4 size)
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
+    // สร้าง PDF Document
+    const doc = new PDFDocument({
+      size: 'A4',
+      margins: { top: 20, bottom: 20, left: 20, right: 20 },
+      bufferPages: true
     });
+    
+    // ลอง setup Thai Font
+    const hasThaiFont = setupThaiFont(doc);
+    if (hasThaiFont) {
+      console.log('✅ Thai font loaded successfully!');
+    } else {
+      console.log('⚠️ Using Helvetica fallback');
+    }
     
     const photosPerPage = 6;
     const totalPages = category === 'ฐานราก' ? 2 : Math.ceil(processedPhotos.length / photosPerPage);
+    
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
     
     for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
       if (pageIndex > 0) {
@@ -57,7 +94,6 @@ async function generateSimplePDF(reportData) {
       
       const pagePhotos = processedPhotos.slice(pageIndex * photosPerPage, (pageIndex + 1) * photosPerPage);
       
-      // เพิ่มรูปว่างถ้าไม่ครบ 6 รูป
       while (pagePhotos.length < photosPerPage) {
         pagePhotos.push({
           id: `empty-${pagePhotos.length}`,
@@ -66,251 +102,283 @@ async function generateSimplePDF(reportData) {
         });
       }
       
-      await drawFirebasePage(doc, {
+      await drawThaiPDFPage(doc, {
         building,
         foundation,
         category,
         projectName: projectName || 'Escent Nakhon si',
         pageNumber: pageIndex + 1,
         totalPages,
-        photos: pagePhotos
+        photos: pagePhotos,
+        hasThaiFont
       });
     }
     
-    // สร้าง PDF buffer
-    const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
+    doc.end();
     
-    console.log('FIREBASE-COMPATIBLE PDF created successfully! 🎉');
-    return pdfBuffer;
+    return new Promise((resolve, reject) => {
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        console.log(`✅ Thai PDF created! Size: ${pdfBuffer.length} bytes`);
+        resolve(pdfBuffer);
+      });
+      
+      doc.on('error', (error) => {
+        console.error('❌ Thai PDF error:', error);
+        reject(error);
+      });
+    });
     
   } catch (error) {
-    console.error('Error generating FIREBASE-COMPATIBLE PDF:', error);
+    console.error('Error generating Thai PDF:', error);
     throw error;
   }
 }
 
-// วาดหน้า PDF สำหรับ Firebase Functions
-async function drawFirebasePage(doc, pageData) {
-  const { building, foundation, category, projectName, pageNumber, totalPages, photos } = pageData;
+// วาดหน้า PDF พร้อม Thai Font
+async function drawThaiPDFPage(doc, pageData) {
+  const { building, foundation, category, projectName, pageNumber, totalPages, photos, hasThaiFont } = pageData;
   
-  // 🎨 FIREBASE-COMPATIBLE HEADER
-  drawFirebaseHeader(doc, {
+  await drawThaiHeader(doc, {
     building,
     foundation,
     category,
     projectName,
     pageNumber,
-    totalPages
+    totalPages,
+    hasThaiFont
   });
   
-  // 🖼️ FIREBASE-COMPATIBLE PHOTOS GRID
-  await drawFirebasePhotosGrid(doc, {
+  await drawThaiPhotosGrid(doc, {
     photos,
-    pageNumber
+    pageNumber,
+    hasThaiFont
   });
 }
 
-// 🎨 วาด Header แบบ Firebase Compatible
-function drawFirebaseHeader(doc, data) {
-  const { building, foundation, category, projectName, pageNumber, totalPages } = data;
+// Header พร้อม Thai Font
+async function drawThaiHeader(doc, data) {
+  const { building, foundation, category, projectName, pageNumber, totalPages, hasThaiFont } = data;
+  
+  const pageWidth = doc.page.width;
+  const margin = 20;
   
   // === LOGO SECTION ===
-  // CENTRAL PATTANA (ปรับให้ไม่ซ้อนกัน)
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.fontSize(14).font(selectFont(doc, 'bold', false)); // Logo ใช้ English font
   
-  // วัดความกว้างและจัดตำแหน่ง
+  // คำนวณตำแหน่ง CENTRAL PATTANA
   const pattanaText = 'PATTANA';
-  const pattanaWidth = doc.getTextWidth(pattanaText);
-  const pageWidth = 210; // A4 width in mm
+  const centralText = 'CENTRAL';
   
-  // PATTANA (สีส้ม/ทอง - ใช้สีเทาแทนใน jsPDF)
-  doc.setTextColor(169, 169, 169); // สีเทา
-  doc.text(pattanaText, pageWidth - 20, 15, { align: 'right' });
+  const pattanaWidth = doc.widthOfString(pattanaText);
+  const centralWidth = doc.widthOfString(centralText);
+  const spacing = 5;
   
-  // CENTRAL (สีเข้ม)
-  doc.setTextColor(0, 0, 0); // สีดำ
-  doc.text('CENTRAL', pageWidth - 20 - pattanaWidth - 5, 15, { align: 'right' });
+  const rightEdge = pageWidth - margin;
+  const pattanaX = rightEdge - pattanaWidth;
+  const centralX = pattanaX - centralWidth - spacing;
+  
+  // วาด CENTRAL (สีดำ)
+  doc.fillColor('#000000').text(centralText, centralX, 15);
+  
+  // วาด PATTANA (สีเทา)
+  doc.fillColor('#666666').text(pattanaText, pattanaX, 15);
   
   // === MAIN HEADER BOX ===
-  const headerY = 25;
-  const headerHeight = 50;
-  const margin = 15;
+  const headerY = 40;
+  const headerHeight = 120;
+  const headerWidth = pageWidth - (margin * 2);
   
   // กรอบใหญ่
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(0, 0, 0);
-  doc.rect(margin, headerY, pageWidth - (margin * 2), headerHeight);
+  doc.strokeColor('#000000')
+     .lineWidth(2)
+     .rect(margin, headerY, headerWidth, headerHeight)
+     .stroke();
   
   // === TITLE SECTION ===
-  const titleHeight = 15;
+  const titleHeight = 40;
   
-  // กรอบ title
-  doc.rect(margin, headerY, pageWidth - (margin * 2), titleHeight);
+  // พื้นหลังขาว + กรอบ
+  doc.fillColor('#FFFFFF')
+     .rect(margin, headerY, headerWidth, titleHeight)
+     .fillAndStroke('#FFFFFF', '#000000');
   
-  // ข้อความ title - ใช้ Helvetica สำหรับภาษาไทย
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 0, 0);
-  doc.text('รูปถ่ายประกอบการตรวจสอบ', pageWidth / 2, headerY + 10, { align: 'center' });
+  // ข้อความ title (ใช้ Thai Font!)
+  doc.fillColor('#000000')
+     .fontSize(16)
+     .font(selectFont(doc, 'bold', hasThaiFont));
+  
+  const titleText = 'รูปถ่ายประกอบการตรวจสอบ';
+  const titleWidth = doc.widthOfString(titleText);
+  const titleX = margin + (headerWidth - titleWidth) / 2;
+  
+  doc.text(titleText, titleX, headerY + 15);
   
   // === INFO SECTION ===
   const infoY = headerY + titleHeight;
   const infoHeight = headerHeight - titleHeight;
   
+  // พื้นหลังข้อมูล
+  doc.fillColor('#FFFFFF')
+     .rect(margin, infoY, headerWidth, infoHeight)
+     .fill();
+  
   // เส้นแบ่งกลาง
-  doc.line(pageWidth / 2, infoY, pageWidth / 2, infoY + infoHeight);
+  const centerX = margin + headerWidth / 2;
+  doc.strokeColor('#000000')
+     .lineWidth(1)
+     .moveTo(centerX, infoY)
+     .lineTo(centerX, infoY + infoHeight)
+     .stroke();
   
-  // === TEXT CONTENT ===
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  // === ข้อมูลซ้าย-ขวา (ใช้ Thai Font!) ===
+  doc.fillColor('#000000')
+     .fontSize(12)
+     .font(selectFont(doc, 'normal', hasThaiFont));
   
-  const leftX = margin + 5;
-  const rightX = pageWidth / 2 + 5;
-  const lineHeight = 8;
-  const startY = infoY + 8;
+  const leftX = margin + 10;
+  const rightX = centerX + 10;
+  const lineHeight = 20;
+  const textStartY = infoY + 15;
   
-  // Left column
-  doc.text(`โครงการ: ${projectName}`, leftX, startY);
-  doc.text(`อาคาร: ${building}`, leftX, startY + lineHeight);
-  doc.text(`หมวดงาน: ${category}`, leftX, startY + lineHeight * 2);
+  // คอลัมน์ซ้าย
+  doc.text(`โครงการ: ${projectName}`, leftX, textStartY);
+  doc.text(`อาคาร: ${building}`, leftX, textStartY + lineHeight);
+  doc.text(`หมวดงาน: ${category}`, leftX, textStartY + lineHeight * 2);
   
-  // Right column
-  doc.text(`วันที่: ${getCurrentThaiDate()}`, rightX, startY);
-  doc.text(`ฐานรากเบอร์: ${foundation}`, rightX, startY + lineHeight);
-  doc.text(`แผ่นที่: ${pageNumber}/${totalPages}`, rightX, startY + lineHeight * 2);
+  // คอลัมน์ขวา
+  doc.text(`วันที่: ${getCurrentThaiDate()}`, rightX, textStartY);
+  doc.text(`ฐานรากเบอร์: ${foundation}`, rightX, textStartY + lineHeight);
+  doc.text(`แผ่นที่: ${pageNumber}/${totalPages}`, rightX, textStartY + lineHeight * 2);
 }
 
-// 🖼️ วาด Photos Grid แบบ Firebase Compatible
-async function drawFirebasePhotosGrid(doc, data) {
-  const { photos, pageNumber } = data;
+// Photos Grid พร้อม Thai Font
+async function drawThaiPhotosGrid(doc, data) {
+  const { photos, pageNumber, hasThaiFont } = data;
   
-  // === GRID CALCULATIONS ===
-  const gridStartY = 85;
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const margin = 15;
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
+  const margin = 20;
   
+  const gridStartY = 180;
   const availableWidth = pageWidth - (margin * 2);
-  const availableHeight = pageHeight - gridStartY - 20;
+  const availableHeight = pageHeight - gridStartY - margin - 20;
   
-  // 2 columns x 3 rows
-  const photoWidth = (availableWidth - 10) / 2;  // 10mm gap between columns
-  const photoHeight = (availableHeight - 20) / 3; // 20mm total gaps for 3 rows
-  const captionHeight = 15;
+  // คำนวณขนาดรูป (2x3 grid)
+  const cols = 2;
+  const rows = 3;
+  const gapX = 10;
+  const gapY = 10;
+  
+  const photoWidth = (availableWidth - gapX * (cols - 1)) / cols;
+  const photoHeight = (availableHeight - gapY * (rows - 1)) / rows;
+  const captionHeight = 40;
   const actualPhotoHeight = photoHeight - captionHeight;
   
-  console.log(`Grid dimensions: ${photoWidth}x${actualPhotoHeight}mm per photo`);
+  console.log(`Photo dimensions: ${photoWidth}x${actualPhotoHeight}px`);
   
-  // === DRAW PHOTOS ===
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 2; col++) {
-      const photoIndex = row * 2 + col;
+  // วาดรูปทั้งหมด
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const photoIndex = row * cols + col;
       const globalPhotoNumber = (pageNumber - 1) * 6 + photoIndex + 1;
       
       if (photoIndex < photos.length) {
         const photo = photos[photoIndex];
         
-        const x = margin + col * (photoWidth + 5);
-        const y = gridStartY + row * (photoHeight + 5);
+        const x = margin + col * (photoWidth + gapX);
+        const y = gridStartY + row * (photoHeight + gapY);
         
-        await drawFirebasePhotoFrame(doc, {
+        await drawThaiPhotoFrame(doc, {
           x,
           y,
           width: photoWidth,
           height: actualPhotoHeight,
           captionHeight,
           photo,
-          photoNumber: globalPhotoNumber
+          photoNumber: globalPhotoNumber,
+          hasThaiFont
         });
       }
     }
   }
 }
 
-// 🎨 วาดกรอบรูป Firebase Compatible
-async function drawFirebasePhotoFrame(doc, frameData) {
-  const { x, y, width, height, captionHeight, photo, photoNumber } = frameData;
+// วาดกรอบรูปพร้อม Thai Caption
+async function drawThaiPhotoFrame(doc, frameData) {
+  const { x, y, width, height, captionHeight, photo, photoNumber, hasThaiFont } = frameData;
   
-  // === PHOTO BORDER ===
-  doc.setLineWidth(0.3);
-  doc.setDrawColor(200, 200, 200);
-  doc.rect(x, y, width, height);
+  // === กรอบรูป ===
+  doc.strokeColor('#CCCCCC')
+     .lineWidth(1)
+     .rect(x, y, width, height)
+     .stroke();
   
-  // === PHOTO CONTENT ===
+  // === เนื้อหารูป ===
   if (photo.imageBase64) {
     try {
-      // ใน jsPDF เราใส่รูปได้โดยตรงจาก base64
-      const imageData = `data:image/jpeg;base64,${photo.imageBase64}`;
+      const imageBuffer = Buffer.from(photo.imageBase64, 'base64');
       
-      // คำนวณขนาดรูปให้พอดีกับกรอบ
       const padding = 2;
       const imgX = x + padding;
       const imgY = y + padding;
       const imgWidth = width - (padding * 2);
       const imgHeight = height - (padding * 2);
       
-      doc.addImage(imageData, 'JPEG', imgX, imgY, imgWidth, imgHeight);
+      // ใส่รูปคุณภาพสูง
+      doc.image(imageBuffer, imgX, imgY, {
+        fit: [imgWidth, imgHeight],
+        align: 'center',
+        valign: 'center'
+      });
       
     } catch (imageError) {
       console.error('Error adding image:', imageError);
-      // แสดงข้อความแทนรูป
-      doc.setFontSize(8);
-      doc.setTextColor(128, 128, 128);
-      doc.text('ไม่พบรูปภาพ', x + width/2, y + height/2, { align: 'center' });
+      drawNoImagePlaceholder(doc, x, y, width, height, hasThaiFont);
     }
   } else {
-    // ไม่มีรูป - แสดงข้อความ
-    doc.setFontSize(8);
-    doc.setTextColor(128, 128, 128);
-    doc.text('ไม่พบรูปภาพ', x + width/2, y + height/2, { align: 'center' });
+    drawNoImagePlaceholder(doc, x, y, width, height, hasThaiFont);
   }
   
-  // === CAPTION ===
+  // === CAPTION (ใช้ Thai Font!) ===
   const captionY = y + height;
   
-  // Caption border
-  doc.setLineWidth(0.2);
-  doc.setDrawColor(230, 230, 230);
-  doc.line(x, captionY, x + width, captionY);
+  // เส้นบอร์เดอร์
+  doc.strokeColor('#DDDDDD')
+     .lineWidth(0.5)
+     .moveTo(x, captionY)
+     .lineTo(x + width, captionY)
+     .stroke();
   
-  // Caption text
-  doc.setFontSize(8);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
+  // ข้อความ caption (Thai Font!)
+  doc.fillColor('#000000')
+     .fontSize(10)
+     .font(selectFont(doc, 'bold', hasThaiFont));
   
   const captionText = `${photoNumber}. ${photo.topic}`;
   
-  // แบ่งข้อความถ้ายาวเกินไป
-  const maxWidth = width - 4;
-  const textWidth = doc.getTextWidth(captionText);
-  
-  if (textWidth > maxWidth) {
-    // ตัดข้อความให้พอดี
-    const words = captionText.split(' ');
-    let line1 = '';
-    let line2 = '';
-    
-    for (let word of words) {
-      const testLine = line1 + word + ' ';
-      if (doc.getTextWidth(testLine) > maxWidth && line1 !== '') {
-        line2 = words.slice(words.indexOf(word)).join(' ');
-        break;
-      } else {
-        line1 = testLine;
-      }
-    }
-    
-    doc.text(line1.trim(), x + width/2, captionY + 5, { align: 'center' });
-    if (line2) {
-      doc.text(line2, x + width/2, captionY + 10, { align: 'center' });
-    }
-  } else {
-    doc.text(captionText, x + width/2, captionY + 7, { align: 'center' });
-  }
+  // วาดข้อความใน caption โดยจัดกึ่งกลาง
+  doc.text(captionText, x + 5, captionY + 10, {
+    width: width - 10,
+    height: captionHeight - 20,
+    align: 'center',
+    ellipsis: true
+  });
 }
 
-// วันที่ปัจจุบันภาษาไทย
+// วาด placeholder เมื่อไม่มีรูป (Thai Font!)
+function drawNoImagePlaceholder(doc, x, y, width, height, hasThaiFont) {
+  doc.fillColor('#F5F5F5')
+     .rect(x + 2, y + 2, width - 4, height - 4)
+     .fill();
+  
+  doc.fillColor('#999999')
+     .fontSize(11)
+     .font(selectFont(doc, 'normal', hasThaiFont))
+     .text('ไม่พบรูปภาพ', x + width/2 - 30, y + height/2 - 5);
+}
+
+// วันที่ไทย
 function getCurrentThaiDate() {
   const now = new Date();
   const day = now.getDate().toString().padStart(2, '0');
@@ -320,7 +388,7 @@ function getCurrentThaiDate() {
   return `${day}/${month}/${year}`;
 }
 
-// อัปโหลด PDF ไป Google Drive
+// อัปโหลด PDF
 async function uploadPDFToDrive(pdfBuffer, filename) {
   try {
     const stream = new Readable();
@@ -334,7 +402,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
       requestBody: {
         name: filename,
         parents: [FOLDER_ID],
-        description: 'QC Report PDF - Firebase Functions Compatible (jsPDF)'
+        description: 'QC Report PDF - Thai Font Support'
       },
       media: {
         mimeType: 'application/pdf',
@@ -344,7 +412,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
       fields: 'id, name, webViewLink, webContentLink'
     });
     
-    console.log(`FIREBASE PDF uploaded: ${response.data.id}`);
+    console.log(`✅ Thai PDF uploaded: ${response.data.id}`);
     
     return {
       fileId: response.data.id,
@@ -355,7 +423,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
     };
     
   } catch (error) {
-    console.error('Error uploading FIREBASE PDF:', error);
+    console.error('Error uploading Thai PDF:', error);
     throw error;
   }
 }

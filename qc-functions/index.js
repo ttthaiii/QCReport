@@ -4,7 +4,7 @@ const cors = require("cors");
 const multer = require("multer");
 const { getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, getCompletedTopics } = require('./api/sheets');
 const { uploadPhoto } = require('./api/photos');
-const { getDriveClient } = require('./services/google-auth'); // แก้ไข import path
+const { getDriveClient } = require('./services/google-auth');
 
 // Setup multer for file uploads
 const upload = multer({
@@ -55,7 +55,7 @@ app.get("/master-data", async (req, res) => {
   }
 });
 
-// 🔥 Add Master Data (Building + Foundation)
+// Add Master Data (Building + Foundation)
 app.post("/master-data", async (req, res) => {
   try {
     const { building, foundation } = req.body;
@@ -67,7 +67,6 @@ app.post("/master-data", async (req, res) => {
       });
     }
     
-    // Validate input
     const buildingTrimmed = building.trim();
     const foundationTrimmed = foundation.trim();
     
@@ -93,7 +92,7 @@ app.post("/master-data", async (req, res) => {
   }
 });
 
-// 🔥 Get Completed Topics (for progress tracking)
+// Get Completed Topics (for progress tracking)
 app.post("/completed-topics", async (req, res) => {
   try {
     const { building, foundation, category } = req.body;
@@ -291,53 +290,37 @@ async function downloadImageAsBase64(driveUrl) {
     const drive = getDriveClient();
     
     try {
-      // วิธีที่ 1: ใช้ export endpoint สำหรับ images
-      const response = await drive.files.export({
+      // ใช้ get with alt=media
+      const response = await drive.files.get({
         fileId: fileId,
-        mimeType: 'image/jpeg',
+        alt: 'media',
         supportsAllDrives: true
       });
       
       if (response.data) {
-        console.log(`Image exported successfully, size: ${response.data.length} bytes`);
+        console.log(`Image downloaded successfully, size: ${response.data.length} bytes`);
         return Buffer.from(response.data, 'binary').toString('base64');
       }
-    } catch (exportError) {
-      console.log('Export failed, trying get with alt=media:', exportError.message);
+    } catch (getError) {
+      console.log('Get with alt=media failed:', getError.message);
       
-      // วิธีที่ 2: ใช้ get with alt=media
+      // วิธีที่ 2: ใช้ direct HTTP request
       try {
-        const response = await drive.files.get({
-          fileId: fileId,
-          alt: 'media',
-          supportsAllDrives: true
-        });
+        const fetch = require('node-fetch');
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        console.log('Trying direct download from:', downloadUrl);
         
-        if (response.data) {
-          console.log(`Image downloaded successfully, size: ${response.data.length} bytes`);
-          return Buffer.from(response.data, 'binary').toString('base64');
-        }
-      } catch (getError) {
-        console.log('Get with alt=media failed:', getError.message);
+        const httpResponse = await fetch(downloadUrl);
         
-        // วิธีที่ 3: ใช้ direct HTTP request
-        try {
-          const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-          console.log('Trying direct download from:', downloadUrl);
-          
-          const fetch = require('node-fetch'); // ต้องติดตั้ง: npm install node-fetch@2
-          const httpResponse = await fetch(downloadUrl);
-          
-          if (httpResponse.ok) {
-            const buffer = await httpResponse.buffer();
-            console.log(`Direct download successful, size: ${buffer.length} bytes`);
-            return buffer.toString('base64');
-          } else {
-            console.log('Direct download failed:', httpResponse.statusText);
-          }
-        } catch (fetchError) {
-          console.log('Direct download error:', fetchError.message);
+        if (httpResponse.ok) {
+          const buffer = await httpResponse.buffer();
+          console.log(`Direct download successful, size: ${buffer.length} bytes`);
+          return buffer.toString('base64');
+        } else {
+          console.log('Direct download failed:', httpResponse.statusText);
         }
+      } catch (fetchError) {
+        console.log('Direct download error:', fetchError.message);
       }
     }
     
@@ -558,9 +541,10 @@ app.post("/log-report", async (req, res) => {
   }
 });
 
-// Export as Firebase Function
+// Export as Firebase Function with increased resources
 exports.api = onRequest({
   region: "asia-southeast1",
-  memory: "1GiB",
-  timeoutSeconds: 120
+  memory: "2GiB",        // เพิ่ม memory เป็น 2GB
+  timeoutSeconds: 300,   // เพิ่ม timeout เป็น 5 นาที
+  cpu: 1                 // ใช้ 1 CPU core
 }, app);
