@@ -1,3 +1,5 @@
+// แทนที่ไฟล์ src/utils/api.js ทั้งหมด
+
 // Simple fetch wrapper
 async function apiCall(endpoint, options = {}) {
   const API_BASE = process.env.NODE_ENV === 'development' 
@@ -75,6 +77,20 @@ function blobToBase64(blob) {
 export const api = {
   // Get QC topics
   getQCTopics: () => apiCall('/qc-topics'),
+  
+  // 🔥 Master Data Management
+  getMasterData: () => apiCall('/master-data'),
+  
+  addMasterData: (building, foundation) => apiCall('/master-data', {
+    method: 'POST',
+    body: JSON.stringify({ building, foundation })
+  }),
+  
+  // 🔥 Progress Tracking
+  getCompletedTopics: (criteria) => apiCall('/completed-topics', {
+    method: 'POST',
+    body: JSON.stringify(criteria)
+  }),
   
   // Upload photo to Drive + log to Sheets
   uploadPhoto: uploadPhotoFile,

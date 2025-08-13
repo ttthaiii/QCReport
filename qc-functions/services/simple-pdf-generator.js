@@ -87,13 +87,11 @@ async function generateSimplePDF(reportData) {
 // สร้าง HTML Template ภาษาไทยที่สวยงาม - 2 รูปต่อหน้าเท่านั้น
 function generateThaiHTMLTemplate({ building, foundation, category, photos, projectName }) {
   
-  // แบ่งรูปเป็นหน้าๆ ละ 2 รูป
-  const photosPerPage = 2;
+  const photosPerPage = 6;
   const totalPages = Math.ceil(photos.length / photosPerPage);
   
-  console.log(`Creating ${totalPages} pages for ${photos.length} photos`);
+  console.log(`Creating ${totalPages} pages for ${photos.length} photos (6 photos per page - 2×3 grid)`);
   
-  // สร้างหน้าต่างๆ
   const pages = [];
   for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
     const startIndex = pageIndex * photosPerPage;
@@ -102,38 +100,50 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
     
     console.log(`Page ${pageIndex + 1}: photos ${startIndex + 1}-${endIndex} (${pagePhotos.length} photos)`);
     
-    // สร้าง HTML สำหรับรูปในหน้านี้
+    // สร้าง HTML สำหรับรูปในหน้านี้ - 2×3 grid (2 columns, 3 rows)
     let photosHTML = '';
-    pagePhotos.forEach((photo, index) => {
-      const photoNumber = startIndex + index + 1;
-      photosHTML += `
-        <div class="photo-container">
-          <div class="photo-header">
-            <span class="photo-number">${photoNumber}. ${photo.topic}</span>
-          </div>
-          <div class="photo-content">
-            ${photo.imageBase64 ? `
-              <img src="data:image/jpeg;base64,${photo.imageBase64}" alt="${photo.topic}" />
-            ` : `
-              <div class="no-image">ไม่พบรูปภาพ</div>
-            `}
-          </div>
-        </div>
-      `;
-    });
     
-    // ถ้าหน้านี้มีแค่ 1 รูป ให้เพิ่ม spacer เพื่อให้เต็ม 2 รูป
-    if (pagePhotos.length === 1) {
-      photosHTML += `
-        <div class="photo-container spacer">
-          <div class="photo-header">
-            <span class="photo-number">2. </span>
-          </div>
-          <div class="photo-content">
-            <div class="no-image">-</div>
-          </div>
-        </div>
-      `;
+    // สร้าง 3 แถว
+    for (let row = 0; row < 3; row++) {
+      photosHTML += '<div class="photo-row">';
+      
+      // สร้าง 2 คอลัมน์ในแต่ละแถว
+      for (let col = 0; col < 2; col++) {
+        const photoIndex = row * 2 + col;
+        const globalPhotoNumber = startIndex + photoIndex + 1;
+        
+        if (photoIndex < pagePhotos.length) {
+          const photo = pagePhotos[photoIndex];
+          photosHTML += `
+            <div class="photo-container">
+              <div class="photo-content">
+                ${photo.imageBase64 ? `
+                  <img src="data:image/jpeg;base64,${photo.imageBase64}" alt="${photo.topic}" />
+                ` : `
+                  <div class="no-image">ไม่พบรูปภาพ</div>
+                `}
+              </div>
+              <div class="photo-header">
+                ${globalPhotoNumber}. ${photo.topic}
+              </div>
+            </div>
+          `;
+        } else {
+          // ช่องว่างสำหรับรูปที่ไม่มี
+          photosHTML += `
+            <div class="photo-container spacer">
+              <div class="photo-content">
+                <div class="no-image">-</div>
+              </div>
+              <div class="photo-header">
+                ${globalPhotoNumber}. 
+              </div>
+            </div>
+          `;
+        }
+      }
+      
+      photosHTML += '</div>'; // ปิด photo-row
     }
     
     pages.push({
@@ -186,7 +196,7 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         </div>
       </div>
       
-      <!-- Photos (2 รูปต่อหน้า) -->
+      <!-- Photos Grid (6 รูปต่อหน้า - 2×3) -->
       <div class="photos-container">
         ${page.photosHTML}
       </div>
@@ -211,7 +221,7 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         body {
           font-family: 'Sarabun', 'TH Sarabun New', Arial, sans-serif;
           font-size: 14px;
-          line-height: 1.4;
+          line-height: 1.2;
           color: #000;
           background: white;
         }
@@ -221,8 +231,8 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
           height: 297mm;
           page-break-after: always;
           position: relative;
-          padding: 8mm; /* ลด margin จาก 15mm เป็น 8mm */
-          padding-top: 15mm; /* เผื่อที่สำหรับ logo */
+          padding: 8mm;
+          padding-top: 12mm;
           display: flex;
           flex-direction: column;
           box-sizing: border-box;
@@ -232,15 +242,15 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
           page-break-after: avoid;
         }
         
-        /* Logo นอกกรอบ - ด้านบนขวา */
+        /* Logo นอกกรอบ */
         .external-logo {
           position: absolute;
-          top: 5mm;
+          top: 4mm;
           right: 8mm;
           font-family: 'Sarabun', sans-serif;
-          font-size: 14px;
+          font-size: 12px;
           font-weight: 600;
-          letter-spacing: 1px;
+          letter-spacing: 0.5px;
           z-index: 10;
         }
         
@@ -253,16 +263,16 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         }
         
         .header {
-          border: 2px solid #000; /* ลดจาก 3px เป็น 2px */
-          margin-bottom: 8mm; /* ลดจาก 15mm เป็น 8mm */
+          border: 2px solid #000;
+          margin-bottom: 5mm;
           flex-shrink: 0;
         }
         
         .header-title {
           border-bottom: 2px solid #000;
           text-align: center;
-          padding: 6mm; /* ลดจาก 10mm เป็น 6mm */
-          font-size: 18px; /* ลดจาก 20px เป็น 18px */
+          padding: 3mm;
+          font-size: 16px;
           font-weight: 600;
           background: white;
           color: black;
@@ -270,10 +280,10 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         
         .header-content {
           display: flex;
-          padding: 5mm 8mm; /* ลดจาก 8mm 10mm เป็น 5mm 8mm */
-          gap: 15mm; /* ลดจาก 20mm เป็น 15mm */
+          padding: 3mm 5mm;
+          gap: 10mm;
           background: white;
-          line-height: 1.3; /* เพิ่ม line-height ให้กระชับ */
+          line-height: 1.2;
         }
         
         .left-column, .right-column {
@@ -281,81 +291,104 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
         }
         
         .info-row {
-          margin-bottom: 3mm; /* ลดจาก 6mm เป็น 3mm */
+          margin-bottom: 1.5mm;
           display: flex;
           align-items: baseline;
         }
         
         .label {
           font-weight: 500;
-          min-width: 22mm; /* ลดจาก 25mm เป็น 22mm */
-          margin-right: 4mm; /* ลดจาก 5mm เป็น 4mm */
-          font-size: 13px;
+          min-width: 18mm;
+          margin-right: 3mm;
+          font-size: 12px;
         }
         
         .value {
           font-weight: 400;
-          font-size: 13px;
+          font-size: 12px;
         }
         
-        /* Photos Container - 2 รูปต่อหน้า */
+        /* Photos Container - 2×3 Grid Layout */
         .photos-container {
           display: flex;
           flex-direction: column;
-          gap: 6mm; /* ลดจาก 8mm เป็น 6mm */
+          gap: 4mm;
           flex: 1;
-          height: calc(297mm - 15mm - 8mm - 60mm); /* ปรับให้เหมาะกับ padding และ header ใหม่ */
+          height: calc(297mm - 12mm - 8mm - 30mm);
         }
         
+        /* Photo Row - แถวละ 2 รูป */
+        .photo-row {
+          display: flex;
+          gap: 4mm;
+          height: calc(33.333% - 2.67mm);
+          min-height: 0;
+        }
+        
+        /* 🔥 Photo Container - หัวข้ออยู่ด้านล่าง */
         .photo-container {
-          border: 2px solid #000;
-          height: calc(50% - 3mm); /* แบ่งครึ่งหน้า ลบ gap */
+          flex: 1;
           display: flex;
           flex-direction: column;
           page-break-inside: avoid;
+          min-width: 0;
+          border: none;
         }
         
         .photo-container.spacer {
-          opacity: 0.3; /* จางๆ สำหรับช่องว่าง */
+          opacity: 0.3;
         }
         
-        .photo-header {
-          border-bottom: 2px solid #000;
-          padding: 3mm 5mm; /* ลดจาก 4mm 6mm เป็น 3mm 5mm */
-          font-size: 14px; /* ลดจาก 16px เป็น 14px */
-          font-weight: 500;
-          text-align: center;
-          background: white;
-          color: black;
-          flex-shrink: 0;
-        }
-        
+        /* 🔥 Photo Content - รูปอยู่ด้านบน */
         .photo-content {
-          flex: 1;
+          flex: 1; /* ให้รูปใช้พื้นที่หลัก */
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
-          background: #f9f9f9;
+          background: white;
           min-height: 0;
-          /* กำหนดขนาดรูปให้เป็น 12.5×8.4 cm */
-          width: 100%;
-          height: 84mm; /* 8.4 cm */
+          padding: 2mm;
         }
         
         .photo-content img {
-          width: 125mm; /* 12.5 cm */
-          height: 84mm; /* 8.4 cm */
-          object-fit: contain; /* รักษาสัดส่วน ไม่บิดเบือน */
+          max-width: 100%;
+          max-height: 100%;
+          width: auto;
+          height: auto;
+          object-fit: contain;
           object-position: center;
           display: block;
-          border: 1px solid #ddd;
+          border: none;
           background: white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          border-radius: 2px;
+        }
+        
+        /* 🔥 Photo Header - หัวข้ออยู่ด้านล่าง */
+        .photo-header {
+          padding: 2mm 0;
+          font-size: 11px;
+          font-weight: 500;
+          text-align: center;
+          background: white;
+          color: black;
+          flex-shrink: 0; /* ไม่ให้ยุบตัว */
+          height: 10mm;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          word-wrap: break-word;
+          overflow: hidden;
+          border: none;
+          /* เพิ่ม border-top เพื่อแยกจากรูป */
+          border-top: 1px solid #e0e0e0;
+          margin-top: 1mm;
         }
         
         .no-image {
           color: #999;
-          font-size: 18px;
+          font-size: 12px;
           text-align: center;
         }
         
@@ -369,18 +402,54 @@ function generateThaiHTMLTemplate({ building, foundation, category, photos, proj
             page-break-after: always;
             margin: 0;
             padding: 8mm;
-            padding-top: 15mm;
+            padding-top: 12mm;
           }
           
           .page:last-child {
             page-break-after: avoid;
           }
           
-          /* กำหนดขนาดรูปแน่นอนใน print */
           .photo-content img {
-            width: 125mm !important; /* 12.5 cm */
-            height: 84mm !important; /* 8.4 cm */
+            max-width: 100% !important;
+            max-height: 100% !important;
             object-fit: contain !important;
+            border: none !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
+          }
+          
+          .header-title {
+            font-size: 14px !important;
+            padding: 2.5mm !important;
+          }
+          
+          .label, .value {
+            font-size: 11px !important;
+          }
+          
+          .photo-header {
+            font-size: 10px !important;
+            padding: 1.5mm 0 !important;
+            height: 8mm !important;
+          }
+          
+          .header-content {
+            padding: 2.5mm 4mm !important;
+          }
+          
+          .info-row {
+            margin-bottom: 1mm !important;
+          }
+          
+          .photos-container {
+            gap: 3mm !important;
+          }
+          
+          .photo-row {
+            gap: 3mm !important;
+          }
+          
+          .photo-content {
+            padding: 1.5mm !important;
           }
         }
       </style>

@@ -7,16 +7,41 @@ const Camera = () => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [qcTopics, setQcTopics] = useState({});
+  
+  // Master Data States
+  const [masterData, setMasterData] = useState({
+    buildings: [],
+    foundations: [],
+    combinations: []
+  });
+  const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
+  
+  // Form States
   const [formData, setFormData] = useState({
-    building: 'A',
-    foundation: 'F01',
-    category: '',
-    topic: ''
+    building: '',
+    foundation: '',
+    category: ''
+  });
+  const [inputMode, setInputMode] = useState({
+    building: 'select',
+    foundation: 'select'
+  });
+  const [newInputs, setNewInputs] = useState({
+    building: '',
+    foundation: ''
   });
   
-  // เปลี่ยนกลับไปใช้ single photo แทน multiple photos ก่อน
-  const [capturedImage, setCapturedImage] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // 🔥 NEW: One-Click Topic Selection States
+  const [selectedTopic, setSelectedTopic] = useState(''); // หัวข้อที่เลือกปัจจุบัน
+  const [captureMode, setCaptureMode] = useState(false); // อยู่ในโหมดถ่ายรูปหรือไม่
+  
+  // Multiple Photos System (เก็บรูปสะสม)
+  const [capturedPhotos, setCapturedPhotos] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // Progress Tracking
+  const [completedTopics, setCompletedTopics] = useState(new Set());
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
   
   // Geolocation states
   const [currentLocation, setCurrentLocation] = useState('กำลังหาตำแหน่ง...');
@@ -27,16 +52,98 @@ const Camera = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Load QC topics on mount
+  // Load data on mount
   useEffect(() => {
     loadQCTopics();
+    loadMasterData();
     getCurrentLocation();
   }, []);
+
+  // Load progress when building/foundation/category changes
+  useEffect(() => {
+    if (formData.building && formData.foundation && formData.category) {
+      loadProgress();
+    }
+  }, [formData.building, formData.foundation, formData.category]);
 
   // Cleanup camera when component unmounts
   useEffect(() => {
     return () => stopCamera();
   }, []);
+
+  const loadMasterData = async () => {
+    setIsLoadingMasterData(true);
+    try {
+      const response = await api.getMasterData();
+      if (response.success) {
+        setMasterData(response.data);
+        
+        if (response.data.buildings.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            building: response.data.buildings[0]
+          }));
+        }
+        if (response.data.foundations.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            foundation: response.data.foundations[0]
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading master data:', error);
+    } finally {
+      setIsLoadingMasterData(false);
+    }
+  };
+
+  const addNewMasterData = async () => {
+    const building = newInputs.building.trim();
+    const foundation = newInputs.foundation.trim();
+    
+    if (!building || !foundation) {
+      alert('กรุณากรอกชื่ออาคารและเลขฐานรากให้ครบถ้วน');
+      return;
+    }
+    
+    try {
+      setIsUploading(true);
+      const response = await api.addMasterData(building, foundation);
+      
+      if (response.success) {
+        if (response.data.duplicate) {
+          alert('ข้อมูลนี้มีอยู่แล้วในระบบ');
+        } else {
+          alert('เพิ่มข้อมูลใหม่สำเร็จ!');
+        }
+        
+        await loadMasterData();
+        setFormData(prev => ({
+          ...prev,
+          building: building,
+          foundation: foundation
+        }));
+        
+        setInputMode({
+          building: 'select',
+          foundation: 'select'
+        });
+        setNewInputs({
+          building: '',
+          foundation: ''
+        });
+        
+      } else {
+        throw new Error('Failed to add master data');
+      }
+    } catch (error) {
+      console.error('Error adding master data:', error);
+      alert('เกิดข้อผิดพลาดในการเพิ่มข้อมูล: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const loadQCTopics = async () => {
     try {
@@ -47,8 +154,7 @@ const Camera = () => {
         if (categories.length > 0) {
           setFormData(prev => ({
             ...prev,
-            category: categories[0],
-            topic: response.data[categories[0]][0] || ''
+            category: categories[0]
           }));
         }
       }
@@ -58,16 +164,25 @@ const Camera = () => {
     }
   };
 
-  const calculateDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
+  const loadProgress = async () => {
+    if (!formData.building || !formData.foundation || !formData.category) return;
+    
+    setIsLoadingProgress(true);
+    try {
+      const response = await api.getCompletedTopics({
+        building: formData.building,
+        foundation: formData.foundation,
+        category: formData.category
+      });
+      
+      if (response.success) {
+        setCompletedTopics(new Set(response.data.completedTopics || []));
+      }
+    } catch (error) {
+      console.error('Error loading progress:', error);
+    } finally {
+      setIsLoadingProgress(false);
+    }
   };
 
   const getCurrentLocation = () => {
@@ -154,85 +269,152 @@ const Camera = () => {
     );
   };
 
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // 🔥 NEW: One-Click Topic Selection with Auto Camera Start
+  const selectTopicAndStartCamera = async (topic) => {
+    if (!formData.building || !formData.foundation || !formData.category) {
+      alert('กรุณาเลือกข้อมูลให้ครบถ้วน: อาคาร, ฐานราก, และหมวดงาน');
+      return;
+    }
+
+    try {
+      console.log(`Selected topic: ${topic}, starting camera...`);
+      
+      // เลือกหัวข้อ
+      setSelectedTopic(topic);
+      setCaptureMode(true);
+      
+      // เปิดกล้องทันที
+      await startCamera();
+      
+    } catch (error) {
+      console.error('Error starting camera for topic:', error);
+      // ถ้าเปิดกล้องไม่ได้ให้ reset state
+      setSelectedTopic('');
+      setCaptureMode(false);
+    }
+  };
+
   const startCamera = async () => {
     try {
       console.log('Starting camera...');
-      setIsCameraOn(true); // ตั้งสถานะเปิดก่อน เพื่อแสดง loading
+      if (stream) {
+        console.log('Stopping existing stream before starting new one...');
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
+      
+      setIsCameraOn(true);
       
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: 'environment',
-          width: { ideal: 640 },   // ลดขนาดเป็น 640x480 (เร็วกว่า)
+          width: { ideal: 640 },   
           height: { ideal: 480 },
-          frameRate: { ideal: 15, max: 30 } // จำกัด framerate
+          frameRate: { ideal: 15, max: 30 }
         }
       });
       
+      console.log('MediaStream obtained:', mediaStream.id);
       setStream(mediaStream);
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         
-        // รอให้ video พร้อมใช้งาน
-        return new Promise((resolve) => {
-          videoRef.current.onloadeddata = () => {
-            console.log('Camera ready!');
+        return new Promise((resolve, reject) => {
+          const video = videoRef.current;
+          
+          const onLoadedData = () => {
+            console.log('Video loaded and ready');
+            video.removeEventListener('loadeddata', onLoadedData);
+            video.removeEventListener('error', onError);
             resolve();
           };
           
-          // Timeout หากรอนานเกิน 5 วินาที
+          const onError = (error) => {
+            console.error('Video error:', error);
+            video.removeEventListener('loadeddata', onLoadedData);
+            video.removeEventListener('error', onError);
+            reject(error);
+          };
+          
+          video.addEventListener('loadeddata', onLoadedData);
+          video.addEventListener('error', onError);
+          
           setTimeout(() => {
-            console.log('Camera timeout, but continuing...');
-            resolve();
-          }, 5000);
+            video.removeEventListener('loadeddata', onLoadedData);
+            video.removeEventListener('error', onError);
+            
+            if (video.readyState >= 2) {
+              console.log('Camera ready after timeout check');
+              resolve();
+            } else {
+              console.log('Camera timeout, but trying to continue...');
+              resolve();
+            }
+          }, 10000);
         });
       }
       
     } catch (error) {
       console.error('Error starting camera:', error);
       setIsCameraOn(false);
+      setStream(null);
       
-      // แสดง error ที่เจาะจงกว่า
       if (error.name === 'NotAllowedError') {
         alert('กรุณาอนุญาตการใช้งานกล้องในเบราว์เซอร์');
       } else if (error.name === 'NotFoundError') {
         alert('ไม่พบกล้องในอุปกรณ์');
+      } else if (error.name === 'NotReadableError') {
+        alert('กล้องถูกใช้งานโดยแอปอื่นอยู่');
       } else {
         alert('ไม่สามารถเปิดกล้องได้: ' + error.message);
       }
+      throw error;
     }
   };
 
   const stopCamera = () => {
     console.log('Stopping camera...');
+    
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      console.log('Stopping all tracks...');
+      stream.getTracks().forEach(track => {
+        console.log(`Stopping track: ${track.kind}, state: ${track.readyState}`);
+        track.stop();
+      });
       setStream(null);
     }
+    
     setIsCameraOn(false);
+    
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+      console.log('Video srcObject cleared');
     }
   };
 
-  const toggleCamera = () => {
-    if (isCameraOn) {
-      stopCamera();
-    } else {
-      startCamera();
-    }
-  };
-
-  const capturePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current || !isCameraOn) {
-      console.log('Cannot capture: missing refs or camera off');
+  // 🔥 NEW: Capture Photo and Auto Reset Camera
+  const capturePhotoAndReset = async () => {
+    if (!videoRef.current || !canvasRef.current || !isCameraOn || !selectedTopic) {
+      console.log('Cannot capture: missing requirements');
       return;
     }
     
     const video = videoRef.current;
     
-    // ตรวจสอบสถานะ video (ผ่อนปรนกว่าเดิม)
-    if (video.readyState < 2) { // HAVE_CURRENT_DATA
+    if (video.readyState < 2) {
       console.log('Video not ready yet, but trying anyway...');
     }
     
@@ -242,19 +424,16 @@ const Camera = () => {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       
-      // ใช้ขนาดที่เล็กกว่าเพื่อความเร็ว
-      const targetWidth = 800;  // ลดจาก 1476
-      const targetHeight = 600; // ลดจาก 992
+      const targetWidth = 800;
+      const targetHeight = 600;
       
       canvas.width = targetWidth;
       canvas.height = targetHeight;
       
       console.log(`Canvas size: ${canvas.width}x${canvas.height}`);
       
-      // วาดรูปจาก video ลงใน canvas
       ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
       
-      // แปลงเป็น blob (quality 0.8 เพื่อความเร็ว)
       canvas.toBlob(async (blob) => {
         if (!blob) {
           console.error('Failed to create blob from canvas');
@@ -266,21 +445,45 @@ const Camera = () => {
         console.log('Blob created successfully, size:', blob.size);
         
         try {
-          // เพิ่ม watermark
           const watermarkText = formatThaiDateTime();
           const location = currentLocation || 'กำลังหาตำแหน่ง...';
           const watermarkedBlob = await addWatermark(blob, watermarkText, location);
           
-          setCapturedImage(URL.createObjectURL(watermarkedBlob));
+          // 🔥 สร้าง photo object และเก็บไว้ในคลังรูป
+          const photoData = {
+            id: Date.now() + Math.random(),
+            blob: watermarkedBlob,
+            url: URL.createObjectURL(watermarkedBlob),
+            building: formData.building,
+            foundation: formData.foundation,
+            category: formData.category,
+            topic: selectedTopic,
+            location: currentLocation,
+            timestamp: new Date().toISOString()
+          };
+          
+          // เพิ่มลงใน array (เก็บสะสม)
+          setCapturedPhotos(prev => [...prev, photoData]);
+          
+          // อัปเดต completed topics
+          setCompletedTopics(prev => new Set([...prev, selectedTopic]));
+          
+          console.log(`Photo captured for topic: ${selectedTopic}`);
+          
+          // 🔥 Auto Reset Camera State (ไม่ลบรูป)
+          stopCamera();
+          setSelectedTopic('');
+          setCaptureMode(false);
           setIsCapturing(false);
-          console.log('Photo captured successfully');
+          
+          // แสดงข้อความสำเร็จ
+          alert(`✅ ถ่ายรูป "${selectedTopic}" เรียบร้อย!\n\n📷 รูปทั้งหมด: ${capturedPhotos.length + 1} รูป`);
+          
         } catch (error) {
           console.error('Error adding watermark:', error);
-          // ถ้า watermark ไม่ได้ ให้ใช้รูปเดิม
-          setCapturedImage(URL.createObjectURL(blob));
           setIsCapturing(false);
         }
-      }, 'image/jpeg', 0.8); // ลด quality จาก 0.9 เป็น 0.8
+      }, 'image/jpeg', 0.8);
       
     } catch (error) {
       console.error('Error capturing photo:', error);
@@ -289,51 +492,103 @@ const Camera = () => {
     }
   };
 
-  const savePhoto = async () => {
-    if (!capturedImage || isLoading) return;
+  // 🔥 NEW: Cancel Capture (back to topic selection)
+  const cancelCapture = () => {
+    stopCamera();
+    setSelectedTopic('');
+    setCaptureMode(false);
+  };
+
+  const uploadAllPhotos = async () => {
+    if (capturedPhotos.length === 0) {
+      alert('ไม่มีรูปให้อัปโหลด');
+      return;
+    }
     
-    setIsLoading(true);
+    setIsUploading(true);
     
     try {
-      console.log('Starting photo save process...');
+      console.log(`Starting upload of ${capturedPhotos.length} photos...`);
       
-      const response = await fetch(capturedImage);
-      const photoBlob = await response.blob();
+      const results = [];
       
-      console.log('Photo blob created:', {
-        type: photoBlob.type,
-        size: photoBlob.size
-      });
+      for (let i = 0; i < capturedPhotos.length; i++) {
+        const photo = capturedPhotos[i];
+        console.log(`Uploading photo ${i + 1}/${capturedPhotos.length}: ${photo.topic}`);
+        
+        try {
+          const result = await api.uploadPhoto(photo.blob, {
+            building: photo.building,
+            foundation: photo.foundation,
+            category: photo.category,
+            topic: photo.topic,
+            location: photo.location
+          });
+          
+          if (result.success) {
+            results.push({ success: true, topic: photo.topic, data: result.data });
+            console.log(`✓ Photo ${i + 1} uploaded successfully`);
+          } else {
+            results.push({ success: false, topic: photo.topic, error: 'Upload failed' });
+            console.log(`✗ Photo ${i + 1} upload failed`);
+          }
+        } catch (error) {
+          results.push({ success: false, topic: photo.topic, error: error.message });
+          console.log(`✗ Photo ${i + 1} upload error:`, error.message);
+        }
+      }
       
-      const photoData = {
-        building: formData.building,
-        foundation: formData.foundation,
-        category: formData.category,
-        topic: formData.topic,
-        location: currentLocation
-      };
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
       
-      console.log('Photo data prepared:', photoData);
-      
-      const result = await api.uploadPhoto(photoBlob, photoData);
-      
-      if (result.success) {
-        alert(`บันทึกรูปภาพสำเร็จ!\nไฟล์: ${result.data.filename}\nID: ${result.data.sheetTimestamp.uniqueId}`);
-        setCapturedImage(null);
+      if (failed === 0) {
+        alert(`🎉 อัปโหลดสำเร็จทั้งหมด ${successful} รูป!`);
+        
+        // เคลียร์รูปหลังอัปโหลดสำเร็จ
+        setCapturedPhotos([]);
+        await loadProgress();
       } else {
-        throw new Error('Failed to upload photo');
+        alert(`อัปโหลดเสร็จสิ้น!\n✅ สำเร็จ: ${successful} รูป\n❌ ล้มเหลว: ${failed} รูป\n\nรูปที่ล้มเหลว:\n${results.filter(r => !r.success).map(r => `- ${r.topic}: ${r.error}`).join('\n')}`);
       }
       
     } catch (error) {
-      console.error('Error saving photo:', error);
-      alert('เกิดข้อผิดพลาดในการบันทึกรูปภาพ: ' + error.message);
+      console.error('Error uploading photos:', error);
+      alert('เกิดข้อผิดพลาดในการอัปโหลด: ' + error.message);
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
     }
   };
 
-  const retakePhoto = () => {
-    setCapturedImage(null);
+  const clearAllPhotos = () => {
+    if (capturedPhotos.length === 0) return;
+    
+    if (confirm(`ต้องการลบรูปทั้งหมด ${capturedPhotos.length} รูป?`)) {
+      capturedPhotos.forEach(photo => {
+        URL.revokeObjectURL(photo.url);
+      });
+      
+      setCapturedPhotos([]);
+      
+      // อัปเดต completed topics จากรูปที่เหลือ (ไม่มี)
+      setCompletedTopics(new Set());
+    }
+  };
+
+  const removePhoto = (photoId) => {
+    setCapturedPhotos(prev => {
+      const updated = prev.filter(photo => photo.id !== photoId);
+      
+      const photoToRemove = prev.find(photo => photo.id === photoId);
+      if (photoToRemove) {
+        URL.revokeObjectURL(photoToRemove.url);
+        
+        // อัปเดต completed topics จากรูปที่เหลือ
+        const remainingTopics = updated.map(p => p.topic);
+        setCompletedTopics(new Set(remainingTopics));
+      }
+      
+      return updated;
+    });
   };
 
   const refreshLocation = () => {
@@ -342,9 +597,21 @@ const Camera = () => {
     getCurrentLocation();
   };
 
+  // แสดงสถานะความครบถ้วนของหมวดงาน
+  const getProgressStats = () => {
+    const currentTopics = qcTopics[formData.category] || [];
+    const completed = currentTopics.filter(topic => completedTopics.has(topic)).length;
+    const total = currentTopics.length;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    return { completed, total, percentage };
+  };
+
+  const progressStats = getProgressStats();
+
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>📸 ถ่ายรูป QC</h1>
+      <h1>📸 ถ่ายรูป QC (One-Click)</h1>
       
       {/* Location Status */}
       <div style={{ 
@@ -378,94 +645,340 @@ const Camera = () => {
           🔄 อัปเดต
         </button>
       </div>
+
+      {/* Progress Status */}
+      <div style={{ 
+        marginBottom: '15px', 
+        padding: '12px', 
+        backgroundColor: '#e3f2fd', 
+        borderRadius: '6px',
+        border: '1px solid #1976d2'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1565c0' }}>
+            📊 ความครบถ้วน: {progressStats.completed}/{progressStats.total} ({progressStats.percentage}%)
+            {capturedPhotos.length > 0 && ` | 📷 ถ่ายแล้ว: ${capturedPhotos.length} รูป`}
+          </span>
+          {isLoadingProgress && (
+            <span style={{ fontSize: '12px', color: '#666' }}>กำลังโหลด...</span>
+          )}
+        </div>
+        {progressStats.total > 0 && (
+          <div style={{ 
+            marginTop: '8px',
+            height: '6px',
+            backgroundColor: '#bbdefb',
+            borderRadius: '3px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${progressStats.percentage}%`,
+              backgroundColor: progressStats.percentage === 100 ? '#4caf50' : '#2196f3',
+              transition: 'width 0.3s ease'
+            }} />
+          </div>
+        )}
+      </div>
       
-      {/* Form Controls */}
+      {/* Basic Form Controls */}
       <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
-          <div>
-            <label>อาคาร:</label>
-            <select 
-              value={formData.building}
-              onChange={(e) => setFormData(prev => ({ ...prev, building: e.target.value }))}
-              style={{ width: '100%', padding: '5px' }}
-            >
-              <option value="A">อาคาร A</option>
-              <option value="B">อาคาร B</option>
-              <option value="C">อาคาร C</option>
-            </select>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           
+          {/* Building Input */}
           <div>
-            <label>ฐานราก:</label>
-            <select 
-              value={formData.foundation}
-              onChange={(e) => setFormData(prev => ({ ...prev, foundation: e.target.value }))}
-              style={{ width: '100%', padding: '5px' }}
-            >
-              {['F01', 'F02', 'F03', 'F04', 'F05'].map(f => (
-                <option key={f} value={f}>{f}</option>
-              ))}
-            </select>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              อาคาร:
+            </label>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              {inputMode.building === 'select' ? (
+                <select 
+                  value={formData.building}
+                  onChange={(e) => setFormData(prev => ({ ...prev, building: e.target.value }))}
+                  style={{ flex: 1, padding: '8px', fontSize: '14px' }}
+                  disabled={isLoadingMasterData || captureMode}
+                >
+                  <option value="">เลือกอาคาร...</option>
+                  {masterData.buildings.map(building => (
+                    <option key={building} value={building}>{building}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={newInputs.building}
+                  onChange={(e) => setNewInputs(prev => ({ ...prev, building: e.target.value }))}
+                  placeholder="ชื่ออาคารใหม่ เช่น A, B, C"
+                  style={{ flex: 1, padding: '8px', fontSize: '14px' }}
+                  disabled={captureMode}
+                />
+              )}
+              <button
+                onClick={() => setInputMode(prev => ({ 
+                  ...prev, 
+                  building: prev.building === 'select' ? 'input' : 'select' 
+                }))}
+                disabled={captureMode}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  opacity: captureMode ? 0.5 : 1
+                }}
+              >
+                {inputMode.building === 'select' ? '+ ใหม่' : 'ยกเลิก'}
+              </button>
+            </div>
           </div>
-          
+
+          {/* หมวดงาน */}
           <div>
-            <label>หมวดงาน:</label>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              หมวดงาน:
+            </label>
             <select 
               value={formData.category}
               onChange={(e) => {
                 const newCategory = e.target.value;
                 setFormData(prev => ({ 
                   ...prev, 
-                  category: newCategory,
-                  topic: qcTopics[newCategory]?.[0] || ''
+                  category: newCategory
                 }));
               }}
-              style={{ width: '100%', padding: '5px' }}
+              style={{ width: '100%', padding: '8px', fontSize: '14px' }}
+              disabled={captureMode}
             >
+              <option value="">เลือกหมวดงาน...</option>
               {Object.keys(qcTopics).map(category => (
                 <option key={category} value={category}>{category}</option>
               ))}
             </select>
           </div>
-          
+
+          {/* Foundation Input */}
           <div>
-            <label>หัวข้อ:</label>
-            <select 
-              value={formData.topic}
-              onChange={(e) => setFormData(prev => ({ ...prev, topic: e.target.value }))}
-              style={{ width: '100%', padding: '5px' }}
-            >
-              {(qcTopics[formData.category] || []).map(topic => (
-                <option key={topic} value={topic}>{topic}</option>
-              ))}
-            </select>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              ฐานราก:
+            </label>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              {inputMode.foundation === 'select' ? (
+                <select 
+                  value={formData.foundation}
+                  onChange={(e) => setFormData(prev => ({ ...prev, foundation: e.target.value }))}
+                  style={{ flex: 1, padding: '8px', fontSize: '14px' }}
+                  disabled={isLoadingMasterData || captureMode}
+                >
+                  <option value="">เลือกฐานราก...</option>
+                  {masterData.foundations.map(foundation => (
+                    <option key={foundation} value={foundation}>{foundation}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={newInputs.foundation}
+                  onChange={(e) => setNewInputs(prev => ({ ...prev, foundation: e.target.value }))}
+                  placeholder="เลขฐานราก เช่น F01, F02"
+                  style={{ flex: 1, padding: '8px', fontSize: '14px' }}
+                  disabled={captureMode}
+                />
+              )}
+              <button
+                onClick={() => setInputMode(prev => ({ 
+                  ...prev, 
+                  foundation: prev.foundation === 'select' ? 'input' : 'select' 
+                }))}
+                disabled={captureMode}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  opacity: captureMode ? 0.5 : 1
+                }}
+              >
+                {inputMode.foundation === 'select' ? '+ ใหม่' : 'ยกเลิก'}
+              </button>
+            </div>
           </div>
         </div>
+        
+        {/* Save New Master Data Button */}
+        {(inputMode.building === 'input' || inputMode.foundation === 'input') && (
+          <div style={{ marginTop: '15px', textAlign: 'center' }}>
+            <button
+              onClick={addNewMasterData}
+              disabled={isUploading || !newInputs.building.trim() || !newInputs.foundation.trim() || captureMode}
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                opacity: (isUploading || !newInputs.building.trim() || !newInputs.foundation.trim() || captureMode) ? 0.6 : 1
+              }}
+            >
+              {isUploading ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูลใหม่'}
+            </button>
+          </div>
+        )}
+        
+        {/* Loading Master Data */}
+        {isLoadingMasterData && (
+          <div style={{ 
+            marginTop: '10px', 
+            textAlign: 'center', 
+            fontSize: '14px', 
+            color: '#666' 
+          }}>
+            กำลังโหลดข้อมูลอาคารและฐานราก...
+          </div>
+        )}
       </div>
 
-      {/* Camera Control */}
-      <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-        <button 
-          onClick={toggleCamera}
-          style={{
-            padding: '12px 24px',
-            fontSize: '16px',
-            backgroundColor: isCameraOn ? '#dc3545' : '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            marginRight: '10px'
-          }}
-        >
-          {isCameraOn ? '📴 ปิดกล้อง' : '📷 เปิดกล้อง'}
-        </button>
-      </div>
-
-      {/* Camera/Preview Area */}
-      <div style={{ position: 'relative', marginBottom: '20px' }}>
-        {!capturedImage ? (
-          <div>
+      {/* 🔥 Main Content: Topic Selection OR Camera Mode */}
+      {!captureMode ? (
+        // Topic Selection Mode
+        <>
+          {formData.building && formData.foundation && formData.category && qcTopics[formData.category] ? (
+            <div style={{ 
+              marginBottom: '20px', 
+              padding: '15px', 
+              backgroundColor: '#ffffff', 
+              borderRadius: '8px',
+              border: '1px solid #dee2e6'
+            }}>
+              <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#495057' }}>
+                📝 เลือกหัวข้อที่ต้องการถ่าย (คลิก = เปิดกล้องทันที):
+              </h3>
+              
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                gap: '10px' 
+              }}>
+                {qcTopics[formData.category].map((topic, index) => {
+                  const isCompleted = completedTopics.has(topic);
+                  const photosForThisTopic = capturedPhotos.filter(p => p.topic === topic);
+                  
+                  return (
+                    <button
+                      key={topic}
+                      onClick={() => selectTopicAndStartCamera(topic)}
+                      style={{
+                        padding: '12px 15px',
+                        fontSize: '14px',
+                        textAlign: 'left',
+                        border: '1px solid #dee2e6',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        backgroundColor: isCompleted ? '#e8f5e8' : '#ffffff',
+                        color: isCompleted ? '#2e7d32' : '#495057',
+                        transition: 'all 0.2s ease',
+                        position: 'relative',
+                        minHeight: '50px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = isCompleted ? '#c8e6c9' : '#f8f9fa';
+                        e.target.style.borderColor = '#007bff';
+                        e.target.style.transform = 'translateY(-1px)';
+                        e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = isCompleted ? '#e8f5e8' : '#ffffff';
+                        e.target.style.borderColor = '#dee2e6';
+                        e.target.style.transform = 'translateY(0)';
+                        e.target.style.boxShadow = 'none';
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontWeight: 'normal' }}>
+                          {index + 1}. {topic}
+                        </span>
+                        {photosForThisTopic.length > 0 && (
+                          <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>
+                            📷 ถ่ายแล้ว {photosForThisTopic.length} รูป
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div style={{ marginLeft: '10px' }}>
+                        {isCompleted ? (
+                          <span style={{ fontSize: '16px', color: '#28a745' }}>✅</span>
+                        ) : (
+                          <span style={{ fontSize: '16px', color: '#007bff' }}>📷</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              marginBottom: '15px',
+              padding: '10px',
+              backgroundColor: '#fff3cd',
+              borderRadius: '5px',
+              textAlign: 'center',
+              fontSize: '14px',
+              color: '#856404',
+              border: '1px solid #ffeaa7'
+            }}>
+              ⚠️ กรุณาเลือก อาคาร, ฐานราก, และหมวดงาน เพื่อแสดงรายการหัวข้อ
+            </div>
+          )}
+        </>
+      ) : (
+        // Camera Mode
+        <div style={{ 
+          marginBottom: '20px', 
+          padding: '15px', 
+          backgroundColor: '#e3f2fd', 
+          borderRadius: '8px',
+          border: '2px solid #1976d2'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '15px'
+          }}>
+            <h3 style={{ margin: 0, color: '#1565c0' }}>
+              📸 กำลังถ่าย: {selectedTopic}
+            </h3>
+            <button
+              onClick={cancelCapture}
+              disabled={isCapturing}
+              style={{
+                padding: '8px 12px',
+                fontSize: '12px',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                opacity: isCapturing ? 0.6 : 1
+              }}
+            >
+              ✕ ยกเลิก
+            </button>
+          </div>
+          
+          {/* Camera View */}
+          <div style={{ position: 'relative', marginBottom: '15px' }}>
             {isCameraOn ? (
               <div style={{ position: 'relative' }}>
                 <video 
@@ -481,7 +994,6 @@ const Camera = () => {
                     borderRadius: '8px'
                   }}
                 />
-                {/* Loading overlay */}
                 {!stream && (
                   <div style={{
                     position: 'absolute',
@@ -520,81 +1032,172 @@ const Camera = () => {
                 color: '#6c757d',
                 fontSize: '16px'
               }}>
-                กดปุ่ม "เปิดกล้อง" เพื่อเริ่มถ่ายรูป
+                กำลังเปิดกล้อง...
               </div>
             )}
             <canvas ref={canvasRef} style={{ display: 'none' }} />
           </div>
-        ) : (
-          <img 
-            src={capturedImage}
-            alt="Captured"
-            style={{ 
-              width: '100%', 
-              maxWidth: '600px', 
-              height: 'auto',
-              borderRadius: '8px'
-            }}
-          />
-        )}
-      </div>
-
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        {!capturedImage ? (
-          isCameraOn && (
+          
+          {/* Capture Button */}
+          <div style={{ textAlign: 'center' }}>
             <button 
-              onClick={capturePhoto}
+              onClick={capturePhotoAndReset}
               disabled={isCapturing || !stream}
               style={{
-                padding: '12px 24px',
-                fontSize: '16px',
-                backgroundColor: '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                opacity: isCapturing ? 0.6 : 1
-              }}
-            >
-              {isCapturing ? 'กำลังถ่าย...' : '📸 ถ่ายรูป'}
-            </button>
-          )
-        ) : (
-          <>
-            <button 
-              onClick={retakePhoto}
-              style={{
-                padding: '12px 24px',
-                fontSize: '16px',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              🔄 ถ่ายใหม่
-            </button>
-            <button 
-              onClick={savePhoto}
-              disabled={isLoading}
-              style={{
-                padding: '12px 24px',
-                fontSize: '16px',
+                padding: '15px 30px',
+                fontSize: '18px',
                 backgroundColor: '#28a745',
                 color: 'white',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 cursor: 'pointer',
-                opacity: isLoading ? 0.6 : 1
+                opacity: (isCapturing || !stream) ? 0.6 : 1,
+                fontWeight: 'bold'
               }}
             >
-              {isLoading ? 'กำลังบันทึก...' : '💾 บันทึก'}
+              {isCapturing ? 'กำลังถ่าย...' : `📸 ถ่ายรูป: ${selectedTopic}`}
             </button>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
+
+      {/* Captured Photos Management */}
+      {capturedPhotos.length > 0 && (
+        <div style={{ 
+          marginTop: '20px',
+          padding: '15px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '8px',
+          border: '1px solid #dee2e6'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '15px'
+          }}>
+            <h3 style={{ margin: 0, color: '#495057' }}>
+              📋 รูปที่ถ่ายแล้ว ({capturedPhotos.length} รูป)
+            </h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button 
+                onClick={uploadAllPhotos}
+                disabled={isUploading}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  opacity: isUploading ? 0.6 : 1,
+                  fontWeight: 'bold'
+                }}
+              >
+                {isUploading ? 'กำลังส่ง...' : `📤 บันทึกทั้งหมด`}
+              </button>
+              
+              <button 
+                onClick={clearAllPhotos}
+                disabled={isUploading}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  opacity: isUploading ? 0.6 : 1
+                }}
+              >
+                🗑️ ลบทั้งหมด
+              </button>
+            </div>
+          </div>
+          
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
+            gap: '12px' 
+          }}>
+            {capturedPhotos.map((photo, index) => (
+              <div key={photo.id} style={{
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                backgroundColor: 'white',
+                position: 'relative',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}>
+                <img 
+                  src={photo.url}
+                  alt={photo.topic}
+                  style={{
+                    width: '100%',
+                    height: '90px',
+                    objectFit: 'cover',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    // แสดงรูปขยาย
+                    const newWindow = window.open('', '_blank');
+                    newWindow.document.write(`
+                      <html>
+                        <head><title>${photo.topic}</title></head>
+                        <body style="margin:0; padding:20px; text-align:center; background:#f5f5f5;">
+                          <h3>${photo.topic}</h3>
+                          <img src="${photo.url}" style="max-width:100%; height:auto;" />
+                          <p style="margin-top:10px; font-size:14px; color:#666;">
+                            ${photo.building} - ${photo.foundation}<br/>
+                            ${new Date(photo.timestamp).toLocaleString('th-TH')}
+                          </p>
+                        </body>
+                      </html>
+                    `);
+                  }}
+                />
+                <div style={{
+                  padding: '8px',
+                  fontSize: '11px',
+                  textAlign: 'center',
+                  backgroundColor: '#f8f9fa',
+                  borderTop: '1px solid #ddd',
+                  minHeight: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <strong>{index + 1}.</strong> {photo.topic}
+                </div>
+                <button
+                  onClick={() => removePhoto(photo.id)}
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    width: '22px',
+                    height: '22px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50%',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Instructions */}
       <div style={{ 
@@ -604,14 +1207,26 @@ const Camera = () => {
         borderRadius: '6px',
         border: '1px solid #ffeaa7'
       }}>
-        <h4 style={{ marginTop: 0, color: '#856404' }}>📝 วิธีการใช้งาน</h4>
+        <h4 style={{ marginTop: 0, color: '#856404' }}>📝 วิธีการใช้งาน (One-Click)</h4>
         <ol style={{ color: '#856404', fontSize: '14px', lineHeight: '1.6' }}>
-          <li>กดปุ่ม <strong>"เปิดกล้อง"</strong> เพื่อเริ่มใช้งาน</li>
-          <li>เลือก <strong>อาคาร</strong>, <strong>ฐานราก</strong>, <strong>หมวดงาน</strong> และ <strong>หัวข้อ</strong></li>
-          <li>กดปุ่ม <strong>"ถ่ายรูป"</strong> เพื่อถ่ายรูป</li>
-          <li>กดปุ่ม <strong>"บันทึก"</strong> เพื่อส่งไปยัง Google Drive</li>
-          <li>หรือกดปุ่ม <strong>"ถ่ายใหม่"</strong> เพื่อถ่ายรูปใหม่</li>
+          <li>เลือก <strong>อาคาร</strong>, <strong>ฐานราก</strong>, และ <strong>หมวดงาน</strong></li>
+          <li><strong>คลิกหัวข้อ</strong>ที่ต้องการถ่าย → <strong>เปิดกล้องทันที</strong></li>
+          <li>กดปุ่ม <strong>"ถ่ายรูป"</strong> → <strong>Auto reset กลับไปเลือกหัวข้อ</strong></li>
+          <li><strong>วนซ้ำ</strong> จนถ่ายครบทุกหัวข้อ</li>
+          <li>กดปุ่ม <strong>"บันทึกทั้งหมด"</strong> เพื่อส่งรูปทั้งหมด</li>
         </ol>
+        <div style={{ 
+          marginTop: '10px', 
+          padding: '8px', 
+          backgroundColor: '#e2e3e5', 
+          borderRadius: '4px',
+          fontSize: '13px'
+        }}>
+          <strong>💡 เคล็ดลับ:</strong> 
+          <br />• <strong>คลิกหัวข้อ = เปิดกล้องทันที</strong> ไม่ต้องกดปุ่มเปิดกล้องแยก
+          <br />• ✅ = ถ่ายแล้ว | 📷 = ยังไม่ถ่าย | คลิกรูปเล็กๆ เพื่อดูขยาย
+          <br />• <strong>รูปจะเก็บสะสม</strong> จนกว่าจะกด "บันทึกทั้งหมด" หรือ "ลบทั้งหมด"
+        </div>
       </div>
     </div>
   );

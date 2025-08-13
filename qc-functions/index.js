@@ -2,7 +2,7 @@ const { onRequest } = require("firebase-functions/v2/https");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const { getQCTopics, logPhoto, logReport, getSheetsClient } = require('./api/sheets');
+const { getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, getCompletedTopics } = require('./api/sheets');
 const { uploadPhoto } = require('./api/photos');
 const { getDriveClient } = require('./services/google-auth'); // แก้ไข import path
 
@@ -35,6 +35,84 @@ app.get("/qc-topics", async (req, res) => {
     res.json({ success: true, data: topics });
   } catch (error) {
     console.error('Error fetching QC topics:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.get("/master-data", async (req, res) => {
+  try {
+    const masterData = await getMasterData();
+    res.json({ success: true, data: masterData });
+  } catch (error) {
+    console.error('Error fetching master data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 🔥 Add Master Data (Building + Foundation)
+app.post("/master-data", async (req, res) => {
+  try {
+    const { building, foundation } = req.body;
+    
+    if (!building || !foundation) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: building, foundation'
+      });
+    }
+    
+    // Validate input
+    const buildingTrimmed = building.trim();
+    const foundationTrimmed = foundation.trim();
+    
+    if (!buildingTrimmed || !foundationTrimmed) {
+      return res.status(400).json({
+        success: false,
+        error: 'Building and foundation cannot be empty'
+      });
+    }
+    
+    console.log(`Adding master data: ${buildingTrimmed}-${foundationTrimmed}`);
+    
+    const result = await addMasterData(buildingTrimmed, foundationTrimmed);
+    
+    res.json({ success: true, data: result });
+    
+  } catch (error) {
+    console.error('Error adding master data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 🔥 Get Completed Topics (for progress tracking)
+app.post("/completed-topics", async (req, res) => {
+  try {
+    const { building, foundation, category } = req.body;
+    
+    if (!building || !foundation || !category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: building, foundation, category'
+      });
+    }
+    
+    console.log(`Getting completed topics for: ${building}-${foundation}-${category}`);
+    
+    const result = await getCompletedTopics({ building, foundation, category });
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error getting completed topics:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 

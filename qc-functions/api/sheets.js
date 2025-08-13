@@ -46,6 +46,184 @@ async function getQCTopics() {
   }
 }
 
+async function getMasterData() {
+  try {
+    const sheets = getSheetsClient();
+    
+    // ดึงข้อมูลจาก Master_Buildings_Foundations sheet
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'Master_Buildings_Foundations!A:B', // A=อาคาร, B=ฐานราก
+    });
+    
+    const rows = response.data.values || [];
+    const masterData = {
+      buildings: new Set(),
+      foundations: new Set(),
+      combinations: [] // เก็บ combination ที่มีอยู่แล้ว
+    };
+    
+    // ประมวลผลข้อมูล (skip header row)
+    rows.slice(1).forEach(row => {
+      if (row[0] && row[1]) {
+        const building = row[0].trim();
+        const foundation = row[1].trim();
+        
+        masterData.buildings.add(building);
+        masterData.foundations.add(foundation);
+        masterData.combinations.push({ building, foundation });
+      }
+    });
+    
+    return {
+      buildings: Array.from(masterData.buildings).sort(),
+      foundations: Array.from(masterData.foundations).sort(),
+      combinations: masterData.combinations
+    };
+    
+  } catch (error) {
+    console.error('Error reading master data:', error);
+    
+    // ถ้า sheet ยังไม่มี ให้สร้างใหม่
+    if (error.message.includes('Unable to parse range')) {
+      console.log('Master_Buildings_Foundations sheet not found, creating...');
+      await createMasterDataSheet();
+      return { buildings: [], foundations: [], combinations: [] };
+    }
+    
+    throw error;
+  }
+}
+
+// 🔥 สร้าง Master Data Sheet (ครั้งแรก)
+async function createMasterDataSheet() {
+  try {
+    const sheets = getSheetsClient();
+    
+    // เพิ่ม sheet ใหม่
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEETS_ID,
+      requestBody: {
+        requests: [{
+          addSheet: {
+            properties: {
+              title: 'Master_Buildings_Foundations',
+              gridProperties: {
+                rowCount: 1000,
+                columnCount: 10
+              }
+            }
+          }
+        }]
+      }
+    });
+    
+    // เพิ่ม header
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEETS_ID,
+      range: 'Master_Buildings_Foundations!A1:C1',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [['อาคาร', 'ฐานราก', 'วันที่สร้าง']]
+      }
+    });
+    
+    console.log('Master_Buildings_Foundations sheet created successfully');
+    
+  } catch (error) {
+    console.error('Error creating master data sheet:', error);
+    throw error;
+  }
+}
+
+// 🔥 เพิ่มข้อมูลอาคาร + ฐานรากใหม่
+async function addMasterData(building, foundation) {
+  try {
+    const sheets = getSheetsClient();
+    const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+    
+    // ตรวจสอบว่ามี combination นี้อยู่แล้วหรือไม่
+    const existingData = await getMasterData();
+    const exists = existingData.combinations.some(
+      combo => combo.building === building && combo.foundation === foundation
+    );
+    
+    if (exists) {
+      console.log(`Combination ${building}-${foundation} already exists`);
+      return { success: true, message: 'Data already exists', duplicate: true };
+    }
+    
+    // เพิ่มข้อมูลใหม่
+    const values = [[building, foundation, timestamp]];
+    
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEETS_ID,
+      range: 'Master_Buildings_Foundations!A:C',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values }
+    });
+    
+    console.log(`Added new master data: ${building}-${foundation}`);
+    
+    return { 
+      success: true, 
+      message: 'Data added successfully',
+      duplicate: false,
+      timestamp 
+    };
+    
+  } catch (error) {
+    console.error('Error adding master data:', error);
+    throw error;
+  }
+}
+
+// 🔥 ดึงรายการรูปที่ถ่ายแล้ว (สำหรับ progress tracking)
+async function getCompletedTopics(criteria) {
+  try {
+    const sheets = getSheetsClient();
+    const { building, foundation, category } = criteria;
+    
+    // ดึงข้อมูลจาก Master_Photos_Log
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'Master_Photos_Log!A:I'
+    });
+    
+    const rows = response.data.values || [];
+    const completedTopics = new Set();
+    
+    // กรองข้อมูลตามเงื่อนไข (skip header row)
+    rows.slice(1).forEach(row => {
+      if (row.length >= 6) {
+        const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic] = row;
+        
+        if (rowBuilding === building && 
+            rowFoundation === foundation && 
+            rowCategory === category && 
+            topic) {
+          completedTopics.add(topic.trim());
+        }
+      }
+    });
+    
+    return {
+      success: true,
+      data: {
+        completedTopics: Array.from(completedTopics),
+        criteria
+      }
+    };
+    
+  } catch (error) {
+    console.error('Error getting completed topics:', error);
+    return {
+      success: false,
+      data: { completedTopics: [] }
+    };
+  }
+}
+
 // บันทึกข้อมูลรูปถ่าย พร้อม Unique ID
 async function logPhoto(photoData) {
   try {
@@ -126,8 +304,11 @@ async function logReport(reportData) {
 }
 
 module.exports = {
-  getSheetsClient,  // เพิ่มการ export function นี้
+  getSheetsClient,
   getQCTopics,
   logPhoto,
-  logReport
+  logReport,
+  getMasterData,      // 🔥 ใหม่
+  addMasterData,      // 🔥 ใหม่
+  getCompletedTopics  // 🔥 ใหม่
 };
