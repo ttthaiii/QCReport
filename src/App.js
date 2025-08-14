@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Camera from './components/Camera';
 import Reports from './components/Reports';
 
 function App() {
   const [currentPage, setCurrentPage] = useState('camera'); // 'camera' หรือ 'reports'
+  const [isMobile, setIsMobile] = useState(false);
 
   const renderPage = () => {
     switch(currentPage) {
@@ -15,64 +16,59 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);  
+
+  const MobileNav = ({ currentPage, setCurrentPage }) => (
+    <div className="mobile-bottom-nav">
+      <button 
+        className={`nav-btn ${currentPage === 'camera' ? 'active' : ''}`}
+        onClick={() => setCurrentPage('camera')}
+      >
+        <span className="nav-icon">📸</span>
+        <span className="nav-text">ถ่ายรูป</span>
+      </button>
+      
+      <button 
+        className={`nav-btn ${currentPage === 'reports' ? 'active' : ''}`}
+        onClick={() => setCurrentPage('reports')}
+      >
+        <span className="nav-icon">📋</span>
+        <span className="nav-text">รายงาน</span>
+      </button>
+    </div>
+  );
+
   return (
     <div className="App">
       {/* Navigation */}
-      <nav style={{
-        backgroundColor: '#343a40',
-        padding: '15px',
-        marginBottom: '0',
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000,
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ 
-          maxWidth: '1200px', 
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <h1 style={{ 
-            color: 'white', 
-            margin: 0,
-            fontSize: '20px',
-            fontWeight: 'bold'
-          }}>
-            🏗️ QC Photo Report System
+      <nav className={`header-nav ${isMobile ? 'mobile' : 'desktop'}`}>
+        <div className="nav-container">
+          <h1 className="nav-title">
+            🏗️ {isMobile ? 'QC Photo Report System' : 'QC Photo Report System'}
           </h1>
           
-          <div>
-            <button
+          {/* แสดง Navigation ทั้ง Mobile และ Desktop */}
+          <div className={`nav-buttons ${isMobile ? 'mobile-tabs' : 'desktop-nav'}`}>
+            <button 
+              className={`nav-btn ${currentPage === 'camera' ? 'active' : ''}`}
               onClick={() => setCurrentPage('camera')}
-              style={{
-                padding: '8px 16px',
-                marginRight: '10px',
-                backgroundColor: currentPage === 'camera' ? '#007bff' : 'transparent',
-                color: 'white',
-                border: '1px solid #007bff',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
             >
-              📸 ถ่ายรูป QC
+              📸 {isMobile ? 'ถ่าย' : 'ถ่ายรูป QC'}
             </button>
-            
-            <button
+            <button 
+              className={`nav-btn ${currentPage === 'reports' ? 'active' : ''}`}
               onClick={() => setCurrentPage('reports')}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: currentPage === 'reports' ? '#28a745' : 'transparent',
-                color: 'white',
-                border: '1px solid #28a745',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
             >
-              📋 สร้างรายงาน
+              📋 {isMobile ? 'รายงาน' : 'สร้างรายงาน'}
             </button>
           </div>
         </div>
@@ -92,7 +88,7 @@ function App() {
         color: '#6c757d',
         fontSize: '14px'
       }}>
-        <p>QC Photo Report System v1.0 | สร้างโดย Firebase + React</p>
+        <p>QC Photo Report System </p>
       </footer>
     </div>
   );

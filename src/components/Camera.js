@@ -3,7 +3,7 @@ import { addWatermark, formatThaiDateTime } from '../utils/watermark';
 import { api } from '../utils/api';
 
 const Camera = () => {
-  // Form States (เดิม)
+  // Form States
   const [qcTopics, setQcTopics] = useState({});
   const [masterData, setMasterData] = useState({
     buildings: [],
@@ -16,104 +16,133 @@ const Camera = () => {
     foundation: '',
     category: ''
   });
-  const [inputMode, setInputMode] = useState({
-    building: 'select',
-    foundation: 'select'
-  });
-  const [newInputs, setNewInputs] = useState({
+
+  // 🔥 NEW: Smart Input States (แทน inputMode และ newInputs)
+  const [inputValues, setInputValues] = useState({
     building: '',
     foundation: ''
   });
 
-  // 🔥 NEW: Native Camera States (แทน camera stream states)
-  const [selectedTopic, setSelectedTopic] = useState(''); // หัวข้อที่เลือก
-  const [captureMode, setCaptureMode] = useState(false); // โหมดถ่ายรูป
-  const [isProcessing, setIsProcessing] = useState(false); // กำลัง process รูป
+  // Native Camera States
+  const [selectedTopic, setSelectedTopic] = useState('');
+  const [captureMode, setCaptureMode] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   
-  // Multiple Photos System (เก็บรูปสะสม - เดิม)
+  // Multiple Photos System
   const [capturedPhotos, setCapturedPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   
-  // Progress Tracking (เดิม)
+  // Progress Tracking
   const [completedTopics, setCompletedTopics] = useState(new Set());
   const [isLoadingProgress, setIsLoadingProgress] = useState(false);
   
-  // Geolocation states (เดิม)
+  // Geolocation states
   const [currentLocation, setCurrentLocation] = useState('กำลังหาตำแหน่ง...');
   const [cachedLocation, setCachedLocation] = useState(null);
   const [lastPosition, setLastPosition] = useState(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   
-  // 🔥 Native Camera Input Ref
+  // Native Camera Input Ref
   const cameraInputRef = useRef(null);
 
-  // Load data on mount (เดิม)
+  // Load data on mount
   useEffect(() => {
     loadQCTopics();
     loadMasterData();
     getCurrentLocation();
   }, []);
 
-  // Load progress when building/foundation/category changes (เดิม)
+  // Load progress when building/foundation/category changes
   useEffect(() => {
     if (formData.building && formData.foundation && formData.category) {
       loadProgress();
     }
   }, [formData.building, formData.foundation, formData.category]);
 
-  // Load Functions (เดิม - ไม่แก้ไข)
+  // 🔥 NEW: Helper functions for smart input
+  const isNewValue = (value, existingList) => {
+    return value && value.trim() && !existingList.includes(value.trim());
+  };
+
+  const handleInputChange = (field, value) => {
+    setInputValues(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // อัปเดต formData ทันที
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const getDataStatus = () => {
+    const building = inputValues.building || formData.building;
+    const foundation = inputValues.foundation || formData.foundation;
+    
+    const newBuilding = isNewValue(building, masterData.buildings);
+    const newFoundation = isNewValue(foundation, masterData.foundations);
+    
+    if (newBuilding && newFoundation) {
+      return {
+        type: 'new',
+        message: `จะเพิ่มข้อมูลใหม่: อาคาร "${building}" และฐานราก "${foundation}"`
+      };
+    } else if (newBuilding) {
+      return {
+        type: 'new',
+        message: `จะเพิ่มอาคารใหม่: "${building}"`
+      };
+    } else if (newFoundation) {
+      return {
+        type: 'new',
+        message: `จะเพิ่มฐานรากใหม่: "${foundation}"`
+      };
+    } else if (building && foundation) {
+      return {
+        type: 'existing',
+        message: `ใช้ข้อมูลที่มีอยู่: ${building}-${foundation}`
+      };
+    }
+    
+    return null;
+  };
+
+  const autoAddNewData = async (building, foundation) => {
+    const newBuilding = isNewValue(building, masterData.buildings);
+    const newFoundation = isNewValue(foundation, masterData.foundations);
+    
+    if (newBuilding || newFoundation) {
+      console.log(`Auto-adding: ${building}-${foundation}`);
+      
+      try {
+        const response = await api.addMasterData(building.trim(), foundation.trim());
+        
+        if (response.success && !response.data.duplicate) {
+          // Reload master data เพื่อให้ dropdown อัปเดต
+          await loadMasterData();
+          console.log(`✅ Auto-added: ${building}-${foundation}`);
+        }
+      } catch (error) {
+        console.error('Auto-add error:', error);
+        // ไม่แสดง error ให้ user เพื่อไม่ให้รบกวนการทำงาน
+      }
+    }
+  };
+
+  // Load Functions
   const loadMasterData = async () => {
     setIsLoadingMasterData(true);
     try {
       const response = await api.getMasterData();
       if (response.success) {
         setMasterData(response.data);
-        if (response.data.buildings.length > 0) {
-          setFormData(prev => ({ ...prev, building: response.data.buildings[0] }));
-        }
-        if (response.data.foundations.length > 0) {
-          setFormData(prev => ({ ...prev, foundation: response.data.foundations[0] }));
-        }
       }
     } catch (error) {
       console.error('Error loading master data:', error);
     } finally {
       setIsLoadingMasterData(false);
-    }
-  };
-
-  const addNewMasterData = async () => {
-    const building = newInputs.building.trim();
-    const foundation = newInputs.foundation.trim();
-    
-    if (!building || !foundation) {
-      alert('กรุณากรอกชื่ออาคารและเลขฐานรากให้ครบถ้วน');
-      return;
-    }
-    
-    try {
-      setIsUploading(true);
-      const response = await api.addMasterData(building, foundation);
-      
-      if (response.success) {
-        if (response.data.duplicate) {
-          alert('ข้อมูลนี้มีอยู่แล้วในระบบ');
-        } else {
-          alert('เพิ่มข้อมูลใหม่สำเร็จ!');
-        }
-        
-        await loadMasterData();
-        setFormData(prev => ({ ...prev, building: building, foundation: foundation }));
-        setInputMode({ building: 'select', foundation: 'select' });
-        setNewInputs({ building: '', foundation: '' });
-      } else {
-        throw new Error('Failed to add master data');
-      }
-    } catch (error) {
-      console.error('Error adding master data:', error);
-      alert('เกิดข้อผิดพลาดในการเพิ่มข้อมูล: ' + error.message);
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -246,16 +275,30 @@ const Camera = () => {
     return R * c;
   };
 
-  // 🔥 NEW: Native Camera Functions
+  // 🔥 UPDATED: Native Camera Functions with Auto-Add
 
-  // One-Click Topic Selection with Native Camera
-  const selectTopicAndOpenCamera = (topic) => {
-    if (!formData.building || !formData.foundation || !formData.category) {
-      alert('กรุณาเลือกข้อมูลให้ครบถ้วน: อาคาร, ฐานราก, และหมวดงาน');
+  // One-Click Topic Selection with Native Camera + Auto-Add
+  const selectTopicAndOpenCamera = async (topic) => {
+    const building = inputValues.building || formData.building;
+    const foundation = inputValues.foundation || formData.foundation;
+    const category = formData.category;
+    
+    if (!building || !foundation || !category) {
+      alert('กรุณากรอกข้อมูลให้ครบถ้วน: อาคาร, ฐานราก, และหมวดงาน');
       return;
     }
 
-    console.log(`Selected topic: ${topic}, opening native camera...`);
+    console.log(`Selected topic: ${topic}, auto-checking: ${building}-${foundation}`);
+    
+    // Auto-add ข้อมูลใหม่ (ถ้ามี) ก่อนถ่ายรูป
+    await autoAddNewData(building, foundation);
+    
+    // อัปเดต formData ด้วยค่าล่าสุด
+    setFormData(prev => ({
+      ...prev,
+      building: building.trim(),
+      foundation: foundation.trim()
+    }));
     
     setSelectedTopic(topic);
     setCaptureMode(true);
@@ -289,7 +332,7 @@ const Camera = () => {
       // Process image: resize + crop + watermark
       const processedBlob = await processImageForQC(file);
       
-      // 🔥 NO PREVIEW - Add directly to captured photos
+      // Add directly to captured photos
       const photoData = {
         id: Date.now() + Math.random(),
         blob: processedBlob,
@@ -406,10 +449,6 @@ const Camera = () => {
     });
   };
 
-  // Approve processed photo (REMOVED - No longer needed)
-
-  // Retake photo (REMOVED - No longer needed)
-
   // Cancel capture
   const cancelCapture = () => {
     resetCameraState();
@@ -427,7 +466,7 @@ const Camera = () => {
     }
   };
 
-  // Upload all photos (เดิม - ไม่แก้ไข)
+  // Upload all photos
   const uploadAllPhotos = async () => {
     if (capturedPhotos.length === 0) {
       alert('ไม่มีรูปให้อัปโหลด');
@@ -488,7 +527,7 @@ const Camera = () => {
     }
   };
 
-  // Clear all photos and other utility functions (เดิม - ไม่แก้ไข)
+  // Clear all photos and other utility functions
   const clearAllPhotos = () => {
     if (capturedPhotos.length === 0) return;
     
@@ -536,12 +575,132 @@ const Camera = () => {
 
   const progressStats = getProgressStats();
 
+  // 🔥 NEW: Render Smart Combobox Form
+  const renderSmartForm = () => {
+    const dataStatus = getDataStatus();
+    
+    return (
+      <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+          
+          {/* Building Combobox */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              อาคาร:
+            </label>
+            <input
+              list="buildings-list"
+              value={inputValues.building || formData.building || ''}
+              onChange={(e) => handleInputChange('building', e.target.value)}
+              placeholder="เลือกหรือพิมพ์ชื่ออาคาร เช่น A, B, C"
+              style={{ 
+                width: '100%', 
+                padding: '8px', 
+                fontSize: '14px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                backgroundColor: 'white'
+              }}
+              disabled={captureMode}
+            />
+            <datalist id="buildings-list">
+              {masterData.buildings.map(building => (
+                <option key={building} value={building} />
+              ))}
+            </datalist>
+          </div>
+
+          {/* Category Select */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              หมวดงาน:
+            </label>
+            <select 
+              value={formData.category}
+              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+              style={{ 
+                width: '100%', 
+                padding: '8px', 
+                fontSize: '14px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px'
+              }}
+              disabled={captureMode}
+            >
+              <option value="">เลือกหมวดงาน...</option>
+              {Object.keys(qcTopics).map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Foundation Combobox */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              ฐานราก:
+            </label>
+            <input
+              list="foundations-list"
+              value={inputValues.foundation || formData.foundation || ''}
+              onChange={(e) => handleInputChange('foundation', e.target.value)}
+              placeholder="เลือกหรือพิมพ์เลขฐานราก เช่น F01, F02"
+              style={{ 
+                width: '100%', 
+                padding: '8px', 
+                fontSize: '14px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                backgroundColor: 'white'
+              }}
+              disabled={captureMode}
+            />
+            <datalist id="foundations-list">
+              {masterData.foundations.map(foundation => (
+                <option key={foundation} value={foundation} />
+              ))}
+            </datalist>
+          </div>
+        </div>
+        
+        {/* Data Status Message */}
+        {dataStatus && (
+          <div style={{ 
+            marginTop: '15px', 
+            padding: '10px', 
+            backgroundColor: dataStatus.type === 'new' ? '#d1ecf1' : '#d4edda', 
+            borderRadius: '5px',
+            border: `1px solid ${dataStatus.type === 'new' ? '#bee5eb' : '#c3e6cb'}`,
+            fontSize: '14px',
+            color: dataStatus.type === 'new' ? '#0c5460' : '#155724'
+          }}>
+            <span style={{ marginRight: '8px' }}>
+              {dataStatus.type === 'new' ? '✨' : '✅'}
+            </span>
+            {dataStatus.message}
+          </div>
+        )}
+        
+        {/* Loading Master Data */}
+        {isLoadingMasterData && (
+          <div style={{ 
+            marginTop: '10px', 
+            textAlign: 'center', 
+            fontSize: '14px', 
+            color: '#666'
+          }}>
+            กำลังโหลดข้อมูลอาคารและฐานราก...
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>📸 ถ่ายรูป QC (Native Camera)</h1>
+      <h1>📸 ถ่ายรูป QC </h1>
       
-      {/* Location Status (เดิม) */}
-      <div style={{ 
+      {/* Location Status */}
+      {/*<div style={{ 
         marginBottom: '15px', 
         padding: '10px', 
         backgroundColor: isGettingLocation ? '#fff3cd' : '#d4edda', 
@@ -571,9 +730,9 @@ const Camera = () => {
         >
           🔄 อัปเดต
         </button>
-      </div>
+      </div>*/}
 
-      {/* Progress Status (เดิม) */}
+      {/* Progress Status */}
       <div style={{ 
         marginBottom: '15px', 
         padding: '12px', 
@@ -608,171 +767,10 @@ const Camera = () => {
         )}
       </div>
       
-      {/* Basic Form Controls (เดิม - ไม่แก้ไข) */}
-      <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-          
-          {/* Building Input */}
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              อาคาร:
-            </label>
-            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-              {inputMode.building === 'select' ? (
-                <select 
-                  value={formData.building}
-                  onChange={(e) => setFormData(prev => ({ ...prev, building: e.target.value }))}
-                  style={{ flex: 1, padding: '8px', fontSize: '14px' }}
-                  disabled={isLoadingMasterData || captureMode}
-                >
-                  <option value="">เลือกอาคาร...</option>
-                  {masterData.buildings.map(building => (
-                    <option key={building} value={building}>{building}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={newInputs.building}
-                  onChange={(e) => setNewInputs(prev => ({ ...prev, building: e.target.value }))}
-                  placeholder="ชื่ออาคารใหม่ เช่น A, B, C"
-                  style={{ flex: 1, padding: '8px', fontSize: '14px' }}
-                  disabled={captureMode}
-                />
-              )}
-              <button
-                onClick={() => setInputMode(prev => ({ 
-                  ...prev, 
-                  building: prev.building === 'select' ? 'input' : 'select' 
-                }))}
-                disabled={captureMode}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '12px',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  opacity: captureMode ? 0.5 : 1
-                }}
-              >
-                {inputMode.building === 'select' ? '+ ใหม่' : 'ยกเลิก'}
-              </button>
-            </div>
-          </div>
+      {/* 🔥 NEW: Smart Combobox Form */}
+      {renderSmartForm()}
 
-          {/* หมวดงาน */}
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              หมวดงาน:
-            </label>
-            <select 
-              value={formData.category}
-              onChange={(e) => {
-                const newCategory = e.target.value;
-                setFormData(prev => ({ 
-                  ...prev, 
-                  category: newCategory
-                }));
-              }}
-              style={{ width: '100%', padding: '8px', fontSize: '14px' }}
-              disabled={captureMode}
-            >
-              <option value="">เลือกหมวดงาน...</option>
-              {Object.keys(qcTopics).map(category => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Foundation Input */}
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              ฐานราก:
-            </label>
-            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-              {inputMode.foundation === 'select' ? (
-                <select 
-                  value={formData.foundation}
-                  onChange={(e) => setFormData(prev => ({ ...prev, foundation: e.target.value }))}
-                  style={{ flex: 1, padding: '8px', fontSize: '14px' }}
-                  disabled={isLoadingMasterData || captureMode}
-                >
-                  <option value="">เลือกฐานราก...</option>
-                  {masterData.foundations.map(foundation => (
-                    <option key={foundation} value={foundation}>{foundation}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={newInputs.foundation}
-                  onChange={(e) => setNewInputs(prev => ({ ...prev, foundation: e.target.value }))}
-                  placeholder="เลขฐานราก เช่น F01, F02"
-                  style={{ flex: 1, padding: '8px', fontSize: '14px' }}
-                  disabled={captureMode}
-                />
-              )}
-              <button
-                onClick={() => setInputMode(prev => ({ 
-                  ...prev, 
-                  foundation: prev.foundation === 'select' ? 'input' : 'select'
-                }))}
-                disabled={captureMode}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '12px',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  opacity: captureMode ? 0.5 : 1
-                }}
-              >
-                {inputMode.foundation === 'select' ? '+ ใหม่' : 'ยกเลิก'}
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        {/* Save New Master Data Button */}
-        {(inputMode.building === 'input' || inputMode.foundation === 'input') && (
-          <div style={{ marginTop: '15px', textAlign: 'center' }}>
-            <button
-              onClick={addNewMasterData}
-              disabled={isUploading || !newInputs.building.trim() || !newInputs.foundation.trim() || captureMode}
-              style={{
-                padding: '10px 20px',
-                fontSize: '14px',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                opacity: (isUploading || !newInputs.building.trim() || !newInputs.foundation.trim() || captureMode) ? 0.6 : 1
-              }}
-            >
-              {isUploading ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูลใหม่'}
-            </button>
-          </div>
-        )}
-        
-        {/* Loading Master Data */}
-        {isLoadingMasterData && (
-          <div style={{ 
-            marginTop: '10px', 
-            textAlign: 'center', 
-            fontSize: '14px', 
-            color: '#666' 
-          }}>
-            กำลังโหลดข้อมูลอาคารและฐานราก...
-          </div>
-        )}
-      </div>
-
-      {/* 🔥 Native Camera Input (Hidden) */}
+      {/* Native Camera Input (Hidden) */}
       <input 
         ref={cameraInputRef}
         type="file" 
@@ -782,9 +780,9 @@ const Camera = () => {
         onChange={handleCameraInput}
       />
 
-      {/* 🔥 Main Content: Topic Selection OR Processing OR Preview */}
+      {/* Main Content: Topic Selection OR Processing */}
       {!captureMode ? (
-        // Topic Selection Mode (หน้าแรก)
+        // Topic Selection Mode
         <>
           {formData.building && formData.foundation && formData.category && qcTopics[formData.category] ? (
             <div style={{ 
@@ -874,7 +872,7 @@ const Camera = () => {
               color: '#856404',
               border: '1px solid #ffeaa7'
             }}>
-              ⚠️ กรุณาเลือก อาคาร, ฐานราก, และหมวดงาน เพื่อแสดงรายการหัวข้อ
+              ⚠️ กรุณากรอก อาคาร, ฐานราก, และหมวดงาน เพื่อแสดงรายการหัวข้อ
             </div>
           )}
         </>
@@ -944,7 +942,7 @@ const Camera = () => {
         </>
       )}
 
-      {/* Captured Photos Management (เดิม - ไม่แก้ไข) */}
+      {/* Captured Photos Management */}
       {capturedPhotos.length > 0 && (
         <div style={{ 
           marginTop: '20px',
@@ -1090,19 +1088,19 @@ const Camera = () => {
       `}</style>
 
       {/* Instructions */}
-      <div style={{ 
+      {/*<div style={{ 
         marginTop: '30px',
         padding: '15px',
         backgroundColor: '#fff3cd',
         borderRadius: '6px',
         border: '1px solid #ffeaa7'
       }}>
-        <h4 style={{ marginTop: 0, color: '#856404' }}>📝 วิธีการใช้งาน (Native Camera)</h4>
+        <h4 style={{ marginTop: 0, color: '#856404' }}>📝 วิธีการใช้งาน (Smart Input)</h4>
         <ol style={{ color: '#856404', fontSize: '14px', lineHeight: '1.6' }}>
-          <li>เลือก <strong>อาคาร</strong>, <strong>ฐานราก</strong>, และ <strong>หมวดงาน</strong></li>
+          <li><strong>พิมพ์หรือเลือก</strong> อาคาร, ฐานราก, และหมวดงาน</li>
           <li><strong>คลิกหัวข้อ</strong> → <strong>เปิดแอปกล้องมือถือ</strong></li>
           <li><strong>ถ่ายรูป</strong> ด้วยกล้องเต็มประสิทธิภาพ (auto focus, HDR)</li>
-          <li><strong>ตรวจสอบ preview</strong> → เลือก "ใช้รูปนี้" หรือ "ถ่ายใหม่"</li>
+          <li><strong>รูปจะเข้าคลังอัตโนมัติ</strong> หลัง process เสร็จ</li>
           <li><strong>วนซ้ำ</strong> จนถ่ายครบทุกหัวข้อ</li>
           <li>กดปุ่ม <strong>"บันทึกทั้งหมด"</strong> เพื่อส่งรูปทั้งหมด</li>
         </ol>
@@ -1113,13 +1111,13 @@ const Camera = () => {
           borderRadius: '4px',
           fontSize: '13px'
         }}>
-          <strong>💡 เคล็ดลับ:</strong> 
-          <br />• <strong>ถือมือถือแนวนอน</strong> เพื่อให้ได้อัตราส่วน 4:3 ที่ดีที่สุด
-          <br />• <strong>วางวัตถุตรงกลาง</strong> รูปจะถูก crop จากตรงกลางอัตโนมัติ
-          <br />• <strong>ใช้ auto focus</strong> ของกล้องมือถือได้เต็มที่
+          <strong>✨ ใหม่!</strong> 
+          <br />• <strong>พิมพ์ข้อมูลใหม่ได้เลย</strong> - ไม่ต้องกด + ใหม่
+          <br />• <strong>Auto-add เมื่อถ่าย</strong> - ข้อมูลใหม่จะถูกเพิ่มอัตโนมัติ
+          <br />• <strong>แสดงสถานะ</strong> - เห็นว่าจะเพิ่มข้อมูลใหม่หรือใช้เดิม
           <br />• <strong>รูปจะถูกปรับเป็น 1600×1200</strong> พร้อม watermark อัตโนมัติ
         </div>
-      </div>
+      </div>*/}
     </div>
   );
 };

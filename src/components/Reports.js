@@ -53,14 +53,12 @@ const Reports = () => {
         if (response.data.buildings.length > 0) {
           setFormData(prev => ({
             ...prev,
-            building: response.data.buildings[0]
           }));
           console.log('Default building set:', response.data.buildings[0]);
         }
         if (response.data.foundations.length > 0) {
           setFormData(prev => ({
             ...prev,
-            foundation: response.data.foundations[0]
           }));
           console.log('Default foundation set:', response.data.foundations[0]);
         }
@@ -94,7 +92,6 @@ const Reports = () => {
         if (categories.length > 0) {
           setFormData(prev => ({
             ...prev,
-            category: categories[0]
           }));
         }
       }
@@ -212,47 +209,6 @@ const Reports = () => {
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>📋 สร้างรายงาน QC</h1>
       
-      {/* Debug API Status */}
-      <div style={{ 
-        padding: '10px', 
-        backgroundColor: '#f8f9fa',
-        borderRadius: '4px',
-        marginBottom: '20px',
-        fontSize: '12px'
-      }}>
-        <strong>🔗 API Status:</strong>
-        <div style={{ marginLeft: '10px', marginTop: '2px' }}>
-          Buildings: {masterData.buildings.length} รายการ
-        </div>
-        <div style={{ marginLeft: '10px' }}>
-          Foundations: {masterData.foundations.length} รายการ
-        </div>
-        <div style={{ marginLeft: '10px' }}>
-          Categories: {Object.keys(qcTopics).length} รายการ
-        </div>
-        <button
-          onClick={() => {
-            console.log('Current master data state:', masterData);
-            console.log('Current form data:', formData);
-            console.log('QC Topics:', qcTopics);
-            console.log('Category Progress:', categoryProgress);
-            loadMasterData(); // โหลดใหม่
-          }}
-          style={{
-            marginTop: '5px',
-            padding: '4px 8px',
-            fontSize: '10px',
-            backgroundColor: '#ffc107',
-            color: '#000',
-            border: 'none',
-            borderRadius: '2px',
-            cursor: 'pointer'
-          }}
-        >
-          🔍 Debug & Reload
-        </button>
-      </div>
-      
       {/* Report Generation Form */}
       <div style={{ 
         marginBottom: '20px', 
@@ -300,30 +256,6 @@ const Reports = () => {
 
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              ฐานราก:
-            </label>
-            <select 
-              value={formData.foundation}
-              onChange={(e) => setFormData(prev => ({ ...prev, foundation: e.target.value }))}
-              style={{ 
-                width: '100%', 
-                padding: '8px 12px',
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
-              }}
-              disabled={isLoadingMasterData}
-            >
-              <option value="">เลือกฐานราก...</option>
-              {masterData.foundations.map(foundation => (
-                <option key={foundation} value={foundation}>{foundation}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
               หมวดงาน:
             </label>
             <select 
@@ -347,6 +279,30 @@ const Reports = () => {
                   </option>
                 );
               })}
+            </select>            
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              ฐานราก:
+            </label>
+            <select 
+              value={formData.foundation}
+              onChange={(e) => setFormData(prev => ({ ...prev, foundation: e.target.value }))}
+              style={{ 
+                width: '100%', 
+                padding: '8px 12px',
+                fontSize: '14px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
+              }}
+              disabled={isLoadingMasterData}
+            >
+              <option value="">เลือกฐานราก...</option>
+              {masterData.foundations.map(foundation => (
+                <option key={foundation} value={foundation}>{foundation}</option>
+              ))}
             </select>
             {isLoadingProgress && (
               <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
@@ -652,7 +608,7 @@ const Reports = () => {
       )}
 
       {/* Instructions */}
-      <div style={{ 
+      {/*<div style={{ 
         marginTop: '30px',
         padding: '15px',
         backgroundColor: '#fff3cd',
@@ -683,7 +639,7 @@ const Reports = () => {
           <br />• กด <strong>"🔄 อัปเดต"</strong> เพื่อโหลดสถานะล่าสุด
           <br />• ข้อมูลจะอัปเดตอัตโนมัติเมื่อเปลี่ยนอาคารหรือฐานราก
         </div>
-      </div>
+      </div>*/}
     </div>
   );
 };
