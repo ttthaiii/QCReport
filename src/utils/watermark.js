@@ -1,5 +1,5 @@
 // แทนที่ไฟล์ src/utils/watermark.js
-// แก้ไขให้รองรับ Portrait และ Landscape อัตโนมัติ
+// แก้ไขให้รองรับ Portrait และ Landscape อัตโนมัติ + ฟอนต์ใหญ่ขึ้น
 
 export function addWatermark(imageFile, watermarkText, location = '') {
   return new Promise((resolve, reject) => {
@@ -26,16 +26,16 @@ export function addWatermark(imageFile, watermarkText, location = '') {
         // Draw image (maintain original size)
         ctx.drawImage(img, 0, 0, imageWidth, imageHeight);
         
-        // 🔥 Watermark size ตามขนาดรูป
-        const fontSize = Math.floor(Math.min(imageWidth, imageHeight) / 80); // ลดขนาดฟอนต์
-        ctx.font = `${fontSize}px Arial, sans-serif`;
+        // 🔥 Watermark size ตามขนาดรูป - เพิ่มขนาดให้ใหญ่ขึ้นมาก
+        const fontSize = Math.floor(Math.min(imageWidth, imageHeight) / 50); // เปลี่ยนจาก 65 เป็น 50 (ใหญ่ขึ้นอีก ~30%)
+        ctx.font = `bold ${fontSize}px Arial, sans-serif`; // เพิ่ม bold
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)'; // เข้มขึ้น
+        ctx.lineWidth = Math.max(3, Math.floor(fontSize / 8)); // เพิ่มความหนาของ stroke
         
         // Position watermark at bottom-right
-        const padding = Math.floor(imageWidth / 80); // padding ตามขนาดรูป
-        const lineHeight = fontSize + 3;
+        const padding = Math.floor(imageWidth / 50); // ปรับ padding ให้เหมาะสมกับฟอนต์ใหญ่
+        const lineHeight = fontSize + 6; // เพิ่มระยะห่างระหว่างบรรทัดเพิ่มเติม
         
         // Parse location และแบ่งบรรทัด
         const locationLines = parseLocationToLines(location);
@@ -47,15 +47,21 @@ export function addWatermark(imageFile, watermarkText, location = '') {
           const textWidth = ctx.measureText(line).width;
           const x = imageWidth - textWidth - padding;
           
-          // Draw text with outline
+          // Draw text with outline (stroke ก่อน fill)
           ctx.strokeText(line, x, y);
           ctx.fillText(line, x, y);
         });
         
+        // 🔥 เพิ่ม shadow effect เพื่อให้ข้อความเด่นชัดขึ้น
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)'; // เข้มขึ้น
+        ctx.shadowBlur = 3; // เบลอมากขึ้น
+        ctx.shadowOffsetX = 2; // เลื่อนมากขึ้น
+        ctx.shadowOffsetY = 2;
+        
         // Convert to blob
         canvas.toBlob((blob) => {
           if (blob) {
-            console.log(`Watermarked image: ${imageWidth}x${imageHeight}, size: ${blob.size} bytes`);
+            console.log(`Watermarked image: ${imageWidth}x${imageHeight}, size: ${blob.size} bytes, fontSize: ${fontSize}px`);
             resolve(blob);
           } else {
             reject(new Error('Failed to create blob from canvas'));
@@ -80,7 +86,6 @@ export function addWatermark(imageFile, watermarkText, location = '') {
   });
 }
 
-
 // แยกที่อยู่เป็นบรรทัดตามลำดับ: หมู่บ้าน, ตำบล, อำเภอ, จังหวัด
 function parseLocationToLines(location) {
   if (!location || location.trim() === '') return [];
@@ -98,18 +103,18 @@ function parseLocationToLines(location) {
   
   // พยายามจัดกลุ่มตามรูปแบบที่อยู่ไทย
   const lines = [];
-  const maxLines = 4; // จำกัดไม่เกิน 4 บรรทัด
+  const maxLines = 3; // ลดจาก 4 เป็น 3 บรรทัด เพื่อให้ฟอนต์ใหญ่ไม่เกะกะ
   
   // ถ้ามีหลายส่วน ให้แบ่งเป็นบรรทัด
   if (parts.length <= maxLines) {
-    // ถ้าไม่เกิน 4 ส่วน ให้แสดงทีละบรรทัด
+    // ถ้าไม่เกิน 3 ส่วน ให้แสดงทีละบรรทัด
     parts.forEach(part => {
-      if (part.length > 25) { // ถ้าบรรทัดยาวเกิน 25 ตัวอักษร
+      if (part.length > 30) { // เพิ่มความยาวสูงสุดต่อบรรทัด
         const words = part.split(' ');
         let currentLine = '';
         
         words.forEach(word => {
-          if ((currentLine + ' ' + word).length > 25) {
+          if ((currentLine + ' ' + word).length > 30) {
             if (currentLine) lines.push(currentLine);
             currentLine = word;
           } else {
@@ -123,19 +128,19 @@ function parseLocationToLines(location) {
       }
     });
   } else {
-    // ถ้าเกิน 4 ส่วน ให้รวมบางส่วน
-    const important = parts.slice(-4); // เอา 4 ส่วนสุดท้าย (สำคัญที่สุด)
+    // ถ้าเกิน 3 ส่วน ให้รวมบางส่วน
+    const important = parts.slice(-3); // เอา 3 ส่วนสุดท้าย (สำคัญที่สุด)
     important.forEach(part => {
-      if (part.length <= 25) {
+      if (part.length <= 30) {
         lines.push(part);
       } else {
         // ตัดข้อความยาว
-        lines.push(part.substring(0, 22) + '...');
+        lines.push(part.substring(0, 27) + '...');
       }
     });
   }
   
-  // จำกัดไม่เกิน 4 บรรทัด
+  // จำกัดไม่เกิน 3 บรรทัด
   return lines.slice(0, maxLines);
 }
 

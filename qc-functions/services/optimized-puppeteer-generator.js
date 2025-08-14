@@ -66,12 +66,12 @@ function createOptimizedHTML(reportData) {
     const pagePhotos = photos.slice(i, i + photosPerPage);
     
     // เติมช่องว่างให้ครบ 6 รูปต่อหน้า
-    /*while (pagePhotos.length < photosPerPage) {
+    while (pagePhotos.length < photosPerPage) {
       pagePhotos.push({
-        topic: `หัวข้อที่ ${i + pagePhotos.length + 1}`,
+        /*topic: `หัวข้อที่ ${i + pagePhotos.length + 1}`,*/
         imageBase64: null
       });
-    }*/
+    }
     
     pages.push(pagePhotos);
   }
