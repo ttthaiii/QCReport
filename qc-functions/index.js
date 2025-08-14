@@ -6,6 +6,9 @@ const { getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMas
 const { uploadPhoto } = require('./api/photos');
 const { getDriveClient } = require('./services/google-auth');
 
+// 🔥 ใช้ optimized-puppeteer-generator (puppeteer-core + @sparticuz/chromium)
+const { generateOptimizedPDF, uploadPDFToDrive } = require('./services/optimized-puppeteer-generator');
+
 // Setup multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -24,7 +27,7 @@ app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
     timestamp: new Date().toISOString(),
-    message: "QC Report API is running" 
+    message: "QC Report API is running with HTML-PDF generator" 
   });
 });
 
@@ -119,10 +122,10 @@ app.post("/completed-topics", async (req, res) => {
   }
 });
 
-// Generate PDF Report
+// 🔥 Generate PDF Report - ใช้ Optimized Puppeteer (puppeteer-core + @sparticuz/chromium)
 app.post("/generate-report", async (req, res) => {
   try {
-    console.log('Report generation request received');
+    console.log('🎯 Optimized Puppeteer PDF generation request received');
     
     const { building, foundation, category } = req.body;
     
@@ -133,7 +136,7 @@ app.post("/generate-report", async (req, res) => {
       });
     }
     
-    console.log(`Generating report for: ${building}-${foundation}-${category}`);
+    console.log(`🚀 Generating Optimized PDF for: ${building}-${foundation}-${category}`);
     
     // ดึงรูปภาพจาก Google Sheets ที่ตรงกับเงื่อนไข
     const photos = await getPhotosForReport(building, foundation, category);
@@ -145,12 +148,10 @@ app.post("/generate-report", async (req, res) => {
       });
     }
     
-    console.log(`Found ${photos.length} photos for report`);
+    console.log(`📸 Found ${photos.length} photos for Optimized PDF`);
     
-    // สร้าง PDF จริง
-    const { generateSimplePDF, uploadPDFToDrive } = require('./services/simple-pdf-generator');
-    
-    const pdfBuffer = await generateSimplePDF({
+    // 🔥 สร้าง PDF ด้วย Optimized Puppeteer
+    const pdfBuffer = await generateOptimizedPDF({
       building,
       foundation,
       category,
@@ -165,7 +166,7 @@ app.post("/generate-report", async (req, res) => {
     // อัปโหลดไป Google Drive
     const driveResult = await uploadPDFToDrive(pdfBuffer, filename);
     
-    console.log('PDF generated and uploaded:', driveResult.fileId);
+    console.log('✅ Optimized PDF generated and uploaded:', driveResult.fileId);
     
     // บันทึกลง Google Sheets
     const reportData = {
@@ -179,19 +180,20 @@ app.post("/generate-report", async (req, res) => {
     
     const sheetResult = await logReport(reportData);
     
-    console.log('Report logged successfully:', sheetResult.uniqueId);
+    console.log('📋 Optimized PDF logged successfully:', sheetResult.uniqueId);
     
     res.json({
       success: true,
       data: {
         ...driveResult,
         photoCount: photos.length,
-        sheetTimestamp: sheetResult
+        sheetTimestamp: sheetResult,
+        generatedWith: 'Optimized-Puppeteer'
       }
     });
     
   } catch (error) {
-    console.error('Error generating report:', error);
+    console.error('❌ Error generating Optimized PDF:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -261,11 +263,11 @@ async function getPhotosForReport(building, foundation, category) {
       }
     }
     
-    console.log(`Found ${photos.length} matching photos`);
+    console.log(`Found ${photos.length} matching photos for HTML-PDF`);
     return photos;
     
   } catch (error) {
-    console.error('Error fetching photos for report:', error);
+    console.error('❌ Error fetching photos for Optimized PDF:', error);
     throw error;
   }
 }
@@ -541,10 +543,13 @@ app.post("/log-report", async (req, res) => {
   }
 });
 
-// Export as Firebase Function with increased resources
+// Export as Firebase Function with optimized settings for Puppeteer (ฟรี)
 exports.api = onRequest({
   region: "asia-southeast1",
-  memory: "2GiB",        // เพิ่ม memory เป็น 2GB
-  timeoutSeconds: 300,   // เพิ่ม timeout เป็น 5 นาที
-  cpu: 1                 // ใช้ 1 CPU core
+  memory: "2GiB",           // เพิ่ม memory สำหรับ Chromium
+  timeoutSeconds: 540,      // เพิ่ม timeout เป็น 9 นาที
+  cpu: 1,                   // ใช้ 1 CPU core
+  // minInstances: 1,       // ❌ ลบบรรทัดนี้เพื่อประหยัด (จะมี cold start)
+  maxInstances: 3,          // จำกัด instance สูงสุด
+  concurrency: 1            // จำกัด concurrent requests เป็น 1
 }, app);

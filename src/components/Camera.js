@@ -446,20 +446,46 @@ const capturePhotoAndReset = async () => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     
-    // 🔥 ใช้ความละเอียดจริงของ video
+    // 🔥 กำหนดขนาดรูปมาตรฐาน - แนวนอน 4:3 ratio
+    const standardWidth = 1600;   // ความกว้าง
+    const standardHeight = 1200;  // ความสูง (4:3 ratio)
+    
+    // ตั้ง canvas ตามขนาดมาตรฐาน
+    canvas.width = standardWidth;
+    canvas.height = standardHeight;
+    
+    console.log(`Canvas standardized to: ${standardWidth}x${standardHeight}`);
+    
+    // คำนวณการครอบตัดจาก video
     const videoWidth = video.videoWidth || video.clientWidth;
     const videoHeight = video.videoHeight || video.clientHeight;
     
-    console.log(`Video actual size: ${videoWidth}x${videoHeight}`);
+    console.log(`Video size: ${videoWidth}x${videoHeight}`);
     
-    // ตั้ง canvas ตามขนาดจริงของ video
-    canvas.width = videoWidth;
-    canvas.height = videoHeight;
+    // คำนวณ aspect ratios
+    const videoRatio = videoWidth / videoHeight;
+    const canvasRatio = standardWidth / standardHeight;
     
-    console.log(`Canvas size: ${canvas.width}x${canvas.height}`);
+    let sourceX = 0, sourceY = 0, sourceWidth = videoWidth, sourceHeight = videoHeight;
     
-    // วาดรูปด้วยขนาดเต็ม
-    ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+    if (videoRatio > canvasRatio) {
+      // Video กว้างกว่า - ครอบตัดด้านซ้าย-ขวา
+      sourceWidth = videoHeight * canvasRatio;
+      sourceX = (videoWidth - sourceWidth) / 2;
+    } else {
+      // Video สูงกว่า - ครอบตัดด้านบน-ล่าง
+      sourceHeight = videoWidth / canvasRatio;
+      sourceY = (videoHeight - sourceHeight) / 2;
+    }
+    
+    console.log(`Crop area: ${sourceX}, ${sourceY}, ${sourceWidth}, ${sourceHeight}`);
+    
+    // วาดรูปด้วยการครอบตัดและปรับขนาด
+    ctx.drawImage(
+      video,
+      sourceX, sourceY, sourceWidth, sourceHeight,  // source (crop from video)
+      0, 0, standardWidth, standardHeight            // destination (canvas)
+    );
     
     canvas.toBlob(async (blob) => {
       if (!blob) {
@@ -469,7 +495,7 @@ const capturePhotoAndReset = async () => {
         return;
       }
       
-      console.log('Blob created successfully, size:', blob.size);
+      console.log('Standardized photo created, size:', blob.size);
       
       try {
         const watermarkText = formatThaiDateTime();
@@ -486,7 +512,8 @@ const capturePhotoAndReset = async () => {
           category: formData.category,
           topic: selectedTopic,
           location: currentLocation,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          dimensions: `${standardWidth}x${standardHeight}` // เก็บขนาดรูป
         };
         
         // เพิ่มลงใน array (เก็บสะสม)
@@ -495,7 +522,7 @@ const capturePhotoAndReset = async () => {
         // อัปเดต completed topics
         setCompletedTopics(prev => new Set([...prev, selectedTopic]));
         
-        console.log(`Photo captured for topic: ${selectedTopic}`);
+        console.log(`📸 Standardized photo captured: ${standardWidth}x${standardHeight}`);
         
         // Auto Reset Camera State (ไม่ลบรูป)
         stopCamera();
@@ -504,13 +531,13 @@ const capturePhotoAndReset = async () => {
         setIsCapturing(false);
         
         // แสดงข้อความสำเร็จ
-        alert(`✅ ถ่ายรูป "${selectedTopic}" เรียบร้อย!\n\n📷 รูปทั้งหมด: ${capturedPhotos.length + 1} รูป`);
+        alert(`✅ ถ่ายรูป "${selectedTopic}" เรียบร้อย!\n📏 ขนาด: ${standardWidth}x${standardHeight}\n📷 รูปทั้งหมด: ${capturedPhotos.length + 1} รูป`);
         
       } catch (error) {
         console.error('Error adding watermark:', error);
         setIsCapturing(false);
       }
-    }, 'image/jpeg', 0.95); // เพิ่มคุณภาพเป็น 0.95
+    }, 'image/jpeg', 0.9); // คุณภาพ 90%
     
   } catch (error) {
     console.error('Error capturing photo:', error);

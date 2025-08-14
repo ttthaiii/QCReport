@@ -9,46 +9,32 @@ export function addWatermark(imageFile, watermarkText, location = '') {
     
     img.onload = () => {
       try {
-        // 🔥 ใช้ขนาดจริงของรูป แทนที่จะบังคับขนาด
-        const originalWidth = img.width;
-        const originalHeight = img.height;
+        // 🔥 รูปที่เข้ามาควรเป็น 1600x1200 แล้ว (มาตรฐาน)
+        const imageWidth = img.width;
+        const imageHeight = img.height;
         
-        // กำหนดขนาดเป้าหมายตามอัตราส่วนเดิม
-        let targetWidth, targetHeight;
+        console.log(`Watermark input: ${imageWidth}x${imageHeight}`);
         
-        // ตรวจสอบว่าเป็น Portrait หรือ Landscape
-        if (originalHeight > originalWidth) {
-          // Portrait (แนวตั้ง) - มือถือส่วนใหญ่
-          targetHeight = 1920; // Full HD height
-          targetWidth = Math.round((originalWidth / originalHeight) * targetHeight);
-        } else {
-          // Landscape (แนวนอน)
-          targetWidth = 1920; // Full HD width  
-          targetHeight = Math.round((originalHeight / originalWidth) * targetWidth);
-        }
-        
-        console.log(`Original: ${originalWidth}x${originalHeight}`);
-        console.log(`Target: ${targetWidth}x${targetHeight}`);
-        
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
+        // ใช้ขนาดเดิมของรูป (ไม่ต้องปรับ)
+        canvas.width = imageWidth;
+        canvas.height = imageHeight;
         
         // Fill background with white
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        ctx.fillRect(0, 0, imageWidth, imageHeight);
         
-        // Draw image (maintain aspect ratio)
-        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+        // Draw image (maintain original size)
+        ctx.drawImage(img, 0, 0, imageWidth, imageHeight);
         
-        // 🔥 Responsive watermark size
-        const fontSize = Math.floor(Math.min(targetWidth, targetHeight) / 50);
+        // 🔥 Watermark size ตามขนาดรูป
+        const fontSize = Math.floor(Math.min(imageWidth, imageHeight) / 80); // ลดขนาดฟอนต์
         ctx.font = `${fontSize}px Arial, sans-serif`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 2;
         
         // Position watermark at bottom-right
-        const padding = 15;
+        const padding = Math.floor(imageWidth / 80); // padding ตามขนาดรูป
         const lineHeight = fontSize + 3;
         
         // Parse location และแบ่งบรรทัด
@@ -57,9 +43,9 @@ export function addWatermark(imageFile, watermarkText, location = '') {
         
         // วาดข้อความทีละบรรทัด (จากล่างขึ้นบน)
         lines.forEach((line, index) => {
-          const y = targetHeight - padding - ((lines.length - 1 - index) * lineHeight);
+          const y = imageHeight - padding - ((lines.length - 1 - index) * lineHeight);
           const textWidth = ctx.measureText(line).width;
-          const x = targetWidth - textWidth - padding;
+          const x = imageWidth - textWidth - padding;
           
           // Draw text with outline
           ctx.strokeText(line, x, y);
@@ -69,11 +55,12 @@ export function addWatermark(imageFile, watermarkText, location = '') {
         // Convert to blob
         canvas.toBlob((blob) => {
           if (blob) {
+            console.log(`Watermarked image: ${imageWidth}x${imageHeight}, size: ${blob.size} bytes`);
             resolve(blob);
           } else {
             reject(new Error('Failed to create blob from canvas'));
           }
-        }, 'image/jpeg', 0.9); // เพิ่มคุณภาพเป็น 0.9
+        }, 'image/jpeg', 0.92); // คุณภาพสูง
         
       } catch (error) {
         reject(error);
@@ -92,6 +79,7 @@ export function addWatermark(imageFile, watermarkText, location = '') {
     }
   });
 }
+
 
 // แยกที่อยู่เป็นบรรทัดตามลำดับ: หมู่บ้าน, ตำบล, อำเภอ, จังหวัด
 function parseLocationToLines(location) {
