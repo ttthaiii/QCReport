@@ -663,6 +663,153 @@ const capturePhotoAndReset = async () => {
 
   const progressStats = getProgressStats();
 
+  const fullscreenCameraStyles = `
+    .fullscreen-camera {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 9999;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .fullscreen-camera video {
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      cursor: crosshair;
+    }
+    
+    .fullscreen-controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      padding: 30px 20px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .fullscreen-topic {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: bold;
+      backdrop-filter: blur(10px);
+    }
+    
+    .capture-button-large {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #fff;
+      border: 4px solid #007bff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: all 0.2s ease;
+    }
+    
+    .capture-button-large:active {
+      transform: scale(0.95);
+      background: #f0f0f0;
+    }
+    
+    .cancel-button {
+      padding: 12px 20px;
+      background: rgba(220, 53, 69, 0.9);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+    }
+    
+    .focus-indicator {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      border: 2px solid #fff;
+      border-radius: 4px;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .focus-indicator.show {
+      opacity: 1;
+    }
+  `;
+
+  const handleTapToFocus = async (event) => {
+    if (!videoRef.current || !stream) return;
+    
+    const rect = videoRef.current.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // แสดง Focus Indicator
+    const indicator = document.querySelector('.focus-indicator');
+    if (indicator) {
+      indicator.style.left = x + 'px';
+      indicator.style.top = y + 'px';
+      indicator.classList.add('show');
+      
+      setTimeout(() => {
+        indicator.classList.remove('show');
+      }, 1000);
+    }
+    
+    try {
+      const track = stream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities();
+      
+      console.log('Camera capabilities:', capabilities);
+      
+      // ลอง Auto Focus ก่อน
+      if (capabilities.focusMode) {
+        await track.applyConstraints({
+          advanced: [{
+            focusMode: 'continuous'
+          }]
+        });
+        console.log('Applied continuous focus');
+      }
+      
+      // ลองปรับ Exposure
+      if (capabilities.exposureMode) {
+        await track.applyConstraints({
+          advanced: [{
+            exposureMode: 'continuous'
+          }]
+        });
+        console.log('Applied continuous exposure');
+      }
+      
+    } catch (error) {
+      console.log('Focus/Exposure adjustment not supported:', error);
+    }
+  };
+
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>📸 ถ่ายรูป QC (One-Click)</h1>
@@ -901,7 +1048,7 @@ const capturePhotoAndReset = async () => {
 
       {/* 🔥 Main Content: Topic Selection OR Camera Mode */}
       {!captureMode ? (
-        // Topic Selection Mode
+        // Topic Selection Mode (หน้าแรก)
         <>
           {formData.building && formData.foundation && formData.category && qcTopics[formData.category] ? (
             <div style={{ 
@@ -996,123 +1143,108 @@ const capturePhotoAndReset = async () => {
           )}
         </>
       ) : (
-        // Camera Mode
-        <div style={{ 
-          marginBottom: '20px', 
-          padding: '15px', 
-          backgroundColor: '#e3f2fd', 
-          borderRadius: '8px',
-          border: '2px solid #1976d2'
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: '15px'
-          }}>
-            <h3 style={{ margin: 0, color: '#1565c0' }}>
-              📸 กำลังถ่าย: {selectedTopic}
-            </h3>
-            <button
-              onClick={cancelCapture}
-              disabled={isCapturing}
-              style={{
-                padding: '8px 12px',
-                fontSize: '12px',
-                backgroundColor: '#dc3545',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                opacity: isCapturing ? 0.6 : 1
-              }}
-            >
-              ✕ ยกเลิก
-            </button>
-          </div>
+        // Fullscreen Camera Mode (หลังกดหัวข้อ)
+        <>
+          <style>{fullscreenCameraStyles}</style>
           
-          {/* Camera View */}
-          <div style={{ position: 'relative', marginBottom: '15px' }}>
-            {isCameraOn ? (
-              <div style={{ position: 'relative' }}>
-                <video 
-                  ref={videoRef}
-                  autoPlay 
-                  playsInline
-                  muted
-                  style={{ 
-                    width: '100%', 
-                    maxWidth: '600px', 
-                    height: 'auto',
-                    backgroundColor: '#000',
-                    borderRadius: '8px'
-                  }}
-                />
-                {!stream && (
-                  <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.7)',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: '8px',
-                    fontSize: '16px'
-                  }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div>กำลังเปิดกล้อง...</div>
-                      <div style={{ fontSize: '12px', marginTop: '5px' }}>
-                        โปรดรอสักครู่
+          <div className="fullscreen-camera">
+            <div className="fullscreen-topic">
+              📸 {selectedTopic}
+            </div>
+            
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              {isCameraOn ? (
+                <>
+                  <video 
+                    ref={videoRef}
+                    autoPlay 
+                    playsInline
+                    muted
+                    onClick={handleTapToFocus}
+                  />
+                  
+                  <div className="focus-indicator"></div>
+                  
+                  {!stream && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: 'rgba(0,0,0,0.8)',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '18px'
+                    }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div>📷 กำลังเปิดกล้อง...</div>
+                        <div style={{ fontSize: '14px', marginTop: '8px', opacity: 0.8 }}>
+                          โปรดรอสักครู่
+                        </div>
                       </div>
                     </div>
+                  )}
+                </>
+              ) : (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: '#000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '18px'
+                }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div>📷 กำลังเปิดกล้อง...</div>
+                    <div style={{ fontSize: '14px', marginTop: '8px', opacity: 0.8 }}>
+                      กรุณารอสักครู่
+                    </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div style={{
-                width: '100%',
-                maxWidth: '600px',
-                height: '300px',
-                backgroundColor: '#f8f9fa',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '2px dashed #dee2e6',
-                color: '#6c757d',
-                fontSize: '16px'
+                </div>
+              )}
+            </div>
+            
+            <div className="fullscreen-controls">
+              <button
+                className="cancel-button"
+                onClick={cancelCapture}
+                disabled={isCapturing}
+              >
+                ✕ ยกเลิก
+              </button>
+              
+              <button 
+                className="capture-button-large"
+                onClick={capturePhotoAndReset}
+                disabled={isCapturing || !stream}
+                style={{
+                  opacity: (isCapturing || !stream) ? 0.6 : 1,
+                  background: isCapturing ? '#ffc107' : '#fff'
+                }}
+              >
+                {isCapturing ? '⏳' : '📷'}
+              </button>
+              
+              <div style={{ 
+                color: 'white', 
+                fontSize: '12px', 
+                textAlign: 'right',
+                opacity: 0.8,
+                maxWidth: '100px'
               }}>
-                กำลังเปิดกล้อง...
+                <div>จิ้มเพื่อโฟกัส</div>
+                <div>{capturedPhotos.length + 1}/∞</div>
               </div>
-            )}
+            </div>
+            
             <canvas ref={canvasRef} style={{ display: 'none' }} />
           </div>
-          
-          {/* Capture Button */}
-          <div style={{ textAlign: 'center' }}>
-            <button 
-              onClick={capturePhotoAndReset}
-              disabled={isCapturing || !stream}
-              style={{
-                padding: '15px 30px',
-                fontSize: '18px',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                opacity: (isCapturing || !stream) ? 0.6 : 1,
-                fontWeight: 'bold'
-              }}
-            >
-              {isCapturing ? 'กำลังถ่าย...' : `📸 ถ่ายรูป: ${selectedTopic}`}
-            </button>
-          </div>
-        </div>
+        </>
       )}
 
       {/* Captured Photos Management */}
