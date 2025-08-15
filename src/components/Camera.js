@@ -807,7 +807,7 @@ const Camera = () => {
           {/* Building Combobox */}
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              อาคาร:
+              อาคาร: <span style={{ fontSize: '12px', color: '#666' }}>💡 พิมพ์ชื่อใหม่ได้เลย</span>
             </label>
             <input
               list="buildings-list"
@@ -831,10 +831,10 @@ const Camera = () => {
             </datalist>
           </div>
 
-          {/* Foundation Input */}
+          {/* Foundation Combobox */}
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              ฐานราก:
+              ฐานราก: <span style={{ fontSize: '12px', color: '#666' }}>💡 พิมพ์เลขใหม่ได้เลย</span>
             </label>
             <input
               list="foundations-list"
@@ -870,7 +870,7 @@ const Camera = () => {
           color: '#155724'
         }}>
           <span style={{ marginRight: '8px' }}>✅</span>
-          ใช้ระบบเดิมสำหรับหมวดงาน "ฐานราก"
+          ใช้ระบบเดิมสำหรับหมวดงาน "ฐานราก" - 📝 ข้อมูลใหม่จะถูกเพิ่มอัตโนมัติเมื่อถ่ายรูป
         </div>
       </div>
     );
@@ -879,51 +879,23 @@ const Camera = () => {
   // 🔥 DYNAMIC FORM: เสา, คาน, etc.
   const renderDynamicForm = (config) => {
     return (
-      <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-          
-          {config.fields.map((field, index) => (
-            <div key={field.name}>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                {field.name}:
-                {field.required && <span style={{ color: 'red' }}> *</span>}
-              </label>
-              <input
-                type={field.type}
-                value={dynamicFields[field.name] || ''}
-                onChange={(e) => setDynamicFields(prev => ({
-                  ...prev,
-                  [field.name]: e.target.value
-                }))}
-                placeholder={field.placeholder}
-                style={{ 
-                  width: '100%', 
-                  padding: '8px', 
-                  fontSize: '14px',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
-                  backgroundColor: 'white'
-                }}
-                disabled={captureMode}
-              />
-            </div>
-          ))}
-        </div>
-        
-        {/* Dynamic Status Message */}
-        <div style={{ 
-          marginTop: '15px', 
-          padding: '10px', 
-          backgroundColor: '#d1ecf1', 
-          borderRadius: '5px',
-          border: '1px solid #bee5eb',
-          fontSize: '14px',
-          color: '#0c5460'
-        }}>
-          <span style={{ marginRight: '8px' }}>✨</span>
-          ใช้ระบบใหม่สำหรับหมวดงาน "{formData.category}" ({config.fields.length} ฟิลด์)
-        </div>
-      </div>
+      <>
+        {config.fields.map((field, index) => (
+          <div key={field.name}>
+            <input
+              list={`${field.name}-list`}  // ✅ เพิ่ม list
+              type={field.type}
+              value={dynamicFields[field.name] || ''}
+              placeholder={field.placeholder}
+            />
+            <datalist id={`${field.name}-list`}>  // ✅ เพิ่ม datalist
+              {getOptionsForField(field.name, formData.category).map(option => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+          </div>
+        ))}
+      </>
     );
   };
 

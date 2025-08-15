@@ -2,7 +2,17 @@ const { onRequest } = require("firebase-functions/v2/https");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const { getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, getCompletedTopics, getMasterDataByCategory, addDynamicMasterData, getMasterDataEnhanced, createDynamicMasterDataSheet } = require('./api/sheets');
+const { 
+  getQCTopics, 
+  logPhoto, 
+  logReport, 
+  getSheetsClient, 
+  getMasterData, 
+  addMasterData, 
+  getCompletedTopics,
+  getMasterDataByCategory,
+  addDynamicMasterData 
+} = require('./api/sheets');
 const { uploadPhoto } = require('./api/photos');
 const { getDriveClient } = require('./services/google-auth');
 
@@ -44,8 +54,8 @@ app.get("/health", (req, res) => {
 // 🔥 NEW: Dynamic Category Configuration Routes
 app.get("/categories", async (req, res) => {
   try {
-    console.log('Getting all available categories');
-    const categories = await getAllCategories();
+    // ตอนนี้ return hardcoded categories (จะปรับทีหลัง)
+    const categories = ['ฐานราก']; // เพิ่มหมวดงานอื่นๆ ทีหลัง
     res.json({ success: true, data: categories });
   } catch (error) {
     console.error('Error fetching categories:', error);
@@ -56,21 +66,6 @@ app.get("/categories", async (req, res) => {
   }
 });
 
-app.get("/category-config/:category", async (req, res) => {
-  try {
-    const { category } = req.params;
-    console.log(`Getting category config for: ${category}`);
-    
-    const config = await getCategoryConfig(category);
-    res.json({ success: true, data: config });
-  } catch (error) {
-    console.error('Error fetching category config:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
 
 // 🔥 NEW: Enhanced master data endpoints - SPECIFIC ROUTES FIRST
 app.get("/master-data/:category", async (req, res) => {
@@ -91,46 +86,6 @@ app.get("/master-data/:category", async (req, res) => {
   }
 });
 
-// 🔥 NEW: Add dynamic master data
-app.post("/master-data-dynamic", async (req, res) => {
-  try {
-    const { category, dynamicFields } = req.body;
-    
-    console.log(`🔍 DEBUG: Adding dynamic master data request:`, { category, dynamicFields });
-    
-    if (!category || !dynamicFields || typeof dynamicFields !== 'object') {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: category, dynamicFields'
-      });
-    }
-    
-    // Validate that all field values are non-empty
-    const fieldNames = Object.keys(dynamicFields);
-    const hasEmptyFields = fieldNames.some(field => !dynamicFields[field] || !dynamicFields[field].trim());
-    
-    if (hasEmptyFields) {
-      return res.status(400).json({
-        success: false,
-        error: 'All dynamic fields must have non-empty values'
-      });
-    }
-    
-    console.log(`🔍 DEBUG: Adding dynamic master data for ${category}:`, dynamicFields);
-    
-    const result = await addDynamicMasterData(category, dynamicFields);
-    console.log(`🔍 DEBUG: Dynamic master data result:`, result);
-    
-    res.json({ success: true, data: result });
-    
-  } catch (error) {
-    console.error('🔍 DEBUG: Error adding dynamic master data:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
 
 // Legacy master data endpoint (GENERAL ROUTES LAST)
 app.get("/master-data", async (req, res) => {
@@ -232,16 +187,23 @@ app.get("/qc-topics", async (req, res) => {
   }
 });
 
-// 🔥 NEW: Enhanced master data endpoints with category support (ต้องอยู่ก่อน GET /master-data)
-app.get("/master-data/:category", async (req, res) => {
+app.get("/category-config/:category", async (req, res) => {
   try {
     const { category } = req.params;
-    console.log(`Getting master data for category: ${category}`);
     
-    const masterData = await getMasterDataByCategory(category);
-    res.json({ success: true, data: masterData });
+    // ตอนนี้ทุกหมวดงานใช้ระบบเดิม
+    const config = {
+      useExisting: true,
+      category: category,
+      fields: [
+        { name: 'อาคาร', type: 'text', required: true, placeholder: 'เลือกหรือพิมพ์ชื่ออาคาร' },
+        { name: 'ฐานราก', type: 'text', required: true, placeholder: 'เลือกหรือพิมพ์เลขฐานราก' }
+      ]
+    };
+    
+    res.json({ success: true, data: config });
   } catch (error) {
-    console.error(`Error fetching master data for ${category}:`, error);
+    console.error('Error fetching category config:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
@@ -258,17 +220,6 @@ app.post("/master-data-dynamic", async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: category, dynamicFields'
-      });
-    }
-    
-    // Validate that all field values are non-empty
-    const fieldNames = Object.keys(dynamicFields);
-    const hasEmptyFields = fieldNames.some(field => !dynamicFields[field] || !dynamicFields[field].trim());
-    
-    if (hasEmptyFields) {
-      return res.status(400).json({
-        success: false,
-        error: 'All dynamic fields must have non-empty values'
       });
     }
     

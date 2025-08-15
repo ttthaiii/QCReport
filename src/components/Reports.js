@@ -447,40 +447,24 @@ const Reports = () => {
       <>
         {config.fields.map((field, index) => (
           <div key={field.name}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              {field.name}:
-              {field.required && <span style={{ color: 'red' }}> *</span>}
-            </label>
-            {/* 🔥 ใช้ Combobox เหมือน Legacy Form */}
-            <input
-              list={`${field.name}-list-reports`}
-              type={field.type}
+            <select 
               value={dynamicFields[field.name] || ''}
               onChange={(e) => setDynamicFields(prev => ({
                 ...prev,
                 [field.name]: e.target.value
               }))}
-              placeholder={field.placeholder}
-              style={{ 
-                width: '100%', 
-                padding: '8px 12px', 
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                backgroundColor: 'white'
-              }}
-            />
-            {/* 🔥 Datalist สำหรับ dropdown options */}
-            <datalist id={`${field.name}-list-reports`}>
-              {getOptionsForField(field.name, config.category).map(option => (
-                <option key={option} value={option} />
-              ))}
-            </datalist>
+            >
+              <option value="">เลือก{field.name}...</option>
+              {getOptionsForField(field.name, config.category).map(option =>
+                <option key={option} value={option}>{option}</option>
+              )}
+            </select>
           </div>
         ))}
       </>
     );
   };
+
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
