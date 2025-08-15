@@ -60,6 +60,43 @@ async function uploadPhotoFile(photoBlob, photoData) {
   }
 }
 
+// 🔥 NEW: Upload photo with dynamic fields
+async function uploadPhotoDynamic(photoBlob, photoData) {
+  const API_BASE = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:5001/qcreport-54164/asia-southeast1/api'
+    : 'https://asia-southeast1-qcreport-54164.cloudfunctions.net/api';
+
+  try {
+    // Convert blob to base64
+    const base64 = await blobToBase64(photoBlob);
+    console.log('Converted to base64, length:', base64.length);
+
+    const response = await fetch(`${API_BASE}/upload-photo-dynamic`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        photo: base64,
+        category: photoData.category,
+        dynamicFields: photoData.dynamicFields,
+        topic: photoData.topic,
+        location: photoData.location || ''
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Dynamic Upload Error: ${response.statusText} - ${errorText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Dynamic upload error:', error);
+    throw error;
+  }
+}
+
 // Helper function to convert blob to base64
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -78,13 +115,59 @@ export const api = {
   // Get QC topics
   getQCTopics: () => apiCall('/qc-topics'),
   
-  // 🔥 Master Data Management
-  getMasterData: () => apiCall('/master-data'),
+  // 🔥 NEW: Dynamic Category Configuration
+  getCategories: () => apiCall('/categories'),
+  getCategoryConfig: (category) => apiCall(`/category-config/${category}`),
+  
+  // 🔥 Enhanced Master Data Management
+  getMasterData: (category = null) => {
+    if (category) {
+      // Encode category name for URL safety
+      const encodedCategory = encodeURIComponent(category);
+      return apiCall(`/master-data/${encodedCategory}`);
+    } else {
+      return apiCall('/master-data');
+    }
+  },
+  
+  getMasterDataByCategory: (category) => {
+    const encodedCategory = encodeURIComponent(category);
+    return apiCall(`/master-data/${encodedCategory}`);
+  },
   
   addMasterData: (building, foundation) => apiCall('/master-data', {
     method: 'POST',
     body: JSON.stringify({ building, foundation })
   }),
+  
+  // 🔥 NEW: Dynamic Master Data
+  addDynamicMasterData: (category, dynamicFields) => apiCall('/master-data-dynamic', {
+    method: 'POST',
+    body: JSON.stringify({ category, dynamicFields })
+  }),
+  
+  // 🔥 Hybrid Master Data Function
+  addMasterDataHybrid: (category, data) => {
+    if (category === 'ฐานราก') {
+      // Use legacy function
+      return apiCall('/master-data', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          building: data.building, 
+          foundation: data.foundation 
+        })
+      });
+    } else {
+      // Use dynamic function
+      return apiCall('/master-data-dynamic', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          category, 
+          dynamicFields: data 
+        })
+      });
+    }
+  },
   
   // 🔥 Progress Tracking
   getCompletedTopics: (criteria) => apiCall('/completed-topics', {
@@ -92,10 +175,13 @@ export const api = {
     body: JSON.stringify(criteria)
   }),
   
-  // Upload photo to Drive + log to Sheets
+  // Upload photo to Drive + log to Sheets (Legacy)
   uploadPhoto: uploadPhotoFile,
   
-  // Generate PDF Report
+  // 🔥 NEW: Upload photo with dynamic fields
+  uploadPhotoDynamic: uploadPhotoDynamic,
+  
+  // Generate PDF Report (Enhanced for dynamic fields)
   generateReport: (data) => apiCall('/generate-report', {
     method: 'POST',
     body: JSON.stringify(data)

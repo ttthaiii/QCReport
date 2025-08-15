@@ -10,11 +10,20 @@ const Reports = () => {
   });
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
   
+  // 🔥 NEW: Dynamic Categories State
+  const [categories, setCategories] = useState([]);
+  const [categoryConfigs, setCategoryConfigs] = useState({});
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  
   const [formData, setFormData] = useState({
     building: '',
     foundation: '',
     category: ''
   });
+  
+  // 🔥 NEW: Dynamic Fields State
+  const [dynamicFields, setDynamicFields] = useState({});
+  
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState(null);
 
@@ -24,59 +33,174 @@ const Reports = () => {
 
   useEffect(() => {
     loadQCTopics();
-    loadMasterData();
+    loadCategories(); // 🔥 NEW
   }, []);
 
-  // 🔥 Load progress when building/foundation changes
+  // 🔥 Load master data when category changes
   useEffect(() => {
-    if (formData.building && formData.foundation && Object.keys(qcTopics).length > 0) {
+    if (formData.category) {
+      loadMasterDataForCategory(formData.category);
+    }
+  }, [formData.category]);
+
+  // 🔥 Load category config when category changes
+  useEffect(() => {
+    if (formData.category) {
+      loadCategoryConfig(formData.category);
+    }
+  }, [formData.category]);
+
+  // 🔥 Load progress when form data changes
+  useEffect(() => {
+    if (formData.category && isFormValid() && Object.keys(qcTopics).length > 0) {
       loadAllCategoryProgress();
     }
-  }, [formData.building, formData.foundation, qcTopics]);
+  }, [formData.category, dynamicFields, qcTopics]);
 
-  const loadMasterData = async () => {
-    setIsLoadingMasterData(true);
+  // 🔥 NEW: Load categories and configs
+  const loadCategories = async () => {
+    setIsLoadingCategories(true);
     try {
-      console.log('Loading master data...');
-      const response = await api.getMasterData();
-      console.log('Master data response:', response);
-      
+      const response = await api.getCategories();
       if (response.success) {
-        setMasterData(response.data);
-        console.log('Master data loaded:', {
-          buildings: response.data.buildings,
-          foundations: response.data.foundations,
-          combinations: response.data.combinations?.length || 0
-        });
-        
-        // ตั้งค่าเริ่มต้น
-        if (response.data.buildings.length > 0) {
-          setFormData(prev => ({
-            ...prev,
-          }));
-          console.log('Default building set:', response.data.buildings[0]);
-        }
-        if (response.data.foundations.length > 0) {
-          setFormData(prev => ({
-            ...prev,
-          }));
-          console.log('Default foundation set:', response.data.foundations[0]);
-        }
-      } else {
-        console.error('Master data response failed:', response);
+        setCategories(response.data);
       }
     } catch (error) {
-      console.error('Error loading master data:', error);
-      
-      // แสดงข้อมูล error ที่ละเอียดกว่า
-      if (error.message.includes('404')) {
-        console.log('Master data sheet might not exist yet');
-      } else if (error.message.includes('Failed to fetch')) {
-        console.log('Network or API connection issue');
+      console.error('Error loading categories:', error);
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  };
+
+  const loadCategoryConfig = async (category) => {
+    if (categoryConfigs[category]) return; // Already loaded
+    
+    try {
+      const response = await api.getCategoryConfig(category);
+      if (response.success) {
+        setCategoryConfigs(prev => ({
+          ...prev,
+          [category]: response.data
+        }));
+        
+        // Initialize dynamic fields for this category
+        if (!response.data.useExisting) {
+          const initialFields = {};
+          response.data.fields.forEach(field => {
+            initialFields[field.name] = '';
+          });
+          setDynamicFields(initialFields);
+        } else {
+          // Reset dynamic fields for legacy categories
+          setDynamicFields({});
+        }
       }
+    } catch (error) {
+      console.error(`Error loading config for ${category}:`, error);
+    }
+  };
+
+  // 🔥 NEW: Check if current category is dynamic
+  const isDynamicCategory = () => {
+    const config = categoryConfigs[formData.category];
+    return config && !config.useExisting;
+  };
+
+  // 🔥 NEW: Check if form is valid
+  const isFormValid = () => {
+    if (!formData.category) return false;
+    
+    if (isDynamicCategory()) {
+      const config = categoryConfigs[formData.category];
+      if (!config) return false;
       
-      // ไม่แสดง alert เพราะอาจเป็นครั้งแรกที่ใช้งาน
-      console.log('Will show empty dropdowns for now');
+      // Check if all required dynamic fields are filled
+      return config.fields.every(field => {
+        const value = dynamicFields[field.name];
+        return !field.required || (value && value.trim());
+      });
+    } else {
+      // Legacy validation (ฐานราก)
+      return formData.building && formData.foundation;
+    }
+  };
+
+  // 🔥 NEW: Get current data for reports
+  const getCurrentData = () => {
+    if (isDynamicCategory()) {
+      return {
+        category: formData.category,
+        dynamicFields: { ...dynamicFields },
+        // For compatibility with legacy systems
+        building: Object.values(dynamicFields)[0] || '',
+        foundation: Object.values(dynamicFields)[1] || ''
+      };
+    } else {
+      return {
+        category: formData.category,
+        building: formData.building,
+        foundation: formData.foundation
+      };
+    }
+  };
+
+  // 🔥 NEW: Get options for dynamic field (similar to Camera.js)
+  const getOptionsForField = (fieldName, category) => {
+    // ถ้าเป็น category ฐานราก ใช้ masterData เดิม
+    if (category === 'ฐานราก') {
+      if (fieldName === 'อาคาร') return masterData.buildings || [];
+      if (fieldName === 'ฐานราก') return masterData.foundations || [];
+    }
+    
+    // สำหรับ dynamic categories ใช้ข้อมูลที่โหลดมาจาก Dynamic_Master_Data
+    if (masterData.uniqueValues && masterData.uniqueValues[fieldName]) {
+      return masterData.uniqueValues[fieldName];
+    }
+    
+    // ถ้าไม่มีข้อมูล ให้ array ว่าง (user สามารถพิมพ์ใหม่ได้)
+    return [];
+  };
+
+  // 🔥 NEW: Load master data by category (similar to Camera.js)
+  const loadMasterDataForCategory = async (category) => {
+    if (!category) return;
+    
+    setIsLoadingMasterData(true);
+    try {
+      const response = await api.getMasterDataByCategory(category);
+      if (response.success) {
+        if (category === 'ฐานราก') {
+          // Legacy format - ใช้ตรงๆ
+          setMasterData(response.data);
+        } else {
+          // Dynamic format - เก็บทั้ง legacy format และ dynamic structure
+          const dynamicMasterData = {
+            // Legacy compatibility
+            buildings: response.data.uniqueValues ? 
+              (response.data.uniqueValues[Object.keys(response.data.uniqueValues)[0]] || []) : [],
+            foundations: response.data.uniqueValues ? 
+              (response.data.uniqueValues[Object.keys(response.data.uniqueValues)[1]] || []) : [],
+            combinations: response.data.combinations || [],
+            // 🔥 NEW: Dynamic structure
+            uniqueValues: response.data.uniqueValues || {},
+            fields: response.data.fields || [],
+            category: response.data.category
+          };
+          
+          setMasterData(dynamicMasterData);
+        }
+      }
+    } catch (error) {
+      console.error(`Error loading master data for ${category}:`, error);
+      // Set empty data structure
+      setMasterData({
+        buildings: [],
+        foundations: [],
+        combinations: [],
+        uniqueValues: {},
+        fields: [],
+        category: category
+      });
     } finally {
       setIsLoadingMasterData(false);
     }
@@ -87,13 +211,6 @@ const Reports = () => {
       const response = await api.getQCTopics();
       if (response.success) {
         setQcTopics(response.data);
-        // Set default category
-        const categories = Object.keys(response.data);
-        if (categories.length > 0) {
-          setFormData(prev => ({
-            ...prev,
-          }));
-        }
       }
     } catch (error) {
       console.error('Error loading QC topics:', error);
@@ -101,21 +218,23 @@ const Reports = () => {
     }
   };
 
-  // 🔥 NEW: Load progress for all categories
+  // 🔥 UPDATED: Load progress for all categories with dynamic support
   const loadAllCategoryProgress = async () => {
-    if (!formData.building || !formData.foundation || Object.keys(qcTopics).length === 0) return;
+    const currentData = getCurrentData();
+    
+    if (!currentData.building || !currentData.foundation || Object.keys(qcTopics).length === 0) return;
     
     setIsLoadingProgress(true);
     setCategoryProgress({});
     
     try {
-      console.log(`Loading progress for all categories: ${formData.building}-${formData.foundation}`);
+      console.log(`Loading progress for all categories: ${currentData.building}-${currentData.foundation}`);
       
       const progressPromises = Object.keys(qcTopics).map(async (category) => {
         try {
           const response = await api.getCompletedTopics({
-            building: formData.building,
-            foundation: formData.foundation,
+            building: currentData.building,
+            foundation: currentData.foundation,
             category: category
           });
           
@@ -163,8 +282,9 @@ const Reports = () => {
     }
   };
 
+  // 🔥 UPDATED: Generate report with dynamic fields support
   const generateReport = async () => {
-    if (!formData.building || !formData.foundation || !formData.category) {
+    if (!isFormValid()) {
       alert('กรุณาเลือกข้อมูลให้ครบถ้วน');
       return;
     }
@@ -172,13 +292,17 @@ const Reports = () => {
     setIsGenerating(true);
     
     try {
-      console.log('Generating report with data:', formData);
+      const currentData = getCurrentData();
+      console.log('Generating report with data:', currentData);
       
-      const response = await api.generateReport(formData);
+      const response = await api.generateReport(currentData);
       
       if (response.success) {
         setGeneratedReport(response.data);
-        alert(`สร้างรายงานสำเร็จ!\nไฟล์: ${response.data.filename}\nจำนวนรูป: ${response.data.photoCount} รูป`);
+        
+        // Enhanced success message
+        const combination = response.data.combination || `${currentData.building}-${currentData.foundation}`;
+        alert(`สร้างรายงานสำเร็จ!\nไฟล์: ${response.data.filename}\nข้อมูล: ${combination}\nจำนวนรูป: ${response.data.photoCount} รูป`);
       } else {
         throw new Error('Failed to generate report');
       }
@@ -205,6 +329,159 @@ const Reports = () => {
 
   const overallProgress = getOverallProgress();
 
+  // 🔥 NEW: Render form based on category type
+  const renderForm = () => {
+    if (!formData.category) {
+      return null; // Will show category selector first
+    }
+
+    const config = categoryConfigs[formData.category];
+    if (!config && !isLoadingCategories) {
+      return (
+        <div style={{
+          marginBottom: '15px',
+          padding: '10px',
+          backgroundColor: '#f8d7da',
+          borderRadius: '5px',
+          textAlign: 'center',
+          fontSize: '14px',
+          color: '#721c24',
+          border: '1px solid #f5c6cb'
+        }}>
+          ❌ ไม่พบการตั้งค่าสำหรับหมวดงาน "{formData.category}"
+        </div>
+      );
+    }
+
+    if (config && config.useExisting) {
+      // 🔥 LEGACY FORM: ฐานราก (NO CHANGES)
+      return renderLegacyForm();
+    } else if (config) {
+      // 🔥 DYNAMIC FORM: เสา, คาน, etc.
+      return renderDynamicForm(config);
+    }
+
+    return (
+      <div style={{
+        marginBottom: '15px',
+        padding: '10px',
+        backgroundColor: '#e2e3e5',
+        borderRadius: '5px',
+        textAlign: 'center',
+        fontSize: '14px',
+        color: '#495057'
+      }}>
+        กำลังโหลดการตั้งค่า...
+      </div>
+    );
+  };
+
+  // 🔥 LEGACY FORM: ฐานราก (เหมือนเดิม 100%)
+  const renderLegacyForm = () => {
+    return (
+      <>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+            อาคาร:
+          </label>
+          <select 
+            value={formData.building}
+            onChange={(e) => setFormData(prev => ({ ...prev, building: e.target.value }))}
+            style={{ 
+              width: '100%', 
+              padding: '8px 12px',
+              fontSize: '14px',
+              border: '1px solid #ced4da',
+              borderRadius: '4px',
+              backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
+            }}
+            disabled={isLoadingMasterData}
+          >
+            <option value="">เลือกอาคาร...</option>
+            {masterData.buildings.map(building => (
+              <option key={building} value={building}>{building}</option>
+            ))}
+          </select>
+          {isLoadingMasterData && (
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+              กำลังโหลด...
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+            ฐานราก:
+          </label>
+          <select 
+            value={formData.foundation}
+            onChange={(e) => setFormData(prev => ({ ...prev, foundation: e.target.value }))}
+            style={{ 
+              width: '100%', 
+              padding: '8px 12px',
+              fontSize: '14px',
+              border: '1px solid #ced4da',
+              borderRadius: '4px',
+              backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
+            }}
+            disabled={isLoadingMasterData}
+          >
+            <option value="">เลือกฐานราก...</option>
+            {masterData.foundations.map(foundation => (
+              <option key={foundation} value={foundation}>{foundation}</option>
+            ))}
+          </select>
+          {isLoadingProgress && (
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+              กำลังโหลดสถานะ...
+            </div>
+          )}            
+        </div>
+      </>
+    );
+  };
+
+  // 🔥 DYNAMIC FORM: เสา, คาน, etc. (ใช้ Combobox เหมือน Legacy)
+  const renderDynamicForm = (config) => {
+    return (
+      <>
+        {config.fields.map((field, index) => (
+          <div key={field.name}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              {field.name}:
+              {field.required && <span style={{ color: 'red' }}> *</span>}
+            </label>
+            {/* 🔥 ใช้ Combobox เหมือน Legacy Form */}
+            <input
+              list={`${field.name}-list-reports`}
+              type={field.type}
+              value={dynamicFields[field.name] || ''}
+              onChange={(e) => setDynamicFields(prev => ({
+                ...prev,
+                [field.name]: e.target.value
+              }))}
+              placeholder={field.placeholder}
+              style={{ 
+                width: '100%', 
+                padding: '8px 12px', 
+                fontSize: '14px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                backgroundColor: 'white'
+              }}
+            />
+            {/* 🔥 Datalist สำหรับ dropdown options */}
+            <datalist id={`${field.name}-list-reports`}>
+              {getOptionsForField(field.name, config.category).map(option => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+          </div>
+        ))}
+      </>
+    );
+  };
+
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>📋 สร้างรายงาน QC</h1>
@@ -225,42 +502,17 @@ const Reports = () => {
           gap: '15px',
           marginBottom: '20px'
         }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              อาคาร:
-            </label>
-            <select 
-              value={formData.building}
-              onChange={(e) => setFormData(prev => ({ ...prev, building: e.target.value }))}
-              style={{ 
-                width: '100%', 
-                padding: '8px 12px',
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
-              }}
-              disabled={isLoadingMasterData}
-            >
-              <option value="">เลือกอาคาร...</option>
-              {masterData.buildings.map(building => (
-                <option key={building} value={building}>{building}</option>
-              ))}
-            </select>
-            {isLoadingMasterData && (
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                กำลังโหลด...
-              </div>
-            )}
-          </div>
-
+          {/* Category Selection - Always first */}
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
               หมวดงาน:
             </label>
             <select 
               value={formData.category}
-              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+              onChange={(e) => {
+                setFormData(prev => ({ ...prev, category: e.target.value }));
+                setDynamicFields({}); // Reset dynamic fields
+              }}
               style={{ 
                 width: '100%', 
                 padding: '8px 12px',
@@ -268,9 +520,10 @@ const Reports = () => {
                 border: '1px solid #ced4da',
                 borderRadius: '4px'
               }}
+              disabled={isLoadingCategories}
             >
               <option value="">เลือกหมวดงาน...</option>
-              {Object.keys(qcTopics).map(category => {
+              {categories.map(category => {
                 const progress = categoryProgress[category];
                 const progressText = progress ? ` (${progress.completed}/${progress.total})` : '';
                 return (
@@ -279,41 +532,41 @@ const Reports = () => {
                   </option>
                 );
               })}
-            </select>            
+            </select>
+            {isLoadingCategories && (
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                กำลังโหลดหมวดงาน...
+              </div>
+            )}
           </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              ฐานราก:
-            </label>
-            <select 
-              value={formData.foundation}
-              onChange={(e) => setFormData(prev => ({ ...prev, foundation: e.target.value }))}
-              style={{ 
-                width: '100%', 
-                padding: '8px 12px',
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
-              }}
-              disabled={isLoadingMasterData}
-            >
-              <option value="">เลือกฐานราก...</option>
-              {masterData.foundations.map(foundation => (
-                <option key={foundation} value={foundation}>{foundation}</option>
-              ))}
-            </select>
-            {isLoadingProgress && (
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                กำลังโหลดสถานะ...
-              </div>
-            )}            
-          </div>
+          {/* 🔥 HYBRID FORM: Conditional rendering */}
+          {renderForm()}
         </div>
 
+        {/* 🔥 Category Type Status */}
+        {formData.category && categoryConfigs[formData.category] && (
+          <div style={{ 
+            marginBottom: '20px',
+            padding: '10px',
+            backgroundColor: categoryConfigs[formData.category].useExisting ? '#d4edda' : '#d1ecf1',
+            borderRadius: '5px',
+            border: `1px solid ${categoryConfigs[formData.category].useExisting ? '#c3e6cb' : '#bee5eb'}`,
+            fontSize: '14px',
+            color: categoryConfigs[formData.category].useExisting ? '#155724' : '#0c5460'
+          }}>
+            <span style={{ marginRight: '8px' }}>
+              {categoryConfigs[formData.category].useExisting ? '✅' : '✨'}
+            </span>
+            {categoryConfigs[formData.category].useExisting ? 
+              `ใช้ระบบเดิมสำหรับหมวดงาน "${formData.category}"` :
+              `ใช้ระบบใหม่สำหรับหมวดงาน "${formData.category}" (${categoryConfigs[formData.category].fields?.length || 0} ฟิลด์)`
+            }
+          </div>
+        )}
+
         {/* 🔥 Overall Progress Summary */}
-        {/*formData.building && formData.foundation && Object.keys(categoryProgress).length > 0 && (
+        {isFormValid() && Object.keys(categoryProgress).length > 0 && (
           <div style={{ 
             marginBottom: '20px',
             padding: '15px',
@@ -364,7 +617,7 @@ const Reports = () => {
         )}
 
         {/* Loading Master Data */}
-        {/*isLoadingMasterData && (
+        {isLoadingMasterData && (
           <div style={{ 
             marginBottom: '15px', 
             textAlign: 'center', 
@@ -379,7 +632,7 @@ const Reports = () => {
         )}
 
         {/* Data Summary */}
-        {/*!isLoadingMasterData && masterData.buildings.length > 0 && (
+        {!isLoadingMasterData && masterData.buildings.length > 0 && !isDynamicCategory() && (
           <div style={{ 
             marginBottom: '15px',
             padding: '10px',
@@ -393,7 +646,7 @@ const Reports = () => {
         )}
 
         {/* Validation Warning */}
-        {(!formData.building || !formData.foundation || !formData.category) && (
+        {!isFormValid() && (
           <div style={{
             marginBottom: '15px',
             padding: '10px',
@@ -404,7 +657,7 @@ const Reports = () => {
             color: '#856404',
             border: '1px solid #ffeaa7'
           }}>
-            ⚠️ กรุณาเลือกข้อมูลให้ครบถ้วน: อาคาร, ฐานราก, และหมวดงาน
+            ⚠️ กรุณากรอกข้อมูลให้ครบถ้วน
           </div>
         )}
 
@@ -412,16 +665,16 @@ const Reports = () => {
         <div style={{ textAlign: 'center' }}>
           <button 
             onClick={generateReport}
-            disabled={isGenerating || !formData.building || !formData.foundation || !formData.category}
+            disabled={isGenerating || !isFormValid()}
             style={{
               padding: '12px 30px',
               fontSize: '16px',
-              backgroundColor: (isGenerating || !formData.building || !formData.foundation || !formData.category) ? '#6c757d' : '#007bff',
+              backgroundColor: (isGenerating || !isFormValid()) ? '#6c757d' : '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: (isGenerating || !formData.building || !formData.foundation || !formData.category) ? 'not-allowed' : 'pointer',
-              opacity: (isGenerating || !formData.building || !formData.foundation || !formData.category) ? 0.6 : 1,
+              cursor: (isGenerating || !isFormValid()) ? 'not-allowed' : 'pointer',
+              opacity: (isGenerating || !isFormValid()) ? 0.6 : 1,
               minWidth: '200px'
             }}
           >
@@ -532,10 +785,17 @@ const Reports = () => {
           
           <div style={{ marginBottom: '15px' }}>
             <p><strong>ไฟล์:</strong> {generatedReport.filename}</p>
-            <p><strong>อาคาร-ฐานราก:</strong> {formData.building}-{formData.foundation}</p>
+            {generatedReport.combination ? (
+              <p><strong>ข้อมูล:</strong> {generatedReport.combination}</p>
+            ) : (
+              <p><strong>อาคาร-ฐานราก:</strong> {getCurrentData().building}-{getCurrentData().foundation}</p>
+            )}
             <p><strong>หมวดงาน:</strong> {formData.category}</p>
             <p><strong>จำนวนรูป:</strong> {generatedReport.photoCount} รูป</p>
             <p><strong>เวลาที่สร้าง:</strong> {generatedReport.sheetTimestamp?.timestamp}</p>
+            {generatedReport.generatedWith && (
+              <p><strong>เครื่องมือ:</strong> {generatedReport.generatedWith}</p>
+            )}
           </div>
           
           <div style={{ marginTop: '15px' }}>
@@ -577,7 +837,7 @@ const Reports = () => {
       )}
 
       {/* No Data Warning */}
-      {!isLoadingMasterData && masterData.buildings.length === 0 && (
+      {!isLoadingMasterData && masterData.buildings.length === 0 && !isDynamicCategory() && (
         <div style={{ 
           marginTop: '20px',
           padding: '20px',
@@ -591,7 +851,8 @@ const Reports = () => {
             กรุณาไปที่หน้า "ถ่ายรูป QC" เพื่อเพิ่มข้อมูลอาคารและฐานรากก่อน
           </p>
           <button
-            onClick={loadMasterData}
+            onClick={() => loadMasterDataForCategory(formData.category)}  // ✅ ใช้ฟังก์ชันที่มีอยู่
+            disabled={!formData.category}  // ✅ เพิ่ม disabled เมื่อไม่มี category
             style={{
               padding: '8px 16px',
               fontSize: '14px',
@@ -599,7 +860,8 @@ const Reports = () => {
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer'
+              cursor: !formData.category ? 'not-allowed' : 'pointer',
+              opacity: !formData.category ? 0.6 : 1
             }}
           >
             🔄 โหลดข้อมูลใหม่
@@ -608,18 +870,19 @@ const Reports = () => {
       )}
 
       {/* Instructions */}
-      {/*<div style={{ 
+      <div style={{ 
         marginTop: '30px',
         padding: '15px',
         backgroundColor: '#fff3cd',
         borderRadius: '6px',
         border: '1px solid #ffeaa7'
       }}>
-        <h4 style={{ marginTop: 0, color: '#856404' }}>📝 วิธีการใช้งาน</h4>
+        <h4 style={{ marginTop: 0, color: '#856404' }}>📝 วิธีการใช้งาน (รองรับ Dynamic Categories)</h4>
         <ol style={{ color: '#856404', fontSize: '14px', lineHeight: '1.6', marginBottom: '10px' }}>
-          <li>เลือก <strong>อาคาร</strong> และ <strong>ฐานราก</strong> → ระบบจะแสดงสถานะทุกหมวดงาน</li>
+          <li>เลือก <strong>หมวดงาน</strong> → ระบบจะแสดงฟอร์มที่เหมาะสม</li>
+          <li><strong>ฐานราก:</strong> เลือกอาคารและฐานราก (ระบบเดิม)</li>
+          <li><strong>เสา/คาน:</strong> กรอกข้อมูลตามฟิลด์ที่กำหนด (ระบบใหม่)</li>
           <li>ดูสถานะความครบถ้วน: <strong>✅ ถ่ายครบ</strong> | <strong>🔄 ถ่ายบางส่วน</strong> | <strong>⚠️ ยังไม่ถ่าย</strong></li>
-          <li>เลือก <strong>หมวดงาน</strong> ที่ต้องการสร้างรายงาน</li>
           <li>กดปุ่ม <strong>"สร้างรายงาน PDF"</strong></li>
           <li>ระบบจะค้นหารูปทั้งหมดที่ตรงตามเงื่อนไข</li>
           <li>สร้าง PDF รายงานและอัปโหลดไป Google Drive</li>
@@ -633,13 +896,14 @@ const Reports = () => {
           borderRadius: '4px',
           fontSize: '13px'
         }}>
-          <strong>💡 เคล็ดลับ:</strong> 
-          <br />• <strong>สถานะรวม</strong> แสดงความครบถ้วนของทุกหมวดงานรวมกัน
-          <br />• <strong>สถานะแต่ละหมวด</strong> แสดงรายละเอียดว่าหมวดไหนถ่ายครบ เหลือหัวข้อไหนบ้าง
-          <br />• กด <strong>"🔄 อัปเดต"</strong> เพื่อโหลดสถานะล่าสุด
-          <br />• ข้อมูลจะอัปเดตอัตโนมัติเมื่อเปลี่ยนอาคารหรือฐานราก
+          <strong>🔥 ใหม่! Dynamic Categories:</strong> 
+          <br />• <strong>Backward Compatible</strong> - ฐานรากใช้งานเหมือนเดิม 100%
+          <br />• <strong>Dynamic Fields</strong> - เสา, คาน ใช้ฟิลด์ตามการตั้งค่า
+          <br />• <strong>Auto Configuration</strong> - อ่านค่าจาก Google Sheets อัตโนมัติ
+          <br />• <strong>Smart Progress</strong> - แสดงสถานะแยกตามหมวดงาน
+          <br />• <strong>Enhanced PDF</strong> - รายงานรองรับข้อมูลแบบใหม่
         </div>
-      </div>*/}
+      </div>
     </div>
   );
 };

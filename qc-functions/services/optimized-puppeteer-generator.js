@@ -100,8 +100,85 @@ function createOptimizedHTML(reportData) {
 }
 
 // Header component
-function createHeader(building, foundation, category, projectName, pageNumber, totalPages) {
+function createHeader(building, foundation, category, projectName, pageNumber, totalPages, reportData = {}) {
   const currentDate = getCurrentThaiDate();
+  const { dynamicFields, isDynamic } = reportData;
+  
+  // 🔥 Generate header content based on category type
+  let leftColumnContent, rightColumnContent;
+  
+  if (isDynamic && dynamicFields) {
+    // 🔥 DYNAMIC HEADER: For เสา, คาน, etc.
+    const fieldEntries = Object.entries(dynamicFields);
+    const totalFields = fieldEntries.length;
+    const leftFields = fieldEntries.slice(0, Math.ceil(totalFields / 2));
+    const rightFields = fieldEntries.slice(Math.ceil(totalFields / 2));
+    
+    leftColumnContent = `
+      <div class="info-item">
+        <span class="label">โครงการ:</span>
+        <span class="value">${projectName}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">หมวดงาน:</span>
+        <span class="value">${category}</span>
+      </div>
+      ${leftFields.map(([key, value]) => `
+        <div class="info-item">
+          <span class="label">${key}:</span>
+          <span class="value">${value}</span>
+        </div>
+      `).join('')}
+    `;
+    
+    rightColumnContent = `
+      <div class="info-item">
+        <span class="label">วันที่:</span>
+        <span class="value">${currentDate}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">แผ่นที่:</span>
+        <span class="value">${pageNumber}/${totalPages}</span>
+      </div>
+      ${rightFields.map(([key, value]) => `
+        <div class="info-item">
+          <span class="label">${key}:</span>
+          <span class="value">${value}</span>
+        </div>
+      `).join('')}
+    `;
+  } else {
+    // 🔥 LEGACY HEADER: For ฐานราก (NO CHANGES)
+    leftColumnContent = `
+      <div class="info-item">
+        <span class="label">โครงการ:</span>
+        <span class="value">${projectName}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">อาคาร:</span>
+        <span class="value">${building}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">หมวดงาน:</span>
+        <span class="value">${category}</span>
+      </div>
+    `;
+    
+    rightColumnContent = `
+      <div class="info-item">
+        <span class="label">วันที่:</span>
+        <span class="value">${currentDate}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">ฐานรากเบอร์:</span>
+        <span class="value">${foundation}</span>
+      </div>
+      <div class="info-item">
+        <span class="label">แผ่นที่:</span>
+        <span class="value">${pageNumber}/${totalPages}</span>
+      </div>
+    `;
+  }
   
   return `
     <header class="header">
@@ -118,39 +195,18 @@ function createHeader(building, foundation, category, projectName, pageNumber, t
         
         <div class="info-section">
           <div class="info-column info-left">
-            <div class="info-item">
-              <span class="label">โครงการ:</span>
-              <span class="value">${projectName}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">อาคาร:</span>
-              <span class="value">${building}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">หมวดงาน:</span>
-              <span class="value">${category}</span>
-            </div>
+            ${leftColumnContent}
           </div>
           
           <div class="info-column info-right">
-            <div class="info-item">
-              <span class="label">วันที่:</span>
-              <span class="value">${currentDate}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">ฐานรากเบอร์:</span>
-              <span class="value">${foundation}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">แผ่นที่:</span>
-              <span class="value">${pageNumber}/${totalPages}</span>
-            </div>
+            ${rightColumnContent}
           </div>
         </div>
       </div>
     </header>
   `;
 }
+
 
 // Photos Grid - แก้ไขให้หัวข้ออยู่ด้านล่างรูป
 function createPhotosGrid(photos, pageIndex) {

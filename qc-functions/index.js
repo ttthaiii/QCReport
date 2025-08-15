@@ -2,9 +2,19 @@ const { onRequest } = require("firebase-functions/v2/https");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const { getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, getCompletedTopics } = require('./api/sheets');
+const { getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, getCompletedTopics, getMasterDataByCategory, addDynamicMasterData, getMasterDataEnhanced, createDynamicMasterDataSheet } = require('./api/sheets');
 const { uploadPhoto } = require('./api/photos');
 const { getDriveClient } = require('./services/google-auth');
+
+// 🔥 NEW: Import dynamic category functions
+const { 
+  getCategoryConfig, 
+  getAllCategories, 
+  isDynamicCategory,
+  convertDynamicFieldsToLegacy,
+  convertLegacyToDynamicFields,
+  createCombinationDescription
+} = require('./api/category-config');
 
 // 🔥 ใช้ optimized-puppeteer-generator (puppeteer-core + @sparticuz/chromium)
 const { generateOptimizedPDF, uploadPDFToDrive } = require('./services/optimized-puppeteer-generator');
@@ -27,8 +37,185 @@ app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
     timestamp: new Date().toISOString(),
-    message: "QC Report API is running with HTML-PDF generator" 
+    message: "QC Report API is running with Dynamic Categories and HTML-PDF generator" 
   });
+});
+
+// 🔥 NEW: Dynamic Category Configuration Routes
+app.get("/categories", async (req, res) => {
+  try {
+    console.log('Getting all available categories');
+    const categories = await getAllCategories();
+    res.json({ success: true, data: categories });
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.get("/category-config/:category", async (req, res) => {
+  try {
+    const { category } = req.params;
+    console.log(`Getting category config for: ${category}`);
+    
+    const config = await getCategoryConfig(category);
+    res.json({ success: true, data: config });
+  } catch (error) {
+    console.error('Error fetching category config:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 🔥 NEW: Enhanced master data endpoints - SPECIFIC ROUTES FIRST
+app.get("/master-data/:category", async (req, res) => {
+  try {
+    const category = decodeURIComponent(req.params.category);
+    console.log(`🔍 DEBUG: Getting master data for category: ${category}`);
+    
+    const masterData = await getMasterDataByCategory(category);
+    console.log(`🔍 DEBUG: Master data result for ${category}:`, masterData);
+    
+    res.json({ success: true, data: masterData });
+  } catch (error) {
+    console.error(`🔍 DEBUG: Error fetching master data for ${req.params.category}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 🔥 NEW: Add dynamic master data
+app.post("/master-data-dynamic", async (req, res) => {
+  try {
+    const { category, dynamicFields } = req.body;
+    
+    console.log(`🔍 DEBUG: Adding dynamic master data request:`, { category, dynamicFields });
+    
+    if (!category || !dynamicFields || typeof dynamicFields !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: category, dynamicFields'
+      });
+    }
+    
+    // Validate that all field values are non-empty
+    const fieldNames = Object.keys(dynamicFields);
+    const hasEmptyFields = fieldNames.some(field => !dynamicFields[field] || !dynamicFields[field].trim());
+    
+    if (hasEmptyFields) {
+      return res.status(400).json({
+        success: false,
+        error: 'All dynamic fields must have non-empty values'
+      });
+    }
+    
+    console.log(`🔍 DEBUG: Adding dynamic master data for ${category}:`, dynamicFields);
+    
+    const result = await addDynamicMasterData(category, dynamicFields);
+    console.log(`🔍 DEBUG: Dynamic master data result:`, result);
+    
+    res.json({ success: true, data: result });
+    
+  } catch (error) {
+    console.error('🔍 DEBUG: Error adding dynamic master data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Legacy master data endpoint (GENERAL ROUTES LAST)
+app.get("/master-data", async (req, res) => {
+  try {
+    const { category } = req.query;
+    
+    console.log(`🔍 DEBUG: Legacy master-data endpoint called with query category: ${category}`);
+    
+    if (category) {
+      // Get category-specific data
+      const masterData = await getMasterDataByCategory(category);
+      res.json({ success: true, data: masterData });
+    } else {
+      // Get legacy master data (backward compatibility)
+      console.log(`🔍 DEBUG: Getting legacy master data`);
+      const masterData = await getMasterData();
+      console.log(`🔍 DEBUG: Legacy master data result:`, masterData);
+      res.json({ success: true, data: masterData });
+    }
+  } catch (error) {
+    console.error('🔍 DEBUG: Error fetching legacy master data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Add Master Data (Building + Foundation) - Enhanced with debugging
+app.post("/master-data", async (req, res) => {
+  try {
+    const { building, foundation, category } = req.body;
+    
+    console.log(`🔍 DEBUG: POST /master-data called with:`, { building, foundation, category });
+    
+    // 🔥 HYBRID APPROACH: Route to appropriate function
+    if (category && category !== 'ฐานราก') {
+      console.log(`🔍 DEBUG: Redirecting to dynamic endpoint for category: ${category}`);
+      
+      // This is a dynamic category, redirect to dynamic endpoint
+      if (!req.body.dynamicFields) {
+        // Convert building/foundation to dynamic fields for compatibility
+        req.body.dynamicFields = {
+          [Object.keys(req.body)[0]]: building, // First field
+          [Object.keys(req.body)[1] || 'field2']: foundation // Second field
+        };
+      }
+      
+      return res.redirect(307, '/master-data-dynamic'); // 307 preserves POST method
+    }
+    
+    // Legacy approach for ฐานราก
+    if (!building || !foundation) {
+      console.log(`🔍 DEBUG: Missing building or foundation for legacy category`);
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: building, foundation'
+      });
+    }
+    
+    const buildingTrimmed = building.trim();
+    const foundationTrimmed = foundation.trim();
+    
+    if (!buildingTrimmed || !foundationTrimmed) {
+      console.log(`🔍 DEBUG: Empty building or foundation after trimming`);
+      return res.status(400).json({
+        success: false,
+        error: 'Building and foundation cannot be empty'
+      });
+    }
+    
+    console.log(`🔍 DEBUG: Adding legacy master data: ${buildingTrimmed}-${foundationTrimmed}`);
+    
+    const result = await addMasterData(buildingTrimmed, foundationTrimmed);
+    console.log(`🔍 DEBUG: Legacy master data add result:`, result);
+    
+    res.json({ success: true, data: result });
+    
+  } catch (error) {
+    console.error('🔍 DEBUG: Error adding legacy master data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
 });
 
 // Get QC Topics
@@ -45,10 +232,75 @@ app.get("/qc-topics", async (req, res) => {
   }
 });
 
+// 🔥 NEW: Enhanced master data endpoints with category support (ต้องอยู่ก่อน GET /master-data)
+app.get("/master-data/:category", async (req, res) => {
+  try {
+    const { category } = req.params;
+    console.log(`Getting master data for category: ${category}`);
+    
+    const masterData = await getMasterDataByCategory(category);
+    res.json({ success: true, data: masterData });
+  } catch (error) {
+    console.error(`Error fetching master data for ${category}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 🔥 NEW: Add dynamic master data
+app.post("/master-data-dynamic", async (req, res) => {
+  try {
+    const { category, dynamicFields } = req.body;
+    
+    if (!category || !dynamicFields || typeof dynamicFields !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: category, dynamicFields'
+      });
+    }
+    
+    // Validate that all field values are non-empty
+    const fieldNames = Object.keys(dynamicFields);
+    const hasEmptyFields = fieldNames.some(field => !dynamicFields[field] || !dynamicFields[field].trim());
+    
+    if (hasEmptyFields) {
+      return res.status(400).json({
+        success: false,
+        error: 'All dynamic fields must have non-empty values'
+      });
+    }
+    
+    console.log(`Adding dynamic master data for ${category}:`, dynamicFields);
+    
+    const result = await addDynamicMasterData(category, dynamicFields);
+    
+    res.json({ success: true, data: result });
+    
+  } catch (error) {
+    console.error('Error adding dynamic master data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Legacy master data endpoint (ต้องอยู่หลัง specific routes)
 app.get("/master-data", async (req, res) => {
   try {
-    const masterData = await getMasterData();
-    res.json({ success: true, data: masterData });
+    const { category } = req.query;
+    
+    if (category) {
+      // Get category-specific data
+      const masterData = await getMasterDataByCategory(category);
+      res.json({ success: true, data: masterData });
+    } else {
+      // Get legacy master data (backward compatibility)
+      const masterData = await getMasterData();
+      res.json({ success: true, data: masterData });
+    }
   } catch (error) {
     console.error('Error fetching master data:', error);
     res.status(500).json({ 
@@ -58,11 +310,26 @@ app.get("/master-data", async (req, res) => {
   }
 });
 
-// Add Master Data (Building + Foundation)
+// Add Master Data (Building + Foundation) - Keep existing for legacy
 app.post("/master-data", async (req, res) => {
   try {
-    const { building, foundation } = req.body;
+    const { building, foundation, category } = req.body;
     
+    // 🔥 HYBRID APPROACH: Route to appropriate function
+    if (category && category !== 'ฐานราก') {
+      // This is a dynamic category, redirect to dynamic endpoint
+      if (!req.body.dynamicFields) {
+        // Convert building/foundation to dynamic fields for compatibility
+        req.body.dynamicFields = {
+          [Object.keys(req.body)[0]]: building, // First field
+          [Object.keys(req.body)[1] || 'field2']: foundation // Second field
+        };
+      }
+      
+      return res.redirect(307, '/master-data-dynamic'); // 307 preserves POST method
+    }
+    
+    // Legacy approach for ฐานราก
     if (!building || !foundation) {
       return res.status(400).json({
         success: false,
@@ -80,7 +347,7 @@ app.post("/master-data", async (req, res) => {
       });
     }
     
-    console.log(`Adding master data: ${buildingTrimmed}-${foundationTrimmed}`);
+    console.log(`Adding legacy master data: ${buildingTrimmed}-${foundationTrimmed}`);
     
     const result = await addMasterData(buildingTrimmed, foundationTrimmed);
     
@@ -122,24 +389,121 @@ app.post("/completed-topics", async (req, res) => {
   }
 });
 
+// 🔥 NEW: Upload photo with dynamic fields support
+app.post("/upload-photo-dynamic", async (req, res) => {
+  try {
+    console.log('Dynamic photo upload request received');
+    
+    const { photo, category, dynamicFields, topic, location } = req.body;
+    
+    if (!photo || !category || !dynamicFields || !topic) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: photo, category, dynamicFields, topic'
+      });
+    }
+    
+    console.log(`Processing dynamic upload for category: ${category}`);
+    console.log('Dynamic fields:', dynamicFields);
+    
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(photo, 'base64');
+    console.log('Image buffer size:', imageBuffer.length);
+    
+    // Convert dynamic fields to legacy format for compatibility
+    const { building, foundation } = convertDynamicFieldsToLegacy(category, dynamicFields);
+    
+    // Generate filename with combination description
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const combination = createCombinationDescription(category, dynamicFields);
+    const filename = `${combination}-${topic}-${timestamp}.jpg`;
+    
+    console.log(`Generated filename: ${filename}`);
+    
+    // Upload to Google Drive
+    const driveResult = await uploadPhoto({
+      imageBuffer,
+      filename,
+      building,
+      foundation,
+      category
+    });
+    
+    console.log('Drive upload successful:', driveResult.fileId);
+    
+    // 🔥 Enhanced photo logging with dynamic fields
+    const photoData = {
+      building,
+      foundation,
+      category,
+      topic,
+      filename: driveResult.filename,
+      driveUrl: driveResult.driveUrl,
+      location: location || '',
+      // 🔥 NEW: Store dynamic fields for future use
+      dynamicFields: JSON.stringify(dynamicFields),
+      combination: combination
+    };
+    
+    const sheetResult = await logPhoto(photoData);
+    
+    console.log('Sheet logging successful:', sheetResult.uniqueId);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        ...driveResult,
+        sheetTimestamp: sheetResult,
+        dynamicFields,
+        combination
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error uploading dynamic photo:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // 🔥 Generate PDF Report - ใช้ Optimized Puppeteer (puppeteer-core + @sparticuz/chromium)
 app.post("/generate-report", async (req, res) => {
   try {
     console.log('🎯 Optimized Puppeteer PDF generation request received');
     
-    const { building, foundation, category } = req.body;
+    const { building, foundation, category, dynamicFields } = req.body;
     
-    if (!building || !foundation || !category) {
+    // 🔥 NEW: Support both legacy and dynamic formats
+    let finalBuilding, finalFoundation;
+    
+    if (dynamicFields) {
+      // Dynamic category - convert fields to legacy format for compatibility
+      const legacy = convertDynamicFieldsToLegacy(category, dynamicFields);
+      finalBuilding = legacy.building;
+      finalFoundation = legacy.foundation;
+      console.log(`Dynamic category detected: ${category}`);
+      console.log('Dynamic fields:', dynamicFields);
+      console.log('Converted to legacy:', legacy);
+    } else {
+      // Legacy format (ฐานราก or fallback)
+      finalBuilding = building;
+      finalFoundation = foundation;
+      console.log(`Legacy format for category: ${category}`);
+    }
+    
+    if (!finalBuilding || !finalFoundation || !category) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: building, foundation, category'
       });
     }
     
-    console.log(`🚀 Generating Optimized PDF for: ${building}-${foundation}-${category}`);
+    console.log(`🚀 Generating Optimized PDF for: ${finalBuilding}-${finalFoundation}-${category}`);
     
     // ดึงรูปภาพจาก Google Sheets ที่ตรงกับเงื่อนไข
-    const photos = await getPhotosForReport(building, foundation, category);
+    const photos = await getPhotosForReport(finalBuilding, finalFoundation, category);
     
     if (!photos || photos.length === 0) {
       return res.status(400).json({
@@ -150,18 +514,24 @@ app.post("/generate-report", async (req, res) => {
     
     console.log(`📸 Found ${photos.length} photos for Optimized PDF`);
     
-    // 🔥 สร้าง PDF ด้วย Optimized Puppeteer
+    // 🔥 สร้าง PDF ด้วย Optimized Puppeteer with dynamic data
     const pdfBuffer = await generateOptimizedPDF({
-      building,
-      foundation,
+      building: finalBuilding,
+      foundation: finalFoundation,
       category,
       photos,
-      projectName: 'Escent Nakhon si'
+      projectName: 'Escent Nakhon si',
+      // 🔥 NEW: Pass dynamic fields for enhanced PDF headers
+      dynamicFields: dynamicFields || null,
+      isDynamic: !!dynamicFields
     });
     
     // สร้างชื่อไฟล์
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-    const filename = `รูปประกอบการตรวจสอบ-${building}-${foundation}-${timestamp}.pdf`;
+    const combination = dynamicFields ? 
+      createCombinationDescription(category, dynamicFields) : 
+      `${finalBuilding}-${finalFoundation}`;
+    const filename = `รูปประกอบการตรวจสอบ-${combination}-${timestamp}.pdf`;
     
     // อัปโหลดไป Google Drive
     const driveResult = await uploadPDFToDrive(pdfBuffer, filename);
@@ -170,12 +540,15 @@ app.post("/generate-report", async (req, res) => {
     
     // บันทึกลง Google Sheets
     const reportData = {
-      building,
-      foundation,
+      building: finalBuilding,
+      foundation: finalFoundation,
       category,
       filename: driveResult.filename,
       driveUrl: driveResult.driveUrl,
-      photoCount: photos.length
+      photoCount: photos.length,
+      // 🔥 NEW: Store dynamic fields info
+      dynamicFields: dynamicFields ? JSON.stringify(dynamicFields) : null,
+      combination: combination
     };
     
     const sheetResult = await logReport(reportData);
@@ -188,7 +561,9 @@ app.post("/generate-report", async (req, res) => {
         ...driveResult,
         photoCount: photos.length,
         sheetTimestamp: sheetResult,
-        generatedWith: 'Optimized-Puppeteer'
+        generatedWith: 'Optimized-Puppeteer',
+        dynamicFields,
+        combination
       }
     });
     

@@ -234,20 +234,22 @@ async function logPhoto(photoData) {
     const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
     
     const values = [[
-      uniqueId,                    // A: ID (ใหม่)
-      timestamp,                   // B: วันเวลา
-      photoData.building,          // C: อาคาร
-      photoData.foundation,        // D: ฐานราก
-      photoData.category,          // E: หมวดงาน
-      photoData.topic,             // F: หัวข้อ
-      photoData.filename,          // G: ไฟล์
-      photoData.driveUrl || '',    // H: URL
-      photoData.location || ''     // I: สถานที่
+      uniqueId,                         // A: ID (ใหม่)
+      timestamp,                        // B: วันเวลา
+      photoData.building,               // C: อาคาร
+      photoData.foundation,             // D: ฐานราก
+      photoData.category,               // E: หมวดงาน
+      photoData.topic,                  // F: หัวข้อ
+      photoData.filename,               // G: ไฟล์
+      photoData.driveUrl || '',         // H: URL
+      photoData.location || '',         // I: สถานที่
+      photoData.dynamicFields || '',    // J: 🔥 NEW: Dynamic Fields (JSON)
+      photoData.combination || ''       // K: 🔥 NEW: Combination Description
     ]];
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:I',
+      range: 'Master_Photos_Log!A:K', // 🔥 Extended range
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
@@ -274,19 +276,21 @@ async function logReport(reportData) {
     const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
     
     const values = [[
-      uniqueId,                      // A: ID (ใหม่)
-      timestamp,                     // B: วันเวลา
-      reportData.building,           // C: อาคาร
-      reportData.foundation,         // D: ฐานราก
-      reportData.category,           // E: หมวดงาน
-      reportData.filename,           // F: ไฟล์
-      reportData.driveUrl || '',     // G: URL
-      reportData.photoCount || 0     // H: จำนวนรูป
+      uniqueId,                           // A: ID (ใหม่)
+      timestamp,                          // B: วันเวลา
+      reportData.building,                // C: อาคาร
+      reportData.foundation,              // D: ฐานราก
+      reportData.category,                // E: หมวดงาน
+      reportData.filename,                // F: ไฟล์
+      reportData.driveUrl || '',          // G: URL
+      reportData.photoCount || 0,         // H: จำนวนรูป
+      reportData.dynamicFields || '',     // I: 🔥 NEW: Dynamic Fields (JSON)
+      reportData.combination || ''        // J: 🔥 NEW: Combination Description
     ]];
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Final_Reports_Log!A:H',
+      range: 'Final_Reports_Log!A:J', // 🔥 Extended range
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
@@ -302,6 +306,7 @@ async function logReport(reportData) {
     throw error;
   }
 }
+
 
 module.exports = {
   getSheetsClient,
