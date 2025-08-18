@@ -245,13 +245,14 @@ const Camera = () => {
     
     setIsLoadingProgress(true);
     try {
-      // Create criteria for progress tracking
+      // 🔥 NEW: ใช้ Full Match แทน basic match
       const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
       
-      const response = await api.getCompletedTopics({
+      const response = await api.getCompletedTopicsFullMatch({
         building: masterDataFields.building,
         foundation: masterDataFields.foundation,
-        category: formData.category
+        category: formData.category,
+        dynamicFields: dynamicFields // 🔥 ส่ง dynamic fields สำหรับ Full Match
       });
       
       if (response.success) {

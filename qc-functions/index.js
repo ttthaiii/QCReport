@@ -1,9 +1,13 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const express = require("express");
-const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const { getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, getCompletedTopics } = require('./api/sheets');
+const { 
+  getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, 
+  getCompletedTopics, 
+  // 🔥 NEW: เพิ่มฟังก์ชัน Full Match + Field Values
+  getCompletedTopicsFullMatch, getFieldValues 
+} = require('./api/sheets');
 const { uploadPhoto } = require('./api/photos');
 const { getDriveClient } = require('./services/google-auth');
 
@@ -393,7 +397,7 @@ async function getPhotosForReport(building, foundation, category) {
     // ดึงข้อมูลจาก Master_Photos_Log
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:I'
+      range: 'Master_Photos_Log!A:J'  // ✅ รองรับ 10 columns (เพิ่ม Dynamic Fields)
     });
     
     const rows = response.data.values || [];
@@ -405,7 +409,7 @@ async function getPhotosForReport(building, foundation, category) {
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       if (row.length >= 8) {
-        const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location] = row;
+        const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
         
         if (rowBuilding === building && rowFoundation === foundation && rowCategory === category) {
           console.log(`✓ Match found: ${topic}`);
@@ -589,7 +593,8 @@ app.post("/upload-photo-base64", async (req, res) => {
       topic,
       filename: driveResult.filename,
       driveUrl: driveResult.driveUrl,
-      location: location || ''
+      location: location || '',
+      dynamicFields: dynamicFields || null  // 🔥 NEW: ส่ง dynamic fields
     };
     
     const sheetResult = await logPhoto(photoData);
@@ -641,7 +646,7 @@ app.post("/upload-photo", (req, res) => {
         size: req.file.size
       });
       
-      const { building, foundation, category, topic, location } = req.body;
+      const { building, foundation, category, topic, location, dynamicFields } = req.body;
       
       if (!building || !foundation || !category || !topic) {
         return res.status(400).json({
@@ -677,8 +682,9 @@ app.post("/upload-photo", (req, res) => {
         topic,
         filename: driveResult.filename,
         driveUrl: driveResult.driveUrl,
-        location: location || ''
-      };
+        location: location || '',
+        dynamicFields: dynamicFields || null  // 🔥 NEW: ส่ง dynamic fields
+      };      
       
       const sheetResult = await logPhoto(photoData);
       
@@ -723,6 +729,58 @@ app.post("/log-report", async (req, res) => {
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error logging report:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// เพิ่มหลังจาก existing endpoints
+
+// 🔥 NEW: Full Match completed topics
+app.post("/completed-topics-full-match", async (req, res) => {
+  try {
+    const { building, foundation, category, dynamicFields } = req.body;
+    
+    if (!building || !foundation || !category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: building, foundation, category'
+      });
+    }
+    
+    console.log(`Getting completed topics with Full Match: ${building}-${foundation}-${category}`);
+    console.log('Dynamic fields:', dynamicFields);
+    
+    const result = await getCompletedTopicsFullMatch({ 
+      building, foundation, category, dynamicFields 
+    });
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error getting completed topics with Full Match:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 🔥 NEW: Get field values for datalist
+app.get("/field-values/:fieldName/:category", async (req, res) => {
+  try {
+    const { fieldName, category } = req.params;
+    
+    console.log(`Getting field values: ${fieldName} for ${category}`);
+    
+    const values = await getFieldValues(decodeURIComponent(fieldName), decodeURIComponent(category));
+    
+    res.json({ success: true, data: values });
+    
+  } catch (error) {
+    console.error('Error getting field values:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 

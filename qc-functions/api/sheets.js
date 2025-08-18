@@ -224,56 +224,6 @@ async function getCompletedTopics(criteria) {
   }
 }
 
-// 🔥 NEW: ดึงรายการรูปที่ถ่ายแล้วแบบ Full Match
-async function getCompletedTopicsFullMatch(criteria) {
-  try {
-    const sheets = getSheetsClient();
-    const { building, foundation, category, dynamicFields } = criteria;
-    
-    console.log('🔍 Getting completed topics with full match:', criteria);
-    
-    // ดึงข้อมูลจาก Master_Photos_Log
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:J'
-    });
-    
-    const rows = response.data.values || [];
-    const completedTopics = new Set();
-    
-    // กรองข้อมูลตามเงื่อนไข Full Match
-    rows.slice(1).forEach(row => {
-      if (row.length >= 6) {
-        const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
-        
-        // ใช้ฟังก์ชัน isFullMatch
-        if (isFullMatch(
-          { building, foundation, category, dynamicFields },
-          { building: rowBuilding, foundation: rowFoundation, category: rowCategory, dynamicFieldsJSON }
-        )) {
-          completedTopics.add(topic.trim());
-        }
-      }
-    });
-    
-    console.log(`📊 Found ${completedTopics.size} completed topics with full match`);
-    
-    return {
-      success: true,
-      data: {
-        completedTopics: Array.from(completedTopics),
-        criteria
-      }
-    };
-    
-  } catch (error) {
-    console.error('Error getting completed topics with full match:', error);
-    return {
-      success: false,
-      data: { completedTopics: [] }
-    };
-  }
-}
 
 // 🔥 NEW: ฟังก์ชันเปรียบเทียบแบบ Full Match
 function isFullMatch(searchCriteria, rowData) {
@@ -307,10 +257,46 @@ function isFullMatch(searchCriteria, rowData) {
     return true;
     
   } catch (parseError) {
-    console.log('Error parsing dynamic fields JSON, using basic match:', parseError.message);
-    // ถ้า parse ไม่ได้ ให้ fallback เป็น basic match
-    return true;
+    console.log('Error parsing dynamic fields JSON, using basic match');
+    return true; // fallback เป็น basic match
   }
+}
+
+// 🔥 NEW: ดึงรายการรูปที่ถ่ายแล้วแบบ Full Match
+async function getCompletedTopicsFullMatch(criteria) {
+  const sheets = getSheetsClient();
+  const { building, foundation, category, dynamicFields } = criteria;
+  
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEETS_ID,
+    range: 'Master_Photos_Log!A:J'
+  });
+  
+  const rows = response.data.values || [];
+  const completedTopics = new Set();
+  
+  // กรองข้อมูลตามเงื่อนไข Full Match
+  rows.slice(1).forEach(row => {
+    if (row.length >= 6) {
+      const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
+      
+      // ใช้ฟังก์ชัน isFullMatch
+      if (isFullMatch(
+        { building, foundation, category, dynamicFields },
+        { building: rowBuilding, foundation: rowFoundation, category: rowCategory, dynamicFieldsJSON }
+      )) {
+        completedTopics.add(topic.trim());
+      }
+    }
+  });
+  
+  return {
+    success: true,
+    data: {
+      completedTopics: Array.from(completedTopics),
+      criteria
+    }
+  };
 }
 
 // 🔥 UPDATED: บันทึกข้อมูลรูปถ่าย พร้อม Dynamic Fields JSON
@@ -324,7 +310,7 @@ async function logPhoto(photoData) {
     
     // 🔥 NEW: แปลง dynamic fields เป็น JSON string
     const dynamicFieldsJSON = photoData.dynamicFields ? JSON.stringify(photoData.dynamicFields) : '';
-    
+
     const values = [[
       uniqueId,                    // A: ID
       timestamp,                   // B: วันเวลา
@@ -337,24 +323,20 @@ async function logPhoto(photoData) {
       photoData.location || '',    // I: สถานที่
       dynamicFieldsJSON            // J: Dynamic Fields JSON 🔥 NEW
     ]];
-    
+
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:J', // 🔥 เพิ่ม column J
+      range: 'Master_Photos_Log!A:J', // ✅ เปลี่ยนเป็น 10 columns
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
-    
+
     // 🔥 NEW: เพิ่ม field values สำหรับ datalist
     if (photoData.dynamicFields) {
       await addFieldValuesFromPhoto(photoData.dynamicFields, photoData.category);
     }
     
-    return { 
-      success: true, 
-      timestamp,
-      uniqueId 
-    };
+    return { success: true, timestamp, uniqueId };
     
   } catch (error) {
     console.error('Error logging photo:', error);
@@ -425,75 +407,57 @@ async function createFieldValuesSheet() {
 
 // 🔥 NEW: เพิ่ม/อัปเดต field value สำหรับ datalist
 async function addFieldValue(fieldName, fieldValue, category) {
+  if (!fieldValue || !fieldValue.trim()) return;
+  
+  const sheets = getSheetsClient();
+  const trimmedValue = fieldValue.trim();
+  const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+  
   try {
-    if (!fieldValue || !fieldValue.trim()) return;
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'Master_Field_Values!A:F',
+    });
     
-    const sheets = getSheetsClient();
-    const trimmedValue = fieldValue.trim();
-    const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+    const rows = response.data.values || [];
+    let existingRowIndex = -1;
+    let existingCount = 0;
     
-    // ตรวจสอบว่ามี Master_Field_Values sheet หรือไม่
-    try {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEETS_ID,
-        range: 'Master_Field_Values!A:F',
-      });
-      
-      const rows = response.data.values || [];
-      let existingRowIndex = -1;
-      let existingCount = 0;
-      
-      // หาแถวที่มีค่าซ้ำ
-      for (let i = 1; i < rows.length; i++) {
-        const [rowFieldName, rowFieldValue, rowCategory] = rows[i];
-        if (rowFieldName === fieldName && rowFieldValue === trimmedValue && rowCategory === category) {
-          existingRowIndex = i + 1; // +1 เพราะ Google Sheets เริ่มจาก 1
-          existingCount = parseInt(rows[i][3] || 1);
-          break;
-        }
-      }
-      
-      if (existingRowIndex > 0) {
-        // อัปเดตค่าที่มีอยู่ (เพิ่ม count และ last_used)
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEETS_ID,
-          range: `Master_Field_Values!A${existingRowIndex}:F${existingRowIndex}`,
-          valueInputOption: 'USER_ENTERED',
-          requestBody: {
-            values: [[fieldName, trimmedValue, category, existingCount + 1, timestamp, rows[existingRowIndex - 1][5]]]
-          }
-        });
-        
-        console.log(`Updated field value: ${fieldName}=${trimmedValue} (count: ${existingCount + 1})`);
-      } else {
-        // เพิ่มค่าใหม่
-        const values = [[fieldName, trimmedValue, category, 1, timestamp, timestamp]];
-        
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEETS_ID,
-          range: 'Master_Field_Values!A:F',
-          valueInputOption: 'USER_ENTERED',
-          requestBody: { values }
-        });
-        
-        console.log(`Added new field value: ${fieldName}=${trimmedValue}`);
-      }
-      
-    } catch (sheetError) {
-      if (sheetError.message.includes('Unable to parse range') || sheetError.message.includes('not found')) {
-        console.log('Master_Field_Values sheet not found, creating...');
-        await createFieldValuesSheet();
-        
-        // เรียกซ้ำหลังสร้าง sheet แล้ว
-        await addFieldValue(fieldName, fieldValue, category);
-      } else {
-        throw sheetError;
+    // หาแถวที่มีค่าซ้ำ
+    for (let i = 1; i < rows.length; i++) {
+      const [rowFieldName, rowFieldValue, rowCategory] = rows[i];
+      if (rowFieldName === fieldName && rowFieldValue === trimmedValue && rowCategory === category) {
+        existingRowIndex = i + 1;
+        existingCount = parseInt(rows[i][3] || 1);
+        break;
       }
     }
     
-  } catch (error) {
-    console.error('Error adding field value:', error);
-    // ไม่ throw เพื่อไม่ให้กระทบการทำงานหลัก
+    if (existingRowIndex > 0) {
+      // อัปเดตค่าที่มีอยู่ (เพิ่ม count และ last_used)
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEETS_ID,
+        range: `Master_Field_Values!A${existingRowIndex}:F${existingRowIndex}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [[fieldName, trimmedValue, category, existingCount + 1, timestamp, rows[existingRowIndex - 1][5]]]
+        }
+      });
+    } else {
+      // เพิ่มค่าใหม่
+      const values = [[fieldName, trimmedValue, category, 1, timestamp, timestamp]];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEETS_ID,
+        range: 'Master_Field_Values!A:F',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values }
+      });
+    }
+  } catch (sheetError) {
+    if (sheetError.message.includes('Unable to parse range')) {
+      await createFieldValuesSheet();
+      await addFieldValue(fieldName, fieldValue, category); // เรียกซ้ำ
+    }
   }
 }
 
@@ -532,7 +496,6 @@ async function getFieldValues(fieldName, category) {
       return new Date(b.lastUsed) - new Date(a.lastUsed);
     });
     
-    console.log(`Found ${values.length} field values for ${fieldName} in ${category}`);
     return values.map(v => v.value);
     
   } catch (error) {
