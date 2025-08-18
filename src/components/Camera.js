@@ -12,16 +12,13 @@ const Camera = () => {
   });
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
   const [formData, setFormData] = useState({
-    building: '',
-    foundation: '',
     category: ''
   });
 
-  // 🔥 NEW: Smart Input States (แทน inputMode และ newInputs)
-  const [inputValues, setInputValues] = useState({
-    building: '',
-    foundation: ''
-  });
+  // 🔥 NEW: Dynamic Fields States
+  const [categoryFields, setCategoryFields] = useState([]);
+  const [dynamicFields, setDynamicFields] = useState({});
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
 
   // Native Camera States
   const [selectedTopic, setSelectedTopic] = useState('');
@@ -52,83 +49,164 @@ const Camera = () => {
     getCurrentLocation();
   }, []);
 
-  // Load progress when building/foundation/category changes
+  // 🔥 NEW: Load category fields when category changes
   useEffect(() => {
-    if (formData.building && formData.foundation && formData.category) {
+    if (formData.category) {
+      loadCategoryFields(formData.category);
+    } else {
+      setCategoryFields([]);
+      setDynamicFields({});
+    }
+  }, [formData.category]);
+
+  // Load progress when dynamic fields and category are ready
+  useEffect(() => {
+    if (formData.category && isFieldsComplete()) {
       loadProgress();
     }
-  }, [formData.building, formData.foundation, formData.category]);
+  }, [formData.category, dynamicFields]);
 
-  // 🔥 NEW: Helper functions for smart input
-  const isNewValue = (value, existingList) => {
-    return value && value.trim() && !existingList.includes(value.trim());
-  };
-
-  const handleInputChange = (field, value) => {
-    setInputValues(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    // อัปเดต formData ทันที
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const getDataStatus = () => {
-    const building = inputValues.building || formData.building;
-    const foundation = inputValues.foundation || formData.foundation;
-    
-    const newBuilding = isNewValue(building, masterData.buildings);
-    const newFoundation = isNewValue(foundation, masterData.foundations);
-    
-    if (newBuilding && newFoundation) {
-      return {
-        type: 'new',
-        message: `จะเพิ่มข้อมูลใหม่: อาคาร "${building}" และฐานราก "${foundation}"`
-      };
-    } else if (newBuilding) {
-      return {
-        type: 'new',
-        message: `จะเพิ่มอาคารใหม่: "${building}"`
-      };
-    } else if (newFoundation) {
-      return {
-        type: 'new',
-        message: `จะเพิ่มฐานรากใหม่: "${foundation}"`
-      };
-    } else if (building && foundation) {
-      return {
-        type: 'existing',
-        message: `ใช้ข้อมูลที่มีอยู่: ${building}-${foundation}`
-      };
-    }
-    
-    return null;
-  };
-
-  const autoAddNewData = async (building, foundation) => {
-    const newBuilding = isNewValue(building, masterData.buildings);
-    const newFoundation = isNewValue(foundation, masterData.foundations);
-    
-    if (newBuilding || newFoundation) {
-      console.log(`Auto-adding: ${building}-${foundation}`);
+  // 🔥 NEW: Load dynamic fields for selected category
+  const loadCategoryFields = async (category) => {
+    setIsLoadingFields(true);
+    try {
+      console.log(`Loading fields for category: ${category}`);
       
-      try {
-        const response = await api.addMasterData(building.trim(), foundation.trim());
+      const response = await api.getDynamicFields(category);
+      if (response.success) {
+        setCategoryFields(response.data.fields || []);
         
-        if (response.success && !response.data.duplicate) {
-          // Reload master data เพื่อให้ dropdown อัปเดต
-          await loadMasterData();
-          console.log(`✅ Auto-added: ${building}-${foundation}`);
-        }
-      } catch (error) {
-        console.error('Auto-add error:', error);
-        // ไม่แสดง error ให้ user เพื่อไม่ให้รบกวนการทำงาน
+        // Reset dynamic fields when category changes
+        const newDynamicFields = {};
+        response.data.fields.forEach(field => {
+          newDynamicFields[field.name] = '';
+        });
+        setDynamicFields(newDynamicFields);
+        
+        console.log(`Loaded ${response.data.fields.length} fields for ${category}:`, 
+                   response.data.fields.map(f => f.name));
       }
+    } catch (error) {
+      console.error('Error loading category fields:', error);
+      // Fallback: create default fields
+      setCategoryFields([
+        { name: 'อาคาร', type: 'combobox', required: true, placeholder: 'เลือกหรือพิมพ์อาคาร' },
+        { name: `${category}เบอร์`, type: 'combobox', required: true, placeholder: `เลือกหรือพิมพ์เลข${category}` }
+      ]);
+      setDynamicFields({ 'อาคาร': '', [`${category}เบอร์`]: '' });
+    } finally {
+      setIsLoadingFields(false);
     }
+  };
+
+  // 🔥 NEW: Handle dynamic field changes
+  const handleDynamicFieldChange = (fieldName, value) => {
+    setDynamicFields(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+  };
+
+  // 🔥 NEW: Check if required fields are complete
+  const isFieldsComplete = () => {
+    if (!formData.category || categoryFields.length === 0) return false;
+    
+    // ตรวจสอบ field ที่ required (อย่างน้อย 2 field แรก)
+    const requiredFields = categoryFields.slice(0, 2);
+    return requiredFields.every(field => {
+      const value = dynamicFields[field.name];
+      return value && value.trim();
+    });
+  };
+
+  // 🔥 NEW: Get field options from master data
+  const getFieldOptions = (fieldName) => {
+    if (fieldName === 'อาคาร') {
+      return masterData.buildings || [];
+    }
+    
+    // สำหรับ field ที่ 2 (เช่น ฐานรากเบอร์, เสาเบอร์)
+    if (categoryFields.length >= 2 && fieldName === categoryFields[1].name) {
+      return masterData.foundations || [];
+    }
+    
+    // สำหรับ field อื่นๆ ยังไม่มี master data
+    return [];
+  };
+
+  // 🔥 NEW: Check if field value is new (not in master data)
+  const isNewValue = (fieldName, value) => {
+    if (!value || !value.trim()) return false;
+    
+    const options = getFieldOptions(fieldName);
+    return !options.includes(value.trim());
+  };
+
+  // 🔥 NEW: Get data status for display
+  const getDataStatus = () => {
+    const fieldEntries = Object.entries(dynamicFields);
+    const newFields = fieldEntries.filter(([name, value]) => isNewValue(name, value));
+    
+    if (newFields.length === 0) {
+      const description = fieldEntries
+        .filter(([name, value]) => value && value.trim())
+        .map(([name, value]) => value)
+        .join('-');
+      
+      return description ? {
+        type: 'existing',
+        message: `ใช้ข้อมูลที่มีอยู่: ${description}`
+      } : null;
+    }
+    
+    const newFieldsText = newFields.map(([name, value]) => `${name} "${value}"`).join(', ');
+    return {
+      type: 'new',
+      message: `จะเพิ่มข้อมูลใหม่: ${newFieldsText}`
+    };
+  };
+
+  // 🔥 NEW: Auto-add new data to master sheet
+  const autoAddNewData = async () => {
+    if (!isFieldsComplete()) return;
+    
+    try {
+      // Convert dynamic fields to building+foundation for master data
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      
+      console.log(`Auto-adding master data:`, masterDataFields);
+      
+      const response = await api.addMasterData(
+        masterDataFields.building, 
+        masterDataFields.foundation
+      );
+      
+      if (response.success && !response.data.duplicate) {
+        // Reload master data เพื่อให้ dropdown อัปเดต
+        await loadMasterData();
+        console.log(`✅ Auto-added: ${masterDataFields.building}-${masterDataFields.foundation}`);
+      }
+    } catch (error) {
+      console.error('Auto-add error:', error);
+      // ไม่แสดง error ให้ user เพื่อไม่ให้รบกวนการทำงาน
+    }
+  };
+
+  // 🔥 NEW: Convert dynamic fields to master data format
+  const convertDynamicFieldsToMasterData = (category, fields) => {
+    if (category === 'ฐานราก') {
+      return {
+        building: fields['อาคาร'] || '',
+        foundation: fields['ฐานรากเบอร์'] || ''
+      };
+    }
+    
+    // สำหรับหมวดอื่น: field แรกเป็น building, field ที่ 2 เป็น foundation
+    const fieldValues = Object.values(fields);
+    return {
+      building: fieldValues[0] || '',
+      foundation: fieldValues[1] || ''
+    };
   };
 
   // Load Functions
@@ -163,13 +241,16 @@ const Camera = () => {
   };
 
   const loadProgress = async () => {
-    if (!formData.building || !formData.foundation || !formData.category) return;
+    if (!formData.category || !isFieldsComplete()) return;
     
     setIsLoadingProgress(true);
     try {
+      // Create criteria for progress tracking
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      
       const response = await api.getCompletedTopics({
-        building: formData.building,
-        foundation: formData.foundation,
+        building: masterDataFields.building,
+        foundation: masterDataFields.foundation,
         category: formData.category
       });
       
@@ -275,30 +356,17 @@ const Camera = () => {
     return R * c;
   };
 
-  // 🔥 UPDATED: Native Camera Functions with Auto-Add
-
-  // One-Click Topic Selection with Native Camera + Auto-Add
+  // 🔥 UPDATED: One-Click Topic Selection with Auto-Add
   const selectTopicAndOpenCamera = async (topic) => {
-    const building = inputValues.building || formData.building;
-    const foundation = inputValues.foundation || formData.foundation;
-    const category = formData.category;
-    
-    if (!building || !foundation || !category) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน: อาคาร, ฐานราก, และหมวดงาน');
+    if (!formData.category || !isFieldsComplete()) {
+      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
 
-    console.log(`Selected topic: ${topic}, auto-checking: ${building}-${foundation}`);
+    console.log(`Selected topic: ${topic}, checking dynamic fields:`, dynamicFields);
     
     // Auto-add ข้อมูลใหม่ (ถ้ามี) ก่อนถ่ายรูป
-    await autoAddNewData(building, foundation);
-    
-    // อัปเดต formData ด้วยค่าล่าสุด
-    setFormData(prev => ({
-      ...prev,
-      building: building.trim(),
-      foundation: foundation.trim()
-    }));
+    await autoAddNewData();
     
     setSelectedTopic(topic);
     setCaptureMode(true);
@@ -332,18 +400,21 @@ const Camera = () => {
       // Process image: resize + crop + watermark
       const processedBlob = await processImageForQC(file);
       
-      // Add directly to captured photos
+      // 🔥 UPDATED: Add photo with dynamic fields
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      
       const photoData = {
         id: Date.now() + Math.random(),
         blob: processedBlob,
         url: URL.createObjectURL(processedBlob),
-        building: formData.building,
-        foundation: formData.foundation,
+        building: masterDataFields.building,
+        foundation: masterDataFields.foundation,
         category: formData.category,
         topic: selectedTopic,
         location: currentLocation,
         timestamp: new Date().toISOString(),
-        dimensions: '1600x1200'
+        dimensions: '1600x1200',
+        dynamicFields: { ...dynamicFields } // 🔥 NEW: เก็บ dynamic fields
       };
 
       // Add to captured photos array
@@ -352,7 +423,7 @@ const Camera = () => {
       // Update completed topics
       setCompletedTopics(prev => new Set([...prev, selectedTopic]));
       
-      console.log(`Photo added directly for topic: ${selectedTopic}`);
+      console.log(`Photo added for topic: ${selectedTopic}`);
       
       // Reset camera state
       resetCameraState();
@@ -490,7 +561,8 @@ const Camera = () => {
             foundation: photo.foundation,
             category: photo.category,
             topic: photo.topic,
-            location: photo.location
+            location: photo.location,
+            dynamicFields: photo.dynamicFields // 🔥 NEW: ส่ง dynamic fields ไปด้วย
           });
           
           if (result.success) {
@@ -573,7 +645,7 @@ const Camera = () => {
     return { completed, total, percentage };
   };
 
-  // 🔥 NEW: ฟังก์ชันเรียงรูปตามลำดับหัวข้อสำหรับการแสดงผล
+  // ฟังก์ชันเรียงรูปตามลำดับหัวข้อสำหรับการแสดงผล
   const getSortedPhotosForDisplay = () => {
     if (!formData.category || !qcTopics[formData.category]) {
       return capturedPhotos;
@@ -605,42 +677,14 @@ const Camera = () => {
 
   const progressStats = getProgressStats();
   const sortedPhotosForDisplay = getSortedPhotosForDisplay();
+  const dataStatus = getDataStatus();
 
-  // 🔥 NEW: Render Smart Combobox Form
-  const renderSmartForm = () => {
-    const dataStatus = getDataStatus();
-    
+  // 🔥 NEW: Render Dynamic Form Fields
+  const renderDynamicForm = () => {
     return (
       <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           
-          {/* Building Combobox */}
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              อาคาร:
-            </label>
-            <input
-              list="buildings-list"
-              value={inputValues.building || formData.building || ''}
-              onChange={(e) => handleInputChange('building', e.target.value)}
-              placeholder="เลือกหรือพิมพ์ชื่ออาคาร เช่น A, B, C"
-              style={{ 
-                width: '100%', 
-                padding: '8px', 
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                backgroundColor: 'white'
-              }}
-              disabled={captureMode}
-            />
-            <datalist id="buildings-list">
-              {masterData.buildings.map(building => (
-                <option key={building} value={building} />
-              ))}
-            </datalist>
-          </div>
-
           {/* Category Select */}
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
@@ -665,33 +709,47 @@ const Camera = () => {
             </select>
           </div>
 
-          {/* Foundation Combobox */}
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              ฐานราก:
-            </label>
-            <input
-              list="foundations-list"
-              value={inputValues.foundation || formData.foundation || ''}
-              onChange={(e) => handleInputChange('foundation', e.target.value)}
-              placeholder="เลือกหรือพิมพ์เลขฐานราก เช่น F01, F02"
-              style={{ 
-                width: '100%', 
-                padding: '8px', 
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                backgroundColor: 'white'
-              }}
-              disabled={captureMode}
-            />
-            <datalist id="foundations-list">
-              {masterData.foundations.map(foundation => (
-                <option key={foundation} value={foundation} />
-              ))}
-            </datalist>
-          </div>
+          {/* Dynamic Fields */}
+          {categoryFields.map((field, index) => (
+            <div key={field.name}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                {field.name}:
+              </label>
+              <input
+                list={`${field.name}-list`}
+                value={dynamicFields[field.name] || ''}
+                onChange={(e) => handleDynamicFieldChange(field.name, e.target.value)}
+                placeholder={field.placeholder}
+                style={{ 
+                  width: '100%', 
+                  padding: '8px', 
+                  fontSize: '14px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '4px',
+                  backgroundColor: 'white'
+                }}
+                disabled={captureMode || isLoadingFields}
+              />
+              <datalist id={`${field.name}-list`}>
+                {getFieldOptions(field.name).map(option => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            </div>
+          ))}
         </div>
+        
+        {/* Loading Fields */}
+        {isLoadingFields && (
+          <div style={{ 
+            marginTop: '15px', 
+            textAlign: 'center', 
+            fontSize: '14px', 
+            color: '#666'
+          }}>
+            กำลังโหลด fields สำหรับ {formData.category}...
+          </div>
+        )}
         
         {/* Data Status Message */}
         {dataStatus && (
@@ -765,8 +823,8 @@ const Camera = () => {
         )}
       </div>
       
-      {/* 🔥 NEW: Smart Combobox Form */}
-      {renderSmartForm()}
+      {/* 🔥 NEW: Dynamic Form */}
+      {renderDynamicForm()}
 
       {/* Native Camera Input (Hidden) */}
       <input 
@@ -782,7 +840,7 @@ const Camera = () => {
       {!captureMode ? (
         // Topic Selection Mode
         <>
-          {formData.building && formData.foundation && formData.category && qcTopics[formData.category] ? (
+          {formData.category && isFieldsComplete() && qcTopics[formData.category] ? (
             <div style={{ 
               marginBottom: '20px', 
               padding: '15px', 
@@ -870,7 +928,7 @@ const Camera = () => {
               color: '#856404',
               border: '1px solid #ffeaa7'
             }}>
-              ⚠️ กรุณากรอก อาคาร, ฐานราก, และหมวดงาน เพื่อแสดงรายการหัวข้อ
+              ⚠️ กรุณาเลือกหมวดงานและกรอกข้อมูลให้ครบถ้วนเพื่อแสดงรายการหัวข้อ
             </div>
           )}
         </>
@@ -940,7 +998,7 @@ const Camera = () => {
         </>
       )}
 
-      {/* 🔥 UPDATED: Captured Photos Management - แสดงตามลำดับที่ถูกต้อง */}
+      {/* Captured Photos Management - แสดงตามลำดับที่ถูกต้อง */}
       {sortedPhotosForDisplay.length > 0 && (
         <div style={{ 
           marginTop: '20px',
@@ -1021,6 +1079,13 @@ const Camera = () => {
                   }}
                   onClick={() => {
                     const newWindow = window.open('', '_blank');
+                    
+                    // 🔥 NEW: แสดง dynamic fields ใน popup
+                    const fieldsDisplay = Object.entries(photo.dynamicFields || {})
+                      .filter(([key, value]) => value && value.trim())
+                      .map(([key, value]) => `${key}: ${value}`)
+                      .join('<br/>');
+                    
                     newWindow.document.write(`
                       <html>
                         <head><title>${photo.topic}</title></head>
@@ -1028,7 +1093,8 @@ const Camera = () => {
                           <h3>${photo.displayOrder || 'N/A'}. ${photo.topic}</h3>
                           <img src="${photo.url}" style="max-width:100%; height:auto;" />
                           <p style="margin-top:10px; font-size:14px; color:#666;">
-                            ${photo.building} - ${photo.foundation}<br/>
+                            ${fieldsDisplay}<br/>
+                            หมวดงาน: ${photo.category}<br/>
                             ${new Date(photo.timestamp).toLocaleString('th-TH')}
                           </p>
                         </body>

@@ -11,10 +11,14 @@ const Reports = () => {
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
   
   const [formData, setFormData] = useState({
-    building: '',
-    foundation: '',
     category: ''
   });
+  
+  // 🔥 NEW: Dynamic Fields States
+  const [categoryFields, setCategoryFields] = useState([]);
+  const [dynamicFields, setDynamicFields] = useState({});
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
+  
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState(null);
 
@@ -27,12 +31,107 @@ const Reports = () => {
     loadMasterData();
   }, []);
 
-  // 🔥 Load progress when building/foundation changes
+  // 🔥 NEW: Load category fields when category changes
   useEffect(() => {
-    if (formData.building && formData.foundation && Object.keys(qcTopics).length > 0) {
+    if (formData.category) {
+      loadCategoryFields(formData.category);
+    } else {
+      setCategoryFields([]);
+      setDynamicFields({});
+    }
+  }, [formData.category]);
+
+  // 🔥 Load progress when dynamic fields and category are ready
+  useEffect(() => {
+    if (formData.category && isFieldsComplete() && Object.keys(qcTopics).length > 0) {
       loadAllCategoryProgress();
     }
-  }, [formData.building, formData.foundation, qcTopics]);
+  }, [formData.category, dynamicFields, qcTopics]);
+
+  // 🔥 NEW: Load dynamic fields for selected category
+  const loadCategoryFields = async (category) => {
+    setIsLoadingFields(true);
+    try {
+      console.log(`Loading fields for category: ${category}`);
+      
+      const response = await api.getDynamicFields(category);
+      if (response.success) {
+        setCategoryFields(response.data.fields || []);
+        
+        // Reset dynamic fields when category changes
+        const newDynamicFields = {};
+        response.data.fields.forEach(field => {
+          newDynamicFields[field.name] = '';
+        });
+        setDynamicFields(newDynamicFields);
+        
+        console.log(`Loaded ${response.data.fields.length} fields for ${category}:`, 
+                   response.data.fields.map(f => f.name));
+      }
+    } catch (error) {
+      console.error('Error loading category fields:', error);
+      // Fallback: create default fields
+      setCategoryFields([
+        { name: 'อาคาร', type: 'combobox', required: true, placeholder: 'เลือกหรือพิมพ์อาคาร' },
+        { name: `${category}เบอร์`, type: 'combobox', required: true, placeholder: `เลือกหรือพิมพ์เลข${category}` }
+      ]);
+      setDynamicFields({ 'อาคาร': '', [`${category}เบอร์`]: '' });
+    } finally {
+      setIsLoadingFields(false);
+    }
+  };
+
+  // 🔥 NEW: Handle dynamic field changes
+  const handleDynamicFieldChange = (fieldName, value) => {
+    setDynamicFields(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+  };
+
+  // 🔥 NEW: Check if required fields are complete
+  const isFieldsComplete = () => {
+    if (!formData.category || categoryFields.length === 0) return false;
+    
+    // ตรวจสอบ field ที่ required (อย่างน้อย 2 field แรก)
+    const requiredFields = categoryFields.slice(0, 2);
+    return requiredFields.every(field => {
+      const value = dynamicFields[field.name];
+      return value && value.trim();
+    });
+  };
+
+  // 🔥 NEW: Get field options from master data
+  const getFieldOptions = (fieldName) => {
+    if (fieldName === 'อาคาร') {
+      return masterData.buildings || [];
+    }
+    
+    // สำหรับ field ที่ 2 (เช่น ฐานรากเบอร์, เสาเบอร์)
+    if (categoryFields.length >= 2 && fieldName === categoryFields[1].name) {
+      return masterData.foundations || [];
+    }
+    
+    // สำหรับ field อื่นๆ ยังไม่มี master data
+    return [];
+  };
+
+  // 🔥 NEW: Convert dynamic fields to master data format
+  const convertDynamicFieldsToMasterData = (category, fields) => {
+    if (category === 'ฐานราก') {
+      return {
+        building: fields['อาคาร'] || '',
+        foundation: fields['ฐานรากเบอร์'] || ''
+      };
+    }
+    
+    // สำหรับหมวดอื่น: field แรกเป็น building, field ที่ 2 เป็น foundation
+    const fieldValues = Object.values(fields);
+    return {
+      building: fieldValues[0] || '',
+      foundation: fieldValues[1] || ''
+    };
+  };
 
   const loadMasterData = async () => {
     setIsLoadingMasterData(true);
@@ -48,20 +147,6 @@ const Reports = () => {
           foundations: response.data.foundations,
           combinations: response.data.combinations?.length || 0
         });
-        
-        // ตั้งค่าเริ่มต้น
-        if (response.data.buildings.length > 0) {
-          setFormData(prev => ({
-            ...prev,
-          }));
-          console.log('Default building set:', response.data.buildings[0]);
-        }
-        if (response.data.foundations.length > 0) {
-          setFormData(prev => ({
-            ...prev,
-          }));
-          console.log('Default foundation set:', response.data.foundations[0]);
-        }
       } else {
         console.error('Master data response failed:', response);
       }
@@ -92,6 +177,7 @@ const Reports = () => {
         if (categories.length > 0) {
           setFormData(prev => ({
             ...prev,
+            category: categories[0]
           }));
         }
       }
@@ -103,19 +189,22 @@ const Reports = () => {
 
   // 🔥 NEW: Load progress for all categories
   const loadAllCategoryProgress = async () => {
-    if (!formData.building || !formData.foundation || Object.keys(qcTopics).length === 0) return;
+    if (!isFieldsComplete() || Object.keys(qcTopics).length === 0) return;
     
     setIsLoadingProgress(true);
     setCategoryProgress({});
     
     try {
-      console.log(`Loading progress for all categories: ${formData.building}-${formData.foundation}`);
+      // Convert dynamic fields to master data format for API call
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      
+      console.log(`Loading progress for all categories: ${masterDataFields.building}-${masterDataFields.foundation}`);
       
       const progressPromises = Object.keys(qcTopics).map(async (category) => {
         try {
           const response = await api.getCompletedTopics({
-            building: formData.building,
-            foundation: formData.foundation,
+            building: masterDataFields.building,
+            foundation: masterDataFields.foundation,
             category: category
           });
           
@@ -164,21 +253,41 @@ const Reports = () => {
   };
 
   const generateReport = async () => {
-    if (!formData.building || !formData.foundation || !formData.category) {
-      alert('กรุณาเลือกข้อมูลให้ครบถ้วน');
+    if (!formData.category || !isFieldsComplete()) {
+      alert('กรุณาเลือกหมวดงานและกรอกข้อมูลให้ครบถ้วน');
       return;
     }
 
     setIsGenerating(true);
     
     try {
-      console.log('Generating report with data:', formData);
+      console.log('Generating report with dynamic fields:', {
+        category: formData.category,
+        dynamicFields: dynamicFields
+      });
       
-      const response = await api.generateReport(formData);
+      // Convert dynamic fields to master data format for report generation
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      
+      const reportData = {
+        category: formData.category,
+        building: masterDataFields.building,
+        foundation: masterDataFields.foundation,
+        dynamicFields: dynamicFields // 🔥 NEW: ส่ง dynamic fields สำหรับ PDF header
+      };
+      
+      const response = await api.generateReport(reportData);
       
       if (response.success) {
         setGeneratedReport(response.data);
-        alert(`สร้างรายงานสำเร็จ!\nไฟล์: ${response.data.filename}\nจำนวนรูป: ${response.data.photoCount} รูป`);
+        
+        // 🔥 NEW: แสดงข้อมูล dynamic fields ใน alert
+        const fieldsDisplay = Object.entries(dynamicFields)
+          .filter(([key, value]) => value && value.trim())
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(', ');
+        
+        alert(`สร้างรายงานสำเร็จ!\nไฟล์: ${response.data.filename}\n${fieldsDisplay}\nจำนวนรูป: ${response.data.photoCount} รูป`);
       } else {
         throw new Error('Failed to generate report');
       }
@@ -203,6 +312,76 @@ const Reports = () => {
     return { completed: totalCompleted, total: totalTopics, percentage };
   };
 
+  // 🔥 NEW: Render Dynamic Form Fields
+  const renderDynamicForm = () => {
+    return (
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+        gap: '15px',
+        marginBottom: '20px'
+      }}>
+        {/* Category Select */}
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+            หมวดงาน:
+          </label>
+          <select 
+            value={formData.category}
+            onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+            style={{ 
+              width: '100%', 
+              padding: '8px 12px',
+              fontSize: '14px',
+              border: '1px solid #ced4da',
+              borderRadius: '4px'
+            }}
+          >
+            <option value="">เลือกหมวดงาน...</option>
+            {Object.keys(qcTopics).map(category => {
+              const progress = categoryProgress[category];
+              const progressText = progress ? ` (${progress.completed}/${progress.total})` : '';
+              return (
+                <option key={category} value={category}>
+                  {category}{progressText}
+                </option>
+              );
+            })}
+          </select>            
+        </div>
+
+        {/* Dynamic Fields */}
+        {categoryFields.map((field, index) => (
+          <div key={field.name}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              {field.name}:
+            </label>
+            <input
+              list={`reports-${field.name}-list`}
+              value={dynamicFields[field.name] || ''}
+              onChange={(e) => handleDynamicFieldChange(field.name, e.target.value)}
+              placeholder={field.placeholder}
+              style={{ 
+                width: '100%', 
+                padding: '8px 12px',
+                fontSize: '14px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px',
+                backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
+              }}
+              disabled={isLoadingMasterData || isLoadingFields}
+            />
+            <datalist id={`reports-${field.name}-list`}>
+              {getFieldOptions(field.name).map(option => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const overallProgress = getOverallProgress();
 
   return (
@@ -219,101 +398,26 @@ const Reports = () => {
       }}>
         <h3 style={{ marginTop: 0, color: '#495057' }}>เลือกข้อมูลสำหรับสร้างรายงาน</h3>
         
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
-          gap: '15px',
-          marginBottom: '20px'
-        }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              อาคาร:
-            </label>
-            <select 
-              value={formData.building}
-              onChange={(e) => setFormData(prev => ({ ...prev, building: e.target.value }))}
-              style={{ 
-                width: '100%', 
-                padding: '8px 12px',
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
-              }}
-              disabled={isLoadingMasterData}
-            >
-              <option value="">เลือกอาคาร...</option>
-              {masterData.buildings.map(building => (
-                <option key={building} value={building}>{building}</option>
-              ))}
-            </select>
-            {isLoadingMasterData && (
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                กำลังโหลด...
-              </div>
-            )}
-          </div>
+        {/* 🔥 NEW: Dynamic Form */}
+        {renderDynamicForm()}
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              หมวดงาน:
-            </label>
-            <select 
-              value={formData.category}
-              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-              style={{ 
-                width: '100%', 
-                padding: '8px 12px',
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px'
-              }}
-            >
-              <option value="">เลือกหมวดงาน...</option>
-              {Object.keys(qcTopics).map(category => {
-                const progress = categoryProgress[category];
-                const progressText = progress ? ` (${progress.completed}/${progress.total})` : '';
-                return (
-                  <option key={category} value={category}>
-                    {category}{progressText}
-                  </option>
-                );
-              })}
-            </select>            
+        {/* 🔥 Loading Fields */}
+        {isLoadingFields && (
+          <div style={{ 
+            marginBottom: '15px', 
+            textAlign: 'center', 
+            fontSize: '14px', 
+            color: '#666',
+            padding: '10px',
+            backgroundColor: '#e9ecef',
+            borderRadius: '4px'
+          }}>
+            กำลังโหลด fields สำหรับ {formData.category}...
           </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              ฐานราก:
-            </label>
-            <select 
-              value={formData.foundation}
-              onChange={(e) => setFormData(prev => ({ ...prev, foundation: e.target.value }))}
-              style={{ 
-                width: '100%', 
-                padding: '8px 12px',
-                fontSize: '14px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
-                backgroundColor: isLoadingMasterData ? '#f5f5f5' : 'white'
-              }}
-              disabled={isLoadingMasterData}
-            >
-              <option value="">เลือกฐานราก...</option>
-              {masterData.foundations.map(foundation => (
-                <option key={foundation} value={foundation}>{foundation}</option>
-              ))}
-            </select>
-            {isLoadingProgress && (
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                กำลังโหลดสถานะ...
-              </div>
-            )}            
-          </div>
-        </div>
+        )}
 
         {/* 🔥 Overall Progress Summary */}
-        {/*formData.building && formData.foundation && Object.keys(categoryProgress).length > 0 && (
+        {isFieldsComplete() && Object.keys(categoryProgress).length > 0 && (
           <div style={{ 
             marginBottom: '20px',
             padding: '15px',
@@ -364,7 +468,7 @@ const Reports = () => {
         )}
 
         {/* Loading Master Data */}
-        {/*isLoadingMasterData && (
+        {isLoadingMasterData && (
           <div style={{ 
             marginBottom: '15px', 
             textAlign: 'center', 
@@ -379,7 +483,7 @@ const Reports = () => {
         )}
 
         {/* Data Summary */}
-        {/*!isLoadingMasterData && masterData.buildings.length > 0 && (
+        {!isLoadingMasterData && masterData.buildings.length > 0 && (
           <div style={{ 
             marginBottom: '15px',
             padding: '10px',
@@ -388,12 +492,12 @@ const Reports = () => {
             fontSize: '14px',
             color: '#1565c0'
           }}>
-            📊 ข้อมูลในระบบ: {masterData.buildings.length} อาคาร, {masterData.foundations.length} ฐานราก, {masterData.combinations.length} รายการ
+            📊 ข้อมูลในระบบ: {masterData.buildings.length} อาคาร, {masterData.foundations.length} รายการ, {masterData.combinations.length} รายการรวม
           </div>
         )}
 
         {/* Validation Warning */}
-        {(!formData.building || !formData.foundation || !formData.category) && (
+        {(!formData.category || !isFieldsComplete()) && (
           <div style={{
             marginBottom: '15px',
             padding: '10px',
@@ -404,7 +508,7 @@ const Reports = () => {
             color: '#856404',
             border: '1px solid #ffeaa7'
           }}>
-            ⚠️ กรุณาเลือกข้อมูลให้ครบถ้วน: อาคาร, ฐานราก, และหมวดงาน
+            ⚠️ กรุณาเลือกหมวดงานและกรอกข้อมูลให้ครบถ้วน
           </div>
         )}
 
@@ -412,16 +516,16 @@ const Reports = () => {
         <div style={{ textAlign: 'center' }}>
           <button 
             onClick={generateReport}
-            disabled={isGenerating || !formData.building || !formData.foundation || !formData.category}
+            disabled={isGenerating || !formData.category || !isFieldsComplete()}
             style={{
               padding: '12px 30px',
               fontSize: '16px',
-              backgroundColor: (isGenerating || !formData.building || !formData.foundation || !formData.category) ? '#6c757d' : '#007bff',
+              backgroundColor: (isGenerating || !formData.category || !isFieldsComplete()) ? '#6c757d' : '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: (isGenerating || !formData.building || !formData.foundation || !formData.category) ? 'not-allowed' : 'pointer',
-              opacity: (isGenerating || !formData.building || !formData.foundation || !formData.category) ? 0.6 : 1,
+              cursor: (isGenerating || !formData.category || !isFieldsComplete()) ? 'not-allowed' : 'pointer',
+              opacity: (isGenerating || !formData.category || !isFieldsComplete()) ? 0.6 : 1,
               minWidth: '200px'
             }}
           >
@@ -532,7 +636,17 @@ const Reports = () => {
           
           <div style={{ marginBottom: '15px' }}>
             <p><strong>ไฟล์:</strong> {generatedReport.filename}</p>
-            <p><strong>อาคาร-ฐานราก:</strong> {formData.building}-{formData.foundation}</p>
+            
+            {/* 🔥 NEW: แสดง dynamic fields */}
+            {Object.keys(dynamicFields).length > 0 && (
+              <p><strong>ข้อมูล:</strong> {
+                Object.entries(dynamicFields)
+                  .filter(([key, value]) => value && value.trim())
+                  .map(([key, value]) => `${key}: ${value}`)
+                  .join(', ')
+              }</p>
+            )}
+            
             <p><strong>หมวดงาน:</strong> {formData.category}</p>
             <p><strong>จำนวนรูป:</strong> {generatedReport.photoCount} รูป</p>
             <p><strong>เวลาที่สร้าง:</strong> {generatedReport.sheetTimestamp?.timestamp}</p>
@@ -606,40 +720,6 @@ const Reports = () => {
           </button>
         </div>
       )}
-
-      {/* Instructions */}
-      {/*<div style={{ 
-        marginTop: '30px',
-        padding: '15px',
-        backgroundColor: '#fff3cd',
-        borderRadius: '6px',
-        border: '1px solid #ffeaa7'
-      }}>
-        <h4 style={{ marginTop: 0, color: '#856404' }}>📝 วิธีการใช้งาน</h4>
-        <ol style={{ color: '#856404', fontSize: '14px', lineHeight: '1.6', marginBottom: '10px' }}>
-          <li>เลือก <strong>อาคาร</strong> และ <strong>ฐานราก</strong> → ระบบจะแสดงสถานะทุกหมวดงาน</li>
-          <li>ดูสถานะความครบถ้วน: <strong>✅ ถ่ายครบ</strong> | <strong>🔄 ถ่ายบางส่วน</strong> | <strong>⚠️ ยังไม่ถ่าย</strong></li>
-          <li>เลือก <strong>หมวดงาน</strong> ที่ต้องการสร้างรายงาน</li>
-          <li>กดปุ่ม <strong>"สร้างรายงาน PDF"</strong></li>
-          <li>ระบบจะค้นหารูปทั้งหมดที่ตรงตามเงื่อนไข</li>
-          <li>สร้าง PDF รายงานและอัปโหลดไป Google Drive</li>
-          <li>คลิกลิงก์เพื่อดูหรือดาวน์โหลด PDF</li>
-        </ol>
-        
-        <div style={{ 
-          marginTop: '10px', 
-          padding: '8px', 
-          backgroundColor: '#e2e3e5', 
-          borderRadius: '4px',
-          fontSize: '13px'
-        }}>
-          <strong>💡 เคล็ดลับ:</strong> 
-          <br />• <strong>สถานะรวม</strong> แสดงความครบถ้วนของทุกหมวดงานรวมกัน
-          <br />• <strong>สถานะแต่ละหมวด</strong> แสดงรายละเอียดว่าหมวดไหนถ่ายครบ เหลือหัวข้อไหนบ้าง
-          <br />• กด <strong>"🔄 อัปเดต"</strong> เพื่อโหลดสถานะล่าสุด
-          <br />• ข้อมูลจะอัปเดตอัตโนมัติเมื่อเปลี่ยนอาคารหรือฐานราก
-        </div>
-      </div>*/}
     </div>
   );
 };

@@ -158,9 +158,9 @@ async function createFullLayoutPhotos(photos, category) {
   }
 }
 
-// สร้าง HTML Template สำหรับรายงาน QC
+// 🔥 UPDATED: สร้าง HTML Template สำหรับรายงาน QC (รองรับ dynamic fields)
 function createOptimizedHTML(reportData) {
-  const { building, foundation, category, photos, projectName } = reportData;
+  const { photos, projectName, category, dynamicFields, building, foundation } = reportData;
   
   // สำหรับทุกหมวดงาน - แบ่งหน้าปกติ (6 รูปต่อหน้า)
   const photosPerPage = 6;
@@ -184,7 +184,7 @@ function createOptimizedHTML(reportData) {
 
   const pageHTML = pages.map((pagePhotos, pageIndex) => `
     <div class="page" ${pageIndex < pages.length - 1 ? 'style="page-break-after: always;"' : ''}>
-      ${createHeader(building, foundation, category, projectName, pageIndex + 1, pages.length)}
+      ${createDynamicHeader(reportData, pageIndex + 1, pages.length)}
       ${createPhotosGrid(pagePhotos, pageIndex)}
     </div>
   `).join('');
@@ -205,9 +205,33 @@ function createOptimizedHTML(reportData) {
   `;
 }
 
-// Header component
-function createHeader(building, foundation, category, projectName, pageNumber, totalPages) {
+// 🔥 NEW: Dynamic Header component (รองรับ 2-4 fields)
+function createDynamicHeader(reportData, pageNumber, totalPages) {
+  const { category, dynamicFields, building, foundation, projectName } = reportData;
   const currentDate = getCurrentThaiDate();
+  
+  // 🔥 ใช้ dynamic fields ถ้ามี, ไม่งั้นใช้ building+foundation (backward compatibility)
+  const fieldsToDisplay = dynamicFields && Object.keys(dynamicFields).length > 0 
+    ? dynamicFields 
+    : { 'อาคาร': building || '', 'ฐานรากเบอร์': foundation || '' };
+  
+  const fieldCount = Object.keys(fieldsToDisplay).length;
+  
+  console.log(`📋 Creating header with ${fieldCount} fields:`, fieldsToDisplay);
+  
+  // เลือก layout ตามจำนวน fields
+  if (fieldCount <= 2) {
+    return create2FieldHeader(fieldsToDisplay, category, projectName, currentDate, pageNumber, totalPages);
+  } else if (fieldCount === 3) {
+    return create3FieldHeader(fieldsToDisplay, category, projectName, currentDate, pageNumber, totalPages);
+  } else {
+    return create4FieldHeader(fieldsToDisplay, category, projectName, currentDate, pageNumber, totalPages);
+  }
+}
+
+// 🔥 NEW: Header layout สำหรับ 2 fields (เดิม - ฐานราก)
+function create2FieldHeader(fields, category, projectName, currentDate, pageNumber, totalPages) {
+  const fieldEntries = Object.entries(fields).filter(([key, value]) => value && value.trim());
   
   return `
     <header class="header">
@@ -228,10 +252,12 @@ function createHeader(building, foundation, category, projectName, pageNumber, t
               <span class="label">โครงการ:</span>
               <span class="value">${projectName}</span>
             </div>
+            ${fieldEntries[0] ? `
             <div class="info-item">
-              <span class="label">อาคาร:</span>
-              <span class="value">${building}</span>
+              <span class="label">${fieldEntries[0][0]}:</span>
+              <span class="value">${fieldEntries[0][1]}</span>
             </div>
+            ` : ''}
             <div class="info-item">
               <span class="label">หมวดงาน:</span>
               <span class="value">${category}</span>
@@ -243,9 +269,107 @@ function createHeader(building, foundation, category, projectName, pageNumber, t
               <span class="label">วันที่:</span>
               <span class="value">${currentDate}</span>
             </div>
+            ${fieldEntries[1] ? `
             <div class="info-item">
-              <span class="label">ฐานรากเบอร์:</span>
-              <span class="value">${foundation}</span>
+              <span class="label">${fieldEntries[1][0]}:</span>
+              <span class="value">${fieldEntries[1][1]}</span>
+            </div>
+            ` : ''}
+            <div class="info-item">
+              <span class="label">แผ่นที่:</span>
+              <span class="value">${pageNumber}/${totalPages}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  `;
+}
+
+// 🔥 NEW: Header layout สำหรับ 3 fields
+function create3FieldHeader(fields, category, projectName, currentDate, pageNumber, totalPages) {
+  const fieldEntries = Object.entries(fields).filter(([key, value]) => value && value.trim());
+  
+  return `
+    <header class="header">
+      <div class="logo-section">
+        <div class="logo-central-pattana">
+          <span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span>
+        </div>
+      </div>
+      
+      <div class="header-box">
+        <div class="title-section">
+          <h1>รูปถ่ายประกอบการตรวจสอบ</h1>
+        </div>
+        
+        <div class="info-section">
+          <div class="info-grid-3">
+            <div class="info-item">
+              <span class="label">โครงการ:</span>
+              <span class="value">${projectName}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">วันที่:</span>
+              <span class="value">${currentDate}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">หมวดงาน:</span>
+              <span class="value">${category}</span>
+            </div>
+            ${fieldEntries.map(([key, value]) => `
+              <div class="info-item">
+                <span class="label">${key}:</span>
+                <span class="value">${value}</span>
+              </div>
+            `).join('')}
+            <div class="info-item">
+              <span class="label">แผ่นที่:</span>
+              <span class="value">${pageNumber}/${totalPages}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  `;
+}
+
+// 🔥 NEW: Header layout สำหรับ 4 fields
+function create4FieldHeader(fields, category, projectName, currentDate, pageNumber, totalPages) {
+  const fieldEntries = Object.entries(fields).filter(([key, value]) => value && value.trim());
+  
+  return `
+    <header class="header">
+      <div class="logo-section">
+        <div class="logo-central-pattana">
+          <span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span>
+        </div>
+      </div>
+      
+      <div class="header-box">
+        <div class="title-section">
+          <h1>รูปถ่ายประกอบการตรวจสอบ</h1>
+        </div>
+        
+        <div class="info-section">
+          <div class="info-grid-4">
+            <div class="info-item">
+              <span class="label">โครงการ:</span>
+              <span class="value">${projectName}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">วันที่:</span>
+              <span class="value">${currentDate}</span>
+            </div>
+            ${fieldEntries.map(([key, value]) => `
+              <div class="info-item">
+                <span class="label">${key}:</span>
+                <span class="value">${value}</span>
+              </div>
+            `).join('')}
+            <div class="info-item">
+              <span class="label">หมวดงาน:</span>
+              <span class="value">${category}</span>
             </div>
             <div class="info-item">
               <span class="label">แผ่นที่:</span>
@@ -298,6 +422,7 @@ function createPhotosGrid(photos, pageIndex) {
                    alt="${topicName}" 
                    class="photo-image">` :
               `<div class="photo-placeholder">
+                 <span class="placeholder-text">ยังไม่ได้ถ่าย</span>
                </div>`
             }
           </div>
@@ -319,7 +444,7 @@ function createPhotosGrid(photos, pageIndex) {
   `;
 }
 
-// Inline CSS สำหรับป้องกัน network requests
+// 🔥 UPDATED: Inline CSS สำหรับ multi-field layouts
 function getInlineCSS() {
   return `
     <style>
@@ -348,18 +473,18 @@ function getInlineCSS() {
       
       .page {
         width: 100%;
-        height: 100vh; /* ใช้ความสูงเต็มหน้า */
+        height: 100vh;
         background: white;
         padding: 12px;
         position: relative;
         display: flex;
-        flex-direction: column; /* จัดเรียงแนวตั้ง */
+        flex-direction: column;
       }
       
       /* Header Styles */
       .header {
-        margin-bottom: 10px; /* ลดระยะห่าง */
-        flex-shrink: 0; /* ไม่ให้หด */
+        margin-bottom: 10px;
+        flex-shrink: 0;
       }
       
       .logo-section {
@@ -391,7 +516,7 @@ function getInlineCSS() {
       
       .title-section {
         background: #fff;
-        padding: 10px; /* ลด padding */
+        padding: 10px;
         text-align: center;
         border-bottom: 1px solid #000;
       }
@@ -407,56 +532,94 @@ function getInlineCSS() {
       .info-section {
         display: table;
         width: 100%;
-        padding: 8px; /* ลด padding */
+        padding: 8px;
         background: #fff;
-        min-height: 60px; /* ลดความสูง */
+        min-height: 60px;
       }
       
+      /* 🔥 NEW: 2-column layout (เดิม) */
       .info-column {
         display: table-cell;
         width: 50%;
         vertical-align: top;
-        padding: 0 8px; /* ลด padding */
+        padding: 0 8px;
       }
       
       .info-right {
         border-left: 1px solid #ddd;
       }
       
+      /* 🔥 NEW: 3-field grid layout */
+      .info-grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 4px;
+        padding: 8px;
+        min-height: 60px;
+      }
+      
+      /* 🔥 NEW: 4-field grid layout */
+      .info-grid-4 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr 1fr;
+        gap: 3px;
+        padding: 6px;
+        min-height: 70px;
+      }
+      
       .info-item {
-        margin-bottom: 5px; /* ลดระยะห่าง */
-        font-size: 11px; /* ลดขนาดฟอนต์ */
+        margin-bottom: 4px;
+        font-size: 10px;
         line-height: 1.2;
         font-family: 'Times New Roman', Times, serif;
+        display: flex;
+        align-items: center;
+      }
+      
+      /* 🔥 Grid layouts ใช้ขนาดฟอนต์เล็กกว่า */
+      .info-grid-3 .info-item,
+      .info-grid-4 .info-item {
+        font-size: 9px;
+        margin-bottom: 2px;
       }
       
       .label {
         font-weight: bold;
         color: #000;
         display: inline-block;
-        min-width: 70px; /* ลดความกว้าง */
+        min-width: 50px;
+        flex-shrink: 0;
+      }
+      
+      .info-grid-3 .label,
+      .info-grid-4 .label {
+        min-width: 40px;
+        font-size: 9px;
       }
       
       .value {
         color: #333;
-        margin-left: 5px;
+        margin-left: 4px;
         word-wrap: break-word;
+        flex: 1;
       }
       
       /* Photos Grid - ขยายให้เต็มพื้นที่ */
       .photos-grid {
         width: 100%;
         overflow: hidden;
-        flex: 1; /* ใช้พื้นที่ที่เหลือทั้งหมด */
+        flex: 1;
         display: flex;
         flex-direction: column;
-        margin-top: 5px; /* ลดระยะห่าง */
+        margin-top: 5px;
       }
       
       .photo-row {
         display: flex;
-        flex: 1; /* แต่ละแถวใช้พื้นที่เท่าๆ กัน */
-        margin-bottom: 5px; /* ระยะห่างระหว่างแถว */
+        flex: 1;
+        margin-bottom: 5px;
       }
       
       .photo-row:last-child {
@@ -464,10 +627,10 @@ function getInlineCSS() {
       }
       
       .photo-frame {
-        flex: 1; /* ใช้พื้นที่เท่าๆ กัน */
+        flex: 1;
         display: flex;
         flex-direction: column;
-        margin: 0 3px; /* ระยะห่างระหว่างคอลัมน์ */
+        margin: 0 3px;
       }
       
       .photo-frame:first-child {
@@ -479,15 +642,15 @@ function getInlineCSS() {
       }
       
       .photo-container {
-        flex: 1; /* ใช้พื้นที่ส่วนใหญ่ */
-        background: white; /* เปลี่ยนจากสีเทาเป็นสีขาว */
+        flex: 1;
+        background: white;
         text-align: center;
         position: relative;
         overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 0; /* สำคัญสำหรับ flex */
+        min-height: 0;
       }
       
       .photo-image {
@@ -495,7 +658,7 @@ function getInlineCSS() {
         max-height: 95%;
         width: auto;
         height: auto;
-        object-fit: contain; /* รักษา aspect ratio */
+        object-fit: contain;
       }
       
       .photo-placeholder {
@@ -504,28 +667,28 @@ function getInlineCSS() {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #f0f0f0; /* เฉพาะ placeholder เท่านั้น */
+        background: #f0f0f0;
         color: #999;
         font-style: italic;
         font-family: 'Times New Roman', Times, serif;
       }
       
       .placeholder-text {
-        font-size: 11px;
+        font-size: 10px;
       }
       
       .photo-caption {
         background: white;
         text-align: center;
-        font-size: 10px; /* ลดขนาดฟอนต์ */
+        font-size: 9px;
         line-height: 1.2;
         font-family: 'Times New Roman', Times, serif;
-        padding: 4px 2px; /* ลด padding */
-        min-height: 40px; /* ลดความสูง */
+        padding: 3px 2px;
+        min-height: 35px;
         display: flex;
         align-items: center;
         justify-content: center;
-        flex-shrink: 0; /* ไม่ให้หด */
+        flex-shrink: 0;
       }
       
       .photo-number {
@@ -562,14 +725,18 @@ function getInlineCSS() {
   `;
 }
 
-// 🔥 UPDATED: สร้าง PDF ด้วย Optimized Puppeteer + Full Layout
+// 🔥 UPDATED: สร้าง PDF ด้วย Optimized Puppeteer + Dynamic Fields
 async function generateOptimizedPDF(reportData) {
   let browser = null;
   let page = null;
   
   try {
-    console.log('🎯 Starting Optimized PDF generation...');
-    console.log(`📊 Original photos: ${reportData.photos.length} for category: ${reportData.category}`);
+    console.log('🎯 Starting Optimized PDF generation with dynamic fields...');
+    console.log(`📊 Report data:`, {
+      category: reportData.category,
+      dynamicFields: reportData.dynamicFields,
+      originalPhotos: reportData.photos.length
+    });
     
     // 🔥 สร้าง Full Layout รวมทั้งรูปที่ถ่ายและ placeholder
     const fullLayoutPhotos = await createFullLayoutPhotos(reportData.photos, reportData.category);
@@ -583,7 +750,7 @@ async function generateOptimizedPDF(reportData) {
     console.log(`✅ Using full layout: ${fullLayoutPhotos.length} items (photos + placeholders)`);
     
     const html = createOptimizedHTML(updatedReportData);
-    console.log('📄 HTML template created with full layout');
+    console.log('📄 HTML template created with dynamic fields support');
     
     browser = await getBrowser();
     page = await browser.newPage();
@@ -623,7 +790,7 @@ async function generateOptimizedPDF(reportData) {
       timeout: 60000
     });
     
-    console.log(`✅ Optimized PDF generated! Size: ${pdfBuffer.length} bytes`);
+    console.log(`✅ Optimized PDF generated with dynamic fields! Size: ${pdfBuffer.length} bytes`);
     
     // ปิด page แต่เก็บ browser ไว้ reuse
     await page.close();
@@ -656,7 +823,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
       requestBody: {
         name: filename,
         parents: [FOLDER_ID],
-        description: 'QC Report PDF - Optimized Puppeteer Generated with Topic Sorting'
+        description: 'QC Report PDF - Generated with Dynamic Fields Support'
       },
       media: {
         mimeType: 'application/pdf',
@@ -666,7 +833,7 @@ async function uploadPDFToDrive(pdfBuffer, filename) {
       fields: 'id, name, webViewLink, webContentLink'
     });
     
-    console.log(`🚀 Optimized PDF uploaded: ${response.data.id}`);
+    console.log(`🚀 Dynamic PDF uploaded: ${response.data.id}`);
     
     return {
       fileId: response.data.id,
@@ -715,5 +882,9 @@ module.exports = {
   cleanup,
   // 🔥 Export ฟังก์ชันใหม่เพื่อให้ส่วนอื่นใช้ได้
   createFullLayoutPhotos,
-  getQCTopicsOrder
+  getQCTopicsOrder,
+  createDynamicHeader, // 🔥 NEW: Export สำหรับ testing
+  create2FieldHeader,  // 🔥 NEW: Export สำหรับ testing  
+  create3FieldHeader,  // 🔥 NEW: Export สำหรับ testing
+  create4FieldHeader   // 🔥 NEW: Export สำหรับ testing
 };

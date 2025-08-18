@@ -1,10 +1,19 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const express = require("express");
+const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const { getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, getCompletedTopics } = require('./api/sheets');
 const { uploadPhoto } = require('./api/photos');
 const { getDriveClient } = require('./services/google-auth');
+
+// 🔥 NEW: Import dynamic fields functions
+const { 
+  getDynamicFields, 
+  validateDynamicFields, 
+  convertDynamicFieldsToMasterData,
+  createCombinationDescription 
+} = require('./api/category-config');
 
 // 🔥 ใช้ optimized-puppeteer-generator (puppeteer-core + @sparticuz/chromium)
 const { generateOptimizedPDF, uploadPDFToDrive } = require('./services/optimized-puppeteer-generator');
@@ -27,7 +36,7 @@ app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
     timestamp: new Date().toISOString(),
-    message: "QC Report API is running with HTML-PDF generator" 
+    message: "QC Report API is running with Dynamic Fields support" 
   });
 });
 
@@ -45,6 +54,163 @@ app.get("/qc-topics", async (req, res) => {
   }
 });
 
+// 🔥 NEW: Dynamic Fields Handlers
+
+// Get dynamic fields for a category
+async function getDynamicFieldsHandler(req, res) {
+  try {
+    const { category } = req.params;
+    
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Category is required'
+      });
+    }
+    
+    console.log(`API: Getting dynamic fields for category: ${decodeURIComponent(category)}`);
+    
+    const result = await getDynamicFields(decodeURIComponent(category));
+    
+    res.json({ success: true, data: result });
+    
+  } catch (error) {
+    console.error('Error getting dynamic fields:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+}
+
+// Validate dynamic fields
+async function validateDynamicFieldsHandler(req, res) {
+  try {
+    const { category, dynamicFields } = req.body;
+    
+    if (!category || !dynamicFields) {
+      return res.status(400).json({
+        success: false,
+        error: 'Category and dynamicFields are required'
+      });
+    }
+    
+    console.log(`API: Validating dynamic fields for ${category}:`, dynamicFields);
+    
+    const validation = validateDynamicFields(category, dynamicFields);
+    
+    if (validation.valid) {
+      res.json({ success: true, message: 'Fields are valid' });
+    } else {
+      res.status(400).json({ 
+        success: false, 
+        error: validation.error 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error validating dynamic fields:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+}
+
+// Add master data with dynamic fields
+async function addMasterDataDynamicHandler(req, res) {
+  try {
+    const { category, dynamicFields } = req.body;
+    
+    if (!category || !dynamicFields) {
+      return res.status(400).json({
+        success: false,
+        error: 'Category and dynamicFields are required'
+      });
+    }
+    
+    console.log(`API: Adding dynamic master data for ${category}:`, dynamicFields);
+    
+    // Convert dynamic fields to building+foundation format
+    const masterData = convertDynamicFieldsToMasterData(category, dynamicFields);
+    
+    if (!masterData.building || !masterData.foundation) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid dynamic fields: missing building or foundation equivalent'
+      });
+    }
+    
+    // Use existing addMasterData function
+    const result = await addMasterData(masterData.building, masterData.foundation);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        ...result,
+        originalFields: dynamicFields,
+        convertedFields: masterData
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error adding dynamic master data:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+}
+
+// Get completed topics with dynamic fields
+async function getCompletedTopicsDynamicHandler(req, res) {
+  try {
+    const { category, dynamicFields } = req.body;
+    
+    if (!category || !dynamicFields) {
+      return res.status(400).json({
+        success: false,
+        error: 'Category and dynamicFields are required'
+      });
+    }
+    
+    console.log(`API: Getting completed topics for ${category}:`, dynamicFields);
+    
+    // Convert dynamic fields to building+foundation format
+    const masterData = convertDynamicFieldsToMasterData(category, dynamicFields);
+    
+    if (!masterData.building || !masterData.foundation) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid dynamic fields: missing building or foundation equivalent'
+      });
+    }
+    
+    // Use existing getCompletedTopics function
+    const result = await getCompletedTopics({
+      building: masterData.building,
+      foundation: masterData.foundation,
+      category: category
+    });
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error getting completed topics with dynamic fields:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+}
+
+// 🔥 NEW: Register dynamic fields endpoints
+app.get('/dynamic-fields/:category', getDynamicFieldsHandler);
+app.post('/validate-dynamic-fields', validateDynamicFieldsHandler);
+app.post('/master-data-dynamic', addMasterDataDynamicHandler);
+app.post('/completed-topics-dynamic', getCompletedTopicsDynamicHandler);
+
+// Master Data endpoints
 app.get("/master-data", async (req, res) => {
   try {
     const masterData = await getMasterData();
@@ -122,12 +288,12 @@ app.post("/completed-topics", async (req, res) => {
   }
 });
 
-// 🔥 Generate PDF Report - ใช้ Optimized Puppeteer (puppeteer-core + @sparticuz/chromium)
+// 🔥 UPDATED: Generate PDF Report - รองรับ Dynamic Fields
 app.post("/generate-report", async (req, res) => {
   try {
     console.log('🎯 Optimized Puppeteer PDF generation request received');
     
-    const { building, foundation, category } = req.body;
+    const { building, foundation, category, dynamicFields } = req.body;
     
     if (!building || !foundation || !category) {
       return res.status(400).json({
@@ -136,7 +302,10 @@ app.post("/generate-report", async (req, res) => {
       });
     }
     
-    console.log(`🚀 Generating Optimized PDF for: ${building}-${foundation}-${category}`);
+    console.log(`🚀 Generating PDF for: ${building}-${foundation}-${category}`);
+    if (dynamicFields) {
+      console.log('📋 Dynamic fields:', dynamicFields);
+    }
     
     // ดึงรูปภาพจาก Google Sheets ที่ตรงกับเงื่อนไข
     const photos = await getPhotosForReport(building, foundation, category);
@@ -148,28 +317,41 @@ app.post("/generate-report", async (req, res) => {
       });
     }
     
-    console.log(`📸 Found ${photos.length} photos for Optimized PDF`);
+    console.log(`📸 Found ${photos.length} photos for PDF`);
     
-    // 🔥 สร้าง PDF ด้วย Optimized Puppeteer
-    const pdfBuffer = await generateOptimizedPDF({
+    // 🔥 สร้าง PDF ด้วย Optimized Puppeteer + Dynamic Fields
+    const reportData = {
       building,
       foundation,
       category,
       photos,
-      projectName: 'Escent Nakhon si'
-    });
+      projectName: 'Escent Nakhon si',
+      dynamicFields: dynamicFields || null // 🔥 NEW: ส่ง dynamic fields ไป PDF
+    };
+    
+    const pdfBuffer = await generateOptimizedPDF(reportData);
     
     // สร้างชื่อไฟล์
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-    const filename = `รูปประกอบการตรวจสอบ-${building}-${foundation}-${timestamp}.pdf`;
+    
+    // 🔥 NEW: ใช้ dynamic fields ในชื่อไฟล์ถ้ามี
+    let filenamePrefix = 'รูปประกอบการตรวจสอบ';
+    if (dynamicFields && Object.keys(dynamicFields).length > 0) {
+      const description = createCombinationDescription(category, dynamicFields);
+      filenamePrefix = `รูปประกอบการตรวจสอบ-${description}`;
+    } else {
+      filenamePrefix = `รูปประกอบการตรวจสอบ-${building}-${foundation}`;
+    }
+    
+    const filename = `${filenamePrefix}-${timestamp}.pdf`;
     
     // อัปโหลดไป Google Drive
     const driveResult = await uploadPDFToDrive(pdfBuffer, filename);
     
-    console.log('✅ Optimized PDF generated and uploaded:', driveResult.fileId);
+    console.log('✅ PDF generated and uploaded:', driveResult.fileId);
     
     // บันทึกลง Google Sheets
-    const reportData = {
+    const reportData2 = {
       building,
       foundation,
       category,
@@ -178,9 +360,9 @@ app.post("/generate-report", async (req, res) => {
       photoCount: photos.length
     };
     
-    const sheetResult = await logReport(reportData);
+    const sheetResult = await logReport(reportData2);
     
-    console.log('📋 Optimized PDF logged successfully:', sheetResult.uniqueId);
+    console.log('📋 PDF logged successfully:', sheetResult.uniqueId);
     
     res.json({
       success: true,
@@ -188,12 +370,13 @@ app.post("/generate-report", async (req, res) => {
         ...driveResult,
         photoCount: photos.length,
         sheetTimestamp: sheetResult,
-        generatedWith: 'Optimized-Puppeteer'
+        generatedWith: 'Optimized-Puppeteer-DynamicFields',
+        dynamicFields: dynamicFields || null
       }
     });
     
   } catch (error) {
-    console.error('❌ Error generating Optimized PDF:', error);
+    console.error('❌ Error generating PDF:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -263,11 +446,11 @@ async function getPhotosForReport(building, foundation, category) {
       }
     }
     
-    console.log(`Found ${photos.length} matching photos for HTML-PDF`);
+    console.log(`Found ${photos.length} matching photos for PDF`);
     return photos;
     
   } catch (error) {
-    console.error('❌ Error fetching photos for Optimized PDF:', error);
+    console.error('❌ Error fetching photos for PDF:', error);
     throw error;
   }
 }
@@ -356,7 +539,7 @@ app.post("/upload-photo-base64", async (req, res) => {
   try {
     console.log('Base64 upload request received');
     
-    const { photo, building, foundation, category, topic, location } = req.body;
+    const { photo, building, foundation, category, topic, location, dynamicFields } = req.body;
     
     if (!photo) {
       return res.status(400).json({
@@ -373,6 +556,9 @@ app.post("/upload-photo-base64", async (req, res) => {
     }
     
     console.log(`Processing base64 upload for: ${building}-${foundation}-${topic}`);
+    if (dynamicFields) {
+      console.log('📋 Dynamic fields:', dynamicFields);
+    }
     
     // Convert base64 to buffer
     const imageBuffer = Buffer.from(photo, 'base64');
@@ -414,7 +600,8 @@ app.post("/upload-photo-base64", async (req, res) => {
       success: true, 
       data: {
         ...driveResult,
-        sheetTimestamp: sheetResult
+        sheetTimestamp: sheetResult,
+        dynamicFields: dynamicFields || null
       }
     });
     
