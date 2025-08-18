@@ -38,9 +38,16 @@ const Camera = () => {
   const [cachedLocation, setCachedLocation] = useState(null);
   const [lastPosition, setLastPosition] = useState(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  
+  const [fieldValues, setFieldValues] = useState({});
+
   // Native Camera Input Ref
   const cameraInputRef = useRef(null);
+
+  useEffect(() => {
+    if (formData.category && categoryFields.length > 0) {
+      loadFieldValues(formData.category, categoryFields);
+    }
+  }, [formData.category, categoryFields]);  
 
   // Load data on mount
   useEffect(() => {
@@ -65,6 +72,22 @@ const Camera = () => {
       loadProgress();
     }
   }, [formData.category, dynamicFields]);
+
+  const loadFieldValues = async (category, fields) => {
+    try {
+      const newFieldValues = {};
+      
+      for (const field of fields) {
+        const values = await api.getFieldValues(field.name, category);
+        newFieldValues[field.name] = values;
+        console.log(`Loaded ${values.length} values for ${field.name}:`, values);
+      }
+      
+      setFieldValues(newFieldValues);
+    } catch (error) {
+      console.error('Error loading field values:', error);
+    }
+  };
 
   // 🔥 NEW: Load dynamic fields for selected category
   const loadCategoryFields = async (category) => {
@@ -111,26 +134,32 @@ const Camera = () => {
   const isFieldsComplete = () => {
     if (!formData.category || categoryFields.length === 0) return false;
     
-    // ตรวจสอบ field ที่ required (อย่างน้อย 2 field แรก)
-    const requiredFields = categoryFields.slice(0, 2);
-    return requiredFields.every(field => {
-      const value = dynamicFields[field.name];
-      return value && value.trim();
+    // ✅ เช็คทุก field ที่มี required: true
+    return categoryFields.every(field => {
+      if (field.required) {
+        const value = dynamicFields[field.name];
+        return value && value.trim();
+      }
+      return true; // field ที่ไม่ required ถือว่าผ่าน
     });
   };
 
   // 🔥 NEW: Get field options from master data
   const getFieldOptions = (fieldName) => {
+    // ใช้ field values ที่โหลดมา
+    if (fieldValues[fieldName]) {
+      return fieldValues[fieldName];
+    }
+    
+    // Fallback: ใช้ master data เดิม
     if (fieldName === 'อาคาร') {
       return masterData.buildings || [];
     }
     
-    // สำหรับ field ที่ 2 (เช่น ฐานรากเบอร์, เสาเบอร์)
     if (categoryFields.length >= 2 && fieldName === categoryFields[1].name) {
       return masterData.foundations || [];
     }
     
-    // สำหรับ field อื่นๆ ยังไม่มี master data
     return [];
   };
 
@@ -245,14 +274,12 @@ const Camera = () => {
     
     setIsLoadingProgress(true);
     try {
-      // 🔥 NEW: ใช้ Full Match แทน basic match
-      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
-      
+      // 🔥 ส่ง dynamic fields โดยตรง ไม่ convert
       const response = await api.getCompletedTopicsFullMatch({
-        building: masterDataFields.building,
-        foundation: masterDataFields.foundation,
+        building: dynamicFields['อาคาร'] || '',        // ✅ ใช้ dynamic fields โดยตรง
+        foundation: dynamicFields['เสาเบอร์'] || '',   // ✅ ใช้ dynamic fields โดยตรง
         category: formData.category,
-        dynamicFields: dynamicFields // 🔥 ส่ง dynamic fields สำหรับ Full Match
+        dynamicFields: dynamicFields                   // ✅ ส่ง full dynamic fields
       });
       
       if (response.success) {

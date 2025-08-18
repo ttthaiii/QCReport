@@ -264,39 +264,76 @@ function isFullMatch(searchCriteria, rowData) {
 
 // 🔥 NEW: ดึงรายการรูปที่ถ่ายแล้วแบบ Full Match
 async function getCompletedTopicsFullMatch(criteria) {
-  const sheets = getSheetsClient();
-  const { building, foundation, category, dynamicFields } = criteria;
-  
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEETS_ID,
-    range: 'Master_Photos_Log!A:J'
-  });
-  
-  const rows = response.data.values || [];
-  const completedTopics = new Set();
-  
-  // กรองข้อมูลตามเงื่อนไข Full Match
-  rows.slice(1).forEach(row => {
-    if (row.length >= 6) {
-      const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
-      
-      // ใช้ฟังก์ชัน isFullMatch
-      if (isFullMatch(
-        { building, foundation, category, dynamicFields },
-        { building: rowBuilding, foundation: rowFoundation, category: rowCategory, dynamicFieldsJSON }
-      )) {
-        completedTopics.add(topic.trim());
+  try {
+    const sheets = getSheetsClient();
+    const { building, foundation, category, dynamicFields } = criteria;
+    
+    console.log('🔍 Full Match search criteria:', {
+      category,
+      dynamicFields
+    });
+    
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'Master_Photos_Log!A:J'
+    });
+    
+    const rows = response.data.values || [];
+    const completedTopics = new Set();
+    
+    rows.slice(1).forEach(row => {
+      if (row.length >= 6) {
+        const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
+        
+        // ✅ เช็ค category ก่อน
+        if (rowCategory !== category) return;
+        
+        // ✅ ถ้าไม่มี dynamic fields ใน row (ข้อมูลเก่า) ให้ skip
+        if (!dynamicFieldsJSON) return;
+        
+        try {
+          const rowDynamicFields = JSON.parse(dynamicFieldsJSON);
+          
+          // ✅ Full Match: ตรวจสอบทุก field ที่มีค่า
+          let isMatch = true;
+          for (const [fieldName, fieldValue] of Object.entries(dynamicFields)) {
+            if (fieldValue && fieldValue.trim()) {
+              const rowFieldValue = rowDynamicFields[fieldName];
+              if (!rowFieldValue || rowFieldValue.trim() !== fieldValue.trim()) {
+                isMatch = false;
+                break;
+              }
+            }
+          }
+          
+          if (isMatch) {
+            completedTopics.add(topic.trim());
+            console.log(`✅ Full Match found: ${topic} with fields:`, rowDynamicFields);
+          }
+          
+        } catch (parseError) {
+          console.log('⚠️ Cannot parse dynamic fields, skipping row');
+        }
       }
-    }
-  });
-  
-  return {
-    success: true,
-    data: {
-      completedTopics: Array.from(completedTopics),
-      criteria
-    }
-  };
+    });
+    
+    console.log(`📊 Full Match result: ${completedTopics.size} completed topics`);
+    
+    return {
+      success: true,
+      data: {
+        completedTopics: Array.from(completedTopics),
+        criteria
+      }
+    };
+    
+  } catch (error) {
+    console.error('Error in getCompletedTopicsFullMatch:', error);
+    return {
+      success: false,
+      data: { completedTopics: [] }
+    };
+  }
 }
 
 // 🔥 UPDATED: บันทึกข้อมูลรูปถ่าย พร้อม Dynamic Fields JSON
@@ -434,7 +471,7 @@ async function addFieldValue(fieldName, fieldValue, category) {
     }
     
     if (existingRowIndex > 0) {
-      // อัปเดตค่าที่มีอยู่ (เพิ่ม count และ last_used)
+      // อัปเดตค่าที่มีอยู่ (เพิ่ม count)
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEETS_ID,
         range: `Master_Field_Values!A${existingRowIndex}:F${existingRowIndex}`,

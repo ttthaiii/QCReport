@@ -312,7 +312,7 @@ app.post("/generate-report", async (req, res) => {
     }
     
     // ดึงรูปภาพจาก Google Sheets ที่ตรงกับเงื่อนไข
-    const photos = await getPhotosForReport(building, foundation, category);
+    const photos = await getPhotosForReport(building, foundation, category, dynamicFields);
     
     if (!photos || photos.length === 0) {
       return res.status(400).json({
@@ -389,72 +389,100 @@ app.post("/generate-report", async (req, res) => {
 });
 
 // ดึงรูปภาพจาก Google Sheets สำหรับสร้าง Report
-async function getPhotosForReport(building, foundation, category) {
+// ✅ อัปเดตให้รับ dynamicFields
+async function getPhotosForReport(building, foundation, category, dynamicFields = null) {
   try {
     const sheets = getSheetsClient();
     const SHEETS_ID = '1ez_Dox16jf9lr5TEsLL5BEOfKZDNGkVD31YSBtx3Qa8';
     
-    // ดึงข้อมูลจาก Master_Photos_Log
+    console.log(`🔍 Full Match photo search:`, {
+      category,
+      dynamicFields
+    });
+    
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:J'  // ✅ รองรับ 10 columns (เพิ่ม Dynamic Fields)
+      range: 'Master_Photos_Log!A:J'
     });
     
     const rows = response.data.values || [];
     const photos = [];
     
-    console.log(`Checking ${rows.length} rows for matching photos...`);
+    console.log(`Checking ${rows.length} rows for Full Match photos...`);
     
-    // กรองข้อมูลตามเงื่อนไข (skip header row)
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       if (row.length >= 8) {
         const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
         
-        if (rowBuilding === building && rowFoundation === foundation && rowCategory === category) {
-          console.log(`✓ Match found: ${topic}`);
+        // ✅ เช็ค category ก่อน
+        if (rowCategory !== category) continue;
+        
+        // ✅ ถ้ามี dynamicFields (Full Match mode)
+        if (dynamicFields && Object.keys(dynamicFields).length > 0) {
+          if (!dynamicFieldsJSON) continue; // skip ข้อมูลเก่าที่ไม่มี dynamic fields
           
-          // ดาวน์โหลดรูปจาก Google Drive และแปลงเป็น base64
-          const imageBase64 = await downloadImageAsBase64(driveUrl || '');
-          
-          if (imageBase64) {
-            photos.push({
-              id,
-              timestamp,
-              building: rowBuilding,
-              foundation: rowFoundation,
-              category: rowCategory,
-              topic,
-              filename,
-              driveUrl,
-              location,
-              imageBase64
-            });
-          } else {
-            console.log(`⚠️ Could not download image for: ${topic}`);
-            // เพิ่มรูปแม้ไม่มี base64 เพื่อให้เห็นใน report
-            photos.push({
-              id,
-              timestamp,
-              building: rowBuilding,
-              foundation: rowFoundation,
-              category: rowCategory,
-              topic,
-              filename,
-              driveUrl,
-              location,
-              imageBase64: null
-            });
+          try {
+            const rowDynamicFields = JSON.parse(dynamicFieldsJSON);
+            
+            // ✅ Full Match: ตรวจสอบทุก field ที่มีค่า
+            let isFullMatch = true;
+            for (const [fieldName, fieldValue] of Object.entries(dynamicFields)) {
+              if (fieldValue && fieldValue.trim()) {
+                const rowFieldValue = rowDynamicFields[fieldName];
+                if (!rowFieldValue || rowFieldValue.trim() !== fieldValue.trim()) {
+                  isFullMatch = false;
+                  break;
+                }
+              }
+            }
+            
+            if (!isFullMatch) continue;
+            
+          } catch (parseError) {
+            console.log('⚠️ Cannot parse dynamic fields, skipping row');
+            continue;
           }
+        } else {
+          // ✅ Basic match (backward compatibility)
+          if (rowBuilding !== building || rowFoundation !== foundation) continue;
+        }
+        
+        console.log(`✅ Full Match photo found: ${topic}`);
+        
+        // ดาวน์โหลดรูป
+        const imageBase64 = await downloadImageAsBase64(driveUrl || '');
+        
+        if (imageBase64) {
+          photos.push({
+            id, timestamp,
+            building: rowBuilding,
+            foundation: rowFoundation,
+            category: rowCategory,
+            topic, filename, driveUrl, location,
+            imageBase64,
+            dynamicFields: dynamicFieldsJSON ? JSON.parse(dynamicFieldsJSON) : null
+          });
+        } else {
+          console.log(`⚠️ Could not download image for: ${topic}`);
+          photos.push({
+            id, timestamp,
+            building: rowBuilding,
+            foundation: rowFoundation,  
+            category: rowCategory,
+            topic, filename, driveUrl, location,
+            imageBase64: null,
+            dynamicFields: dynamicFieldsJSON ? JSON.parse(dynamicFieldsJSON) : null
+          });
         }
       }
     }
     
-    console.log(`Found ${photos.length} matching photos for PDF`);
+    console.log(`📸 Found ${photos.length} Full Match photos for PDF`);
     return photos;
     
   } catch (error) {
-    console.error('❌ Error fetching photos for PDF:', error);
+    console.error('❌ Error fetching Full Match photos for PDF:', error);
     throw error;
   }
 }

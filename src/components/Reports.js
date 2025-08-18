@@ -195,17 +195,17 @@ const Reports = () => {
     setCategoryProgress({});
     
     try {
-      // Convert dynamic fields to master data format for API call
-      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
-      
-      console.log(`Loading progress for all categories: ${masterDataFields.building}-${masterDataFields.foundation}`);
+      console.log(`Loading progress with Full Match for all categories`);
+      console.log('Dynamic fields:', dynamicFields);
       
       const progressPromises = Object.keys(qcTopics).map(async (category) => {
         try {
-          const response = await api.getCompletedTopics({
-            building: masterDataFields.building,
-            foundation: masterDataFields.foundation,
-            category: category
+          // ✅ ใช้ Full Match API สำหรับทุก category
+          const response = await api.getCompletedTopicsFullMatch({
+            building: dynamicFields['อาคาร'] || '',
+            foundation: Object.values(dynamicFields)[1] || '', // field ที่ 2
+            category: category,
+            dynamicFields: dynamicFields // ✅ ส่ง dynamic fields เต็มๆ
           });
           
           const completedTopics = response.success ? new Set(response.data.completedTopics || []) : new Set();
@@ -213,6 +213,8 @@ const Reports = () => {
           const completed = totalTopics.filter(topic => completedTopics.has(topic)).length;
           const total = totalTopics.length;
           const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+          
+          console.log(`📊 ${category}: ${completed}/${total} (${percentage}%)`);
           
           return {
             category,
@@ -243,7 +245,7 @@ const Reports = () => {
       });
       
       setCategoryProgress(progressMap);
-      console.log('Category progress loaded:', progressMap);
+      console.log('✅ All category progress loaded with Full Match');
       
     } catch (error) {
       console.error('Error loading category progress:', error);
@@ -261,19 +263,18 @@ const Reports = () => {
     setIsGenerating(true);
     
     try {
-      console.log('Generating report with dynamic fields:', {
+      console.log('🎯 Generating Full Match report with dynamic fields:', {
         category: formData.category,
         dynamicFields: dynamicFields
       });
       
-      // Convert dynamic fields to master data format for report generation
-      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
-      
+      // ✅ ใช้ dynamic fields โดยตรง สำหรับ Full Match
       const reportData = {
         category: formData.category,
-        building: masterDataFields.building,
-        foundation: masterDataFields.foundation,
-        dynamicFields: dynamicFields // 🔥 NEW: ส่ง dynamic fields สำหรับ PDF header
+        building: dynamicFields['อาคาร'] || '',           // ✅ ใช้ dynamic fields โดยตรง
+        foundation: Object.values(dynamicFields)[1] || '', // ✅ field ที่ 2 โดยตรง
+        dynamicFields: dynamicFields,                      // ✅ ส่ง full dynamic fields
+        useFullMatch: true                                 // ✅ flag บอกให้ใช้ Full Match
       };
       
       const response = await api.generateReport(reportData);
@@ -281,19 +282,19 @@ const Reports = () => {
       if (response.success) {
         setGeneratedReport(response.data);
         
-        // 🔥 NEW: แสดงข้อมูล dynamic fields ใน alert
+        // ✅ แสดงข้อมูล Full Match
         const fieldsDisplay = Object.entries(dynamicFields)
           .filter(([key, value]) => value && value.trim())
           .map(([key, value]) => `${key}: ${value}`)
           .join(', ');
         
-        alert(`สร้างรายงานสำเร็จ!\nไฟล์: ${response.data.filename}\n${fieldsDisplay}\nจำนวนรูป: ${response.data.photoCount} รูป`);
+        alert(`✅ สร้างรายงาน Full Match สำเร็จ!\nไฟล์: ${response.data.filename}\n📋 ข้อมูล: ${fieldsDisplay}\n📸 จำนวนรูป: ${response.data.photoCount} รูป`);
       } else {
         throw new Error('Failed to generate report');
       }
       
     } catch (error) {
-      console.error('Error generating report:', error);
+      console.error('Error generating Full Match report:', error);
       alert('เกิดข้อผิดพลาดในการสร้างรายงาน: ' + error.message);
     } finally {
       setIsGenerating(false);

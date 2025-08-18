@@ -114,19 +114,6 @@ export const api = {
     }
   },
 
-  // 🔥 NEW: Get field values for datalist (Complete Datalist System)
-  getFieldValues: async (fieldName, category) => {
-    try {
-      console.log(`API: Getting field values for ${fieldName} in ${category}`);
-      const result = await apiCall(`/field-values/${encodeURIComponent(fieldName)}/${encodeURIComponent(category)}`);
-      console.log(`API: Found ${result.data?.length || 0} values for ${fieldName}`);
-      return result.data || [];
-    } catch (error) {
-      console.error(`API: Error getting field values for ${fieldName}:`, error);
-      return [];
-    }
-  },
-
   // 🔥 NEW: Validate dynamic fields
   validateDynamicFields: async (category, dynamicFields) => {
     try {
@@ -252,7 +239,7 @@ export const api = {
       console.error(`Error getting field values for ${fieldName}:`, error);
       return [];
     }
-  },  
+  },
   
   // Upload photo to Drive + log to Sheets
   uploadPhoto: uploadPhotoFile,
