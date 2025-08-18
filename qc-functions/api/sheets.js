@@ -516,8 +516,13 @@ async function getFieldValues(fieldName, category) {
       if (row.length >= 3) {
         const [rowFieldName, rowFieldValue, rowCategory, count, lastUsed] = row;
         
-        if (rowFieldName === fieldName && 
-            (rowCategory === category || fieldName === 'อาคาร')) { // อาคารใช้ร่วมกันได้
+        // ✅ แก้เงื่อนไข: อาคารใช้ร่วมกันได้ แต่ field อื่นต้องตรง category
+        const shouldInclude = rowFieldName === fieldName && (
+          (fieldName === 'อาคาร') || // อาคารใช้ร่วมกันได้ทุก category  
+          (rowCategory === category)  // field อื่นต้องตรง category เท่านั้น
+        );
+        
+        if (shouldInclude) {
           values.push({
             value: rowFieldValue,
             count: parseInt(count || 1),

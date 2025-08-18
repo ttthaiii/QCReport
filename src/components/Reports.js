@@ -25,6 +25,7 @@ const Reports = () => {
   // 🔥 NEW: Progress tracking for all categories
   const [categoryProgress, setCategoryProgress] = useState({});
   const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+  const [fieldValues, setFieldValues] = useState({});
 
   useEffect(() => {
     loadQCTopics();
@@ -47,6 +48,12 @@ const Reports = () => {
       loadAllCategoryProgress();
     }
   }, [formData.category, dynamicFields, qcTopics]);
+
+  useEffect(() => {
+    if (formData.category && categoryFields.length > 0) {
+      loadFieldValues(formData.category, categoryFields);
+    }
+  }, [formData.category, categoryFields]);
 
   // 🔥 NEW: Load dynamic fields for selected category
   const loadCategoryFields = async (category) => {
@@ -76,6 +83,7 @@ const Reports = () => {
         { name: `${category}เบอร์`, type: 'combobox', required: true, placeholder: `เลือกหรือพิมพ์เลข${category}` }
       ]);
       setDynamicFields({ 'อาคาร': '', [`${category}เบอร์`]: '' });
+      setFieldValues({});
     } finally {
       setIsLoadingFields(false);
     }
@@ -87,6 +95,24 @@ const Reports = () => {
       ...prev,
       [fieldName]: value
     }));
+  };
+
+  const loadFieldValues = async (category, fields) => {
+    try {
+      console.log(`📋 Loading field values for ${category}...`);
+      const newFieldValues = {};
+      
+      for (const field of fields) {
+        const values = await api.getFieldValues(field.name, category);
+        newFieldValues[field.name] = values;
+        console.log(`✅ Field "${field.name}": ${values.length} values loaded`);
+      }
+      
+      setFieldValues(newFieldValues);
+    } catch (error) {
+      console.error('❌ Error loading field values:', error);
+      setFieldValues({});
+    }
   };
 
   // 🔥 NEW: Check if required fields are complete
@@ -103,16 +129,20 @@ const Reports = () => {
 
   // 🔥 NEW: Get field options from master data
   const getFieldOptions = (fieldName) => {
+    // 🔥 ใช้ field values ที่โหลดมาจาก Complete Datalist
+    if (fieldValues[fieldName]) {
+      return fieldValues[fieldName];
+    }
+    
+    // Fallback: ใช้ master data เดิม (สำหรับ backward compatibility)
     if (fieldName === 'อาคาร') {
       return masterData.buildings || [];
     }
     
-    // สำหรับ field ที่ 2 (เช่น ฐานรากเบอร์, เสาเบอร์)
     if (categoryFields.length >= 2 && fieldName === categoryFields[1].name) {
       return masterData.foundations || [];
     }
     
-    // สำหรับ field อื่นๆ ยังไม่มี master data
     return [];
   };
 
@@ -195,19 +225,45 @@ const Reports = () => {
     setCategoryProgress({});
     
     try {
-      console.log(`Loading progress with Full Match for all categories`);
-      console.log('Dynamic fields:', dynamicFields);
+      console.log(`📊 Loading progress for all categories...`);
+      console.log(`✅ Current category: ${formData.category}`);
+      console.log(`✅ Current dynamic fields:`, dynamicFields);
       
       const progressPromises = Object.keys(qcTopics).map(async (category) => {
         try {
-          // ✅ ใช้ Full Match API สำหรับทุก category
-          const response = await api.getCompletedTopicsFullMatch({
-            building: dynamicFields['อาคาร'] || '',
-            foundation: Object.values(dynamicFields)[1] || '', // field ที่ 2
-            category: category,
-            dynamicFields: dynamicFields // ✅ ส่ง dynamic fields เต็มๆ
-          });
+          console.log(`🔍 Processing category: ${category}`);
           
+          let response;
+          
+          // ✅ ใช้ Full Match เฉพาะ category ที่เลือกอยู่ปัจจุบัน
+          if (category === formData.category) {
+            console.log(`🎯 Using Full Match for current category: ${category}`);
+            
+            response = await api.getCompletedTopicsFullMatch({
+              building: dynamicFields['อาคาร'] || '',
+              foundation: Object.values(dynamicFields)[1] || '',
+              category: category,
+              dynamicFields: dynamicFields // ✅ ส่ง dynamic fields ปัจจุบัน
+            });
+            
+            console.log(`✅ Full Match result for ${category}:`, response.data?.completedTopics?.length || 0, 'topics');
+            
+          } else {
+            console.log(`📋 Using Legacy Match for other category: ${category}`);
+            
+            // ✅ สำหรับ category อื่นๆ ใช้ Legacy API (เพราะไม่รู้ dynamic fields ของมัน)
+            const masterDataFields = api.convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+            
+            response = await api.getCompletedTopics({
+              building: masterDataFields.building,
+              foundation: masterDataFields.foundation,
+              category: category
+            });
+            
+            console.log(`✅ Legacy result for ${category}:`, response.data?.completedTopics?.length || 0, 'topics');
+          }
+          
+          // ✅ ประมวลผลข้อมูลเหมือนเดิม
           const completedTopics = response.success ? new Set(response.data.completedTopics || []) : new Set();
           const totalTopics = qcTopics[category] || [];
           const completed = totalTopics.filter(topic => completedTopics.has(topic)).length;
@@ -222,37 +278,57 @@ const Reports = () => {
             total,
             percentage,
             completedTopics: Array.from(completedTopics),
-            remainingTopics: totalTopics.filter(topic => !completedTopics.has(topic))
+            remainingTopics: totalTopics.filter(topic => !completedTopics.has(topic)),
+            usedFullMatch: category === formData.category // ✅ บันทึกว่าใช้ Full Match หรือไม่
           };
+          
         } catch (error) {
-          console.error(`Error loading progress for ${category}:`, error);
+          console.error(`❌ Error loading progress for ${category}:`, error);
+          
+          // ✅ Error fallback
           return {
             category,
             completed: 0,
             total: qcTopics[category]?.length || 0,
             percentage: 0,
             completedTopics: [],
-            remainingTopics: qcTopics[category] || []
+            remainingTopics: qcTopics[category] || [],
+            usedFullMatch: false,
+            error: error.message
           };
         }
       });
       
+      // ✅ รอให้ทุก category เสร็จ
       const results = await Promise.all(progressPromises);
       
+      // ✅ จัดเก็บผลลัพธ์
       const progressMap = {};
       results.forEach(result => {
         progressMap[result.category] = result;
       });
       
       setCategoryProgress(progressMap);
-      console.log('✅ All category progress loaded with Full Match');
+      
+      // ✅ สรุปผลลัพธ์
+      const fullMatchCategories = results.filter(r => r.usedFullMatch).map(r => r.category);
+      const legacyCategories = results.filter(r => !r.usedFullMatch && !r.error).map(r => r.category);
+      const errorCategories = results.filter(r => r.error).map(r => r.category);
+      
+      console.log(`✅ Progress loading completed!`);
+      console.log(`🎯 Full Match used: ${fullMatchCategories.join(', ') || 'None'}`);
+      console.log(`📋 Legacy Match used: ${legacyCategories.join(', ') || 'None'}`);
+      if (errorCategories.length > 0) {
+        console.log(`❌ Errors: ${errorCategories.join(', ')}`);
+      }
       
     } catch (error) {
-      console.error('Error loading category progress:', error);
+      console.error('❌ Error in loadAllCategoryProgress:', error);
     } finally {
       setIsLoadingProgress(false);
     }
   };
+
 
   const generateReport = async () => {
     if (!formData.category || !isFieldsComplete()) {
