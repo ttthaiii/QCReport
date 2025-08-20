@@ -422,7 +422,6 @@ function createPhotosGrid(photos, pageIndex) {
                    alt="${topicName}" 
                    class="photo-image">` :
               `<div class="photo-placeholder">
-                 <span class="placeholder-text">ยังไม่ได้ถ่าย</span>
                </div>`
             }
           </div>

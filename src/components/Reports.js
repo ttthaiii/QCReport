@@ -23,9 +23,15 @@ const Reports = () => {
   const [generatedReport, setGeneratedReport] = useState(null);
 
   // 🔥 NEW: Progress tracking for all categories
-  const [categoryProgress, setCategoryProgress] = useState({});
-  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
   const [fieldValues, setFieldValues] = useState({});
+  const [currentCategoryProgress, setCurrentCategoryProgress] = useState({
+    completed: 0,
+    total: 0,
+    percentage: 0,
+    completedTopics: []
+  });
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+  const [dataStatusMessage, setDataStatusMessage] = useState(null);
 
   useEffect(() => {
     loadQCTopics();
@@ -45,7 +51,7 @@ const Reports = () => {
   // 🔥 Load progress when dynamic fields and category are ready
   useEffect(() => {
     if (formData.category && isFieldsComplete() && Object.keys(qcTopics).length > 0) {
-      loadAllCategoryProgress();
+      loadCurrentCategoryProgress();
     }
   }, [formData.category, dynamicFields, qcTopics]);
 
@@ -95,6 +101,9 @@ const Reports = () => {
       ...prev,
       [fieldName]: value
     }));
+    
+    // Clear status message เมื่อ user เปลี่ยน field
+    setDataStatusMessage(null);
   };
 
   const loadFieldValues = async (category, fields) => {
@@ -119,11 +128,10 @@ const Reports = () => {
   const isFieldsComplete = () => {
     if (!formData.category || categoryFields.length === 0) return false;
     
-    // ตรวจสอบ field ที่ required (อย่างน้อย 2 field แรก)
-    const requiredFields = categoryFields.slice(0, 2);
-    return requiredFields.every(field => {
+    // ✅ เช็คทุก field ที่ configured ไม่ใช่แค่ 2 field แรก
+    return categoryFields.every(field => {
       const value = dynamicFields[field.name];
-      return value && value.trim();
+      return value && value.trim(); // ต้องมีค่าทุก field
     });
   };
 
@@ -144,23 +152,6 @@ const Reports = () => {
     }
     
     return [];
-  };
-
-  // 🔥 NEW: Convert dynamic fields to master data format
-  const convertDynamicFieldsToMasterData = (category, fields) => {
-    if (category === 'ฐานราก') {
-      return {
-        building: fields['อาคาร'] || '',
-        foundation: fields['ฐานรากเบอร์'] || ''
-      };
-    }
-    
-    // สำหรับหมวดอื่น: field แรกเป็น building, field ที่ 2 เป็น foundation
-    const fieldValues = Object.values(fields);
-    return {
-      building: fieldValues[0] || '',
-      foundation: fieldValues[1] || ''
-    };
   };
 
   const loadMasterData = async () => {
@@ -217,118 +208,53 @@ const Reports = () => {
     }
   };
 
-  // 🔥 NEW: Load progress for all categories
-  const loadAllCategoryProgress = async () => {
-    if (!isFieldsComplete() || Object.keys(qcTopics).length === 0) return;
-    
+  // 🔥 NEW: Load progress สำหรับหมวดปัจจุบันเท่านั้น
+  const loadCurrentCategoryProgress = async () => {
+    if (!formData.category || !isFieldsComplete()) {
+      setCurrentCategoryProgress({ completed: 0, total: 0, percentage: 0, completedTopics: [] });
+      return;
+    }
+
     setIsLoadingProgress(true);
-    setCategoryProgress({});
-    
     try {
-      console.log(`📊 Loading progress for all categories...`);
-      console.log(`✅ Current category: ${formData.category}`);
-      console.log(`✅ Current dynamic fields:`, dynamicFields);
+      console.log(`📊 Loading progress for current category: ${formData.category}`);
       
-      const progressPromises = Object.keys(qcTopics).map(async (category) => {
-        try {
-          console.log(`🔍 Processing category: ${category}`);
-          
-          let response;
-          
-          // ✅ ใช้ Full Match เฉพาะ category ที่เลือกอยู่ปัจจุบัน
-          if (category === formData.category) {
-            console.log(`🎯 Using Full Match for current category: ${category}`);
-            
-            response = await api.getCompletedTopicsFullMatch({
-              building: dynamicFields['อาคาร'] || '',
-              foundation: Object.values(dynamicFields)[1] || '',
-              category: category,
-              dynamicFields: dynamicFields // ✅ ส่ง dynamic fields ปัจจุบัน
-            });
-            
-            console.log(`✅ Full Match result for ${category}:`, response.data?.completedTopics?.length || 0, 'topics');
-            
-          } else {
-            console.log(`📋 Using Legacy Match for other category: ${category}`);
-            
-            // ✅ สำหรับ category อื่นๆ ใช้ Legacy API (เพราะไม่รู้ dynamic fields ของมัน)
-            const masterDataFields = api.convertDynamicFieldsToMasterData(formData.category, dynamicFields);
-            
-            response = await api.getCompletedTopics({
-              building: masterDataFields.building,
-              foundation: masterDataFields.foundation,
-              category: category
-            });
-            
-            console.log(`✅ Legacy result for ${category}:`, response.data?.completedTopics?.length || 0, 'topics');
-          }
-          
-          // ✅ ประมวลผลข้อมูลเหมือนเดิม
-          const completedTopics = response.success ? new Set(response.data.completedTopics || []) : new Set();
-          const totalTopics = qcTopics[category] || [];
-          const completed = totalTopics.filter(topic => completedTopics.has(topic)).length;
-          const total = totalTopics.length;
-          const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-          
-          console.log(`📊 ${category}: ${completed}/${total} (${percentage}%)`);
-          
-          return {
-            category,
-            completed,
-            total,
-            percentage,
-            completedTopics: Array.from(completedTopics),
-            remainingTopics: totalTopics.filter(topic => !completedTopics.has(topic)),
-            usedFullMatch: category === formData.category // ✅ บันทึกว่าใช้ Full Match หรือไม่
-          };
-          
-        } catch (error) {
-          console.error(`❌ Error loading progress for ${category}:`, error);
-          
-          // ✅ Error fallback
-          return {
-            category,
-            completed: 0,
-            total: qcTopics[category]?.length || 0,
-            percentage: 0,
-            completedTopics: [],
-            remainingTopics: qcTopics[category] || [],
-            usedFullMatch: false,
-            error: error.message
-          };
-        }
+      // ใช้ Full Match สำหรับหมวดปัจจุบัน
+      const response = await api.getCompletedTopicsFullMatch({
+        building: dynamicFields['อาคาร'] || '',
+        foundation: Object.values(dynamicFields)[1] || '',
+        category: formData.category,
+        dynamicFields: dynamicFields
       });
       
-      // ✅ รอให้ทุก category เสร็จ
-      const results = await Promise.all(progressPromises);
-      
-      // ✅ จัดเก็บผลลัพธ์
-      const progressMap = {};
-      results.forEach(result => {
-        progressMap[result.category] = result;
-      });
-      
-      setCategoryProgress(progressMap);
-      
-      // ✅ สรุปผลลัพธ์
-      const fullMatchCategories = results.filter(r => r.usedFullMatch).map(r => r.category);
-      const legacyCategories = results.filter(r => !r.usedFullMatch && !r.error).map(r => r.category);
-      const errorCategories = results.filter(r => r.error).map(r => r.category);
-      
-      console.log(`✅ Progress loading completed!`);
-      console.log(`🎯 Full Match used: ${fullMatchCategories.join(', ') || 'None'}`);
-      console.log(`📋 Legacy Match used: ${legacyCategories.join(', ') || 'None'}`);
-      if (errorCategories.length > 0) {
-        console.log(`❌ Errors: ${errorCategories.join(', ')}`);
+      if (response.success) {
+        const completedTopics = new Set(response.data.completedTopics || []);
+        const totalTopics = qcTopics[formData.category] || [];
+        const completed = totalTopics.filter(topic => completedTopics.has(topic)).length;
+        const total = totalTopics.length;
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+        
+        setCurrentCategoryProgress({
+          completed,
+          total,
+          percentage,
+          completedTopics: Array.from(completedTopics)
+        });
+        
+        console.log(`✅ Progress for ${formData.category}: ${completed}/${total} (${percentage}%)`);
+        setDataStatusMessage(
+          completed === 0 && total > 0 
+            ? `🔍 ไม่พบข้อมูลสำหรับ ${Object.entries(dynamicFields).filter(([k,v]) => v && v.trim()).map(([k,v]) => `${k}:${v}`).join(', ')} ในระบบ`
+            : null
+        );        
       }
-      
     } catch (error) {
-      console.error('❌ Error in loadAllCategoryProgress:', error);
+      console.error('❌ Error loading current category progress:', error);
+      setCurrentCategoryProgress({ completed: 0, total: 0, percentage: 0, completedTopics: [] });
     } finally {
       setIsLoadingProgress(false);
     }
   };
-
 
   const generateReport = async () => {
     if (!formData.category || !isFieldsComplete()) {
@@ -377,18 +303,6 @@ const Reports = () => {
     }
   };
 
-  // 🔥 Helper function to get progress summary
-  const getOverallProgress = () => {
-    const categories = Object.keys(categoryProgress);
-    if (categories.length === 0) return { completed: 0, total: 0, percentage: 0 };
-    
-    const totalCompleted = categories.reduce((sum, cat) => sum + categoryProgress[cat].completed, 0);
-    const totalTopics = categories.reduce((sum, cat) => sum + categoryProgress[cat].total, 0);
-    const percentage = totalTopics > 0 ? Math.round((totalCompleted / totalTopics) * 100) : 0;
-    
-    return { completed: totalCompleted, total: totalTopics, percentage };
-  };
-
   // 🔥 NEW: Render Dynamic Form Fields
   const renderDynamicForm = () => {
     return (
@@ -415,15 +329,11 @@ const Reports = () => {
             }}
           >
             <option value="">เลือกหมวดงาน...</option>
-            {Object.keys(qcTopics).map(category => {
-              const progress = categoryProgress[category];
-              const progressText = progress ? ` (${progress.completed}/${progress.total})` : '';
-              return (
-                <option key={category} value={category}>
-                  {category}{progressText}
-                </option>
-              );
-            })}
+            {Object.keys(qcTopics).map(category => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
           </select>            
         </div>
 
@@ -459,7 +369,6 @@ const Reports = () => {
     );
   };
 
-  const overallProgress = getOverallProgress();
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
@@ -490,57 +399,6 @@ const Reports = () => {
             borderRadius: '4px'
           }}>
             กำลังโหลด fields สำหรับ {formData.category}...
-          </div>
-        )}
-
-        {/* 🔥 Overall Progress Summary */}
-        {isFieldsComplete() && Object.keys(categoryProgress).length > 0 && (
-          <div style={{ 
-            marginBottom: '20px',
-            padding: '15px',
-            backgroundColor: '#e3f2fd',
-            borderRadius: '6px',
-            border: '1px solid #1976d2'
-          }}>
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              marginBottom: '10px'
-            }}>
-              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1565c0' }}>
-                📊 สถานะรวม: {overallProgress.completed}/{overallProgress.total} หัวข้อ ({overallProgress.percentage}%)
-              </span>
-              <button
-                onClick={loadAllCategoryProgress}
-                disabled={isLoadingProgress}
-                style={{
-                  padding: '5px 10px',
-                  fontSize: '12px',
-                  backgroundColor: '#1976d2',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '3px',
-                  cursor: 'pointer',
-                  opacity: isLoadingProgress ? 0.6 : 1
-                }}
-              >
-                🔄 อัปเดต
-              </button>
-            </div>
-            <div style={{ 
-              height: '8px',
-              backgroundColor: '#bbdefb',
-              borderRadius: '4px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                height: '100%',
-                width: `${overallProgress.percentage}%`,
-                backgroundColor: overallProgress.percentage === 100 ? '#4caf50' : '#2196f3',
-                transition: 'width 0.3s ease'
-              }} />
-            </div>
           </div>
         )}
 
@@ -593,20 +451,22 @@ const Reports = () => {
         <div style={{ textAlign: 'center' }}>
           <button 
             onClick={generateReport}
-            disabled={isGenerating || !formData.category || !isFieldsComplete()}
+            disabled={isGenerating || !formData.category || !isFieldsComplete() || currentCategoryProgress.completed === 0}
             style={{
               padding: '12px 30px',
               fontSize: '16px',
-              backgroundColor: (isGenerating || !formData.category || !isFieldsComplete()) ? '#6c757d' : '#007bff',
+              backgroundColor: (isGenerating || !formData.category || !isFieldsComplete() || currentCategoryProgress.completed === 0) ? '#6c757d' : '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: (isGenerating || !formData.category || !isFieldsComplete()) ? 'not-allowed' : 'pointer',
-              opacity: (isGenerating || !formData.category || !isFieldsComplete()) ? 0.6 : 1,
+              cursor: (isGenerating || !formData.category || !isFieldsComplete() || currentCategoryProgress.completed === 0) ? 'not-allowed' : 'pointer',
+              opacity: (isGenerating || !formData.category || !isFieldsComplete() || currentCategoryProgress.completed === 0) ? 0.6 : 1,
               minWidth: '200px'
             }}
           >
-            {isGenerating ? '🔄 กำลังสร้างรายงาน...' : '📋 สร้างรายงาน PDF'}
+            {isGenerating ? '🔄 กำลังสร้างรายงาน...' : 
+            currentCategoryProgress.completed === 0 && currentCategoryProgress.total > 0 ? '📋 ไม่มีข้อมูลสำหรับสร้างรายงาน' :
+            '📋 สร้างรายงาน PDF'}
           </button>
         </div>
       </div>
@@ -623,8 +483,28 @@ const Reports = () => {
           <h4 style={{ color: '#495057', marginBottom: '15px', marginTop: 0 }}>
             📝 หัวข้อในหมวด "{formData.category}":
           </h4>
-          
-          {categoryProgress[formData.category] && (
+
+          {/* 🔥 NEW: Data Status Message */}
+          {dataStatusMessage && (
+            <div style={{ 
+              marginBottom: '15px',
+              padding: '12px',
+              backgroundColor: '#fff3cd',
+              borderRadius: '6px',
+              border: '1px solid #ffeaa7',
+              fontSize: '14px',
+              color: '#856404',
+              textAlign: 'center'
+            }}>
+              <span style={{ marginRight: '8px' }}>⚠️</span>
+              {dataStatusMessage}
+              <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>
+                💡 ลองตรวจสอบข้อมูลที่กรอก หรือถ่ายรูปสำหรับข้อมูลชุดนี้
+              </div>
+            </div>
+          )}
+
+          {currentCategoryProgress.total > 0 && (
             <div style={{ marginBottom: '15px' }}>
               <div style={{ 
                 display: 'flex', 
@@ -632,9 +512,10 @@ const Reports = () => {
                 alignItems: 'center',
                 marginBottom: '5px'
               }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1565c0' }}>
-                  ความครบถ้วน: {categoryProgress[formData.category].completed}/{categoryProgress[formData.category].total} ({categoryProgress[formData.category].percentage}%)
-                </span>
+              <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1565c0' }}>
+                ความครบถ้วน: {currentCategoryProgress.completed}/{currentCategoryProgress.total} ({currentCategoryProgress.percentage}%)
+                {isLoadingProgress && <span style={{ marginLeft: '8px', fontSize: '12px' }}>กำลังโหลด...</span>}
+              </span>
               </div>
               <div style={{ 
                 height: '6px',
@@ -644,8 +525,8 @@ const Reports = () => {
               }}>
                 <div style={{
                   height: '100%',
-                  width: `${categoryProgress[formData.category].percentage}%`,
-                  backgroundColor: categoryProgress[formData.category].percentage === 100 ? '#4caf50' : '#2196f3',
+                  width: `${currentCategoryProgress.percentage}%`,
+                  backgroundColor: currentCategoryProgress.percentage === 100 ? '#4caf50' : '#2196f3',
                   transition: 'width 0.3s ease'
                 }} />
               </div>
@@ -661,7 +542,7 @@ const Reports = () => {
             overflowY: 'auto'
           }}>
             {qcTopics[formData.category].map((topic, index) => {
-              const isCompleted = categoryProgress[formData.category]?.completedTopics.includes(topic);
+              const isCompleted = currentCategoryProgress.completedTopics.includes(topic);
               
               return (
                 <div key={index} style={{ 

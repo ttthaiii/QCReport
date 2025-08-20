@@ -363,8 +363,8 @@ async function logPhoto(photoData) {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:J', // ✅ เปลี่ยนเป็น 10 columns
-      valueInputOption: 'USER_ENTERED',
+      range: 'Master_Photos_Log!A:J', 
+      valueInputOption: 'RAW', // ✅ บังคับให้เป็น text ไม่ auto-format
       requestBody: { values }
     });
 
@@ -475,7 +475,7 @@ async function addFieldValue(fieldName, fieldValue, category) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEETS_ID,
         range: `Master_Field_Values!A${existingRowIndex}:F${existingRowIndex}`,
-        valueInputOption: 'USER_ENTERED',
+        valueInputOption: 'RAW',
         requestBody: {
           values: [[fieldName, trimmedValue, category, existingCount + 1, timestamp, rows[existingRowIndex - 1][5]]]
         }
@@ -486,7 +486,7 @@ async function addFieldValue(fieldName, fieldValue, category) {
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEETS_ID,
         range: 'Master_Field_Values!A:F',
-        valueInputOption: 'USER_ENTERED',
+        valueInputOption: 'RAW',
         requestBody: { values }
       });
     }
@@ -537,8 +537,16 @@ async function getFieldValues(fieldName, category) {
       if (b.count !== a.count) return b.count - a.count;
       return new Date(b.lastUsed) - new Date(a.lastUsed);
     });
-    
-    return values.map(v => v.value);
+
+    // ✅ Deduplicate แต่รักษาลำดับตาม count/usage
+    const seen = new Set();
+    const uniqueValues = values.filter(v => {
+      if (seen.has(v.value)) return false;
+      seen.add(v.value);
+      return true;
+    });
+
+    return uniqueValues.map(v => v.value);
     
   } catch (error) {
     console.error('Error getting field values:', error);
