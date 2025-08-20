@@ -290,7 +290,7 @@ const Reports = () => {
           .map(([key, value]) => `${key}: ${value}`)
           .join(', ');
         
-        alert(`✅ สร้างรายงาน Full Match สำเร็จ!\nไฟล์: ${response.data.filename}\n📋 ข้อมูล: ${fieldsDisplay}\n📸 จำนวนรูป: ${response.data.photoCount} รูป`);
+        alert(`✅ สร้างรายงาน Full Match สำเร็จ!\nไฟล์: ${response.data.filename}\n📋 ข้อมูล: ${fieldsDisplay}`);
       } else {
         throw new Error('Failed to generate report');
       }
@@ -418,7 +418,7 @@ const Reports = () => {
         )}
 
         {/* Data Summary */}
-        {!isLoadingMasterData && masterData.buildings.length > 0 && (
+        {/*{!isLoadingMasterData && masterData.buildings.length > 0 && (
           <div style={{ 
             marginBottom: '15px',
             padding: '10px',
@@ -429,7 +429,7 @@ const Reports = () => {
           }}>
             📊 ข้อมูลในระบบ: {masterData.buildings.length} อาคาร, {masterData.foundations.length} รายการ, {masterData.combinations.length} รายการรวม
           </div>
-        )}
+        )}*/}
 
         {/* Validation Warning */}
         {(!formData.category || !isFieldsComplete()) && (
@@ -606,7 +606,6 @@ const Reports = () => {
             )}
             
             <p><strong>หมวดงาน:</strong> {formData.category}</p>
-            <p><strong>จำนวนรูป:</strong> {generatedReport.photoCount} รูป</p>
             <p><strong>เวลาที่สร้าง:</strong> {generatedReport.sheetTimestamp?.timestamp}</p>
           </div>
           
