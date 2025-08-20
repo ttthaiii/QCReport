@@ -26,29 +26,45 @@ async function getQCTopics() {
     const rows = response.data.values || [];
     const topics = {};
     
+    console.log(`📊 Processing ${rows.length} rows from QC Topics sheet...`);
+    
     // จัดกลุ่มตาม mainCategory -> subCategory -> topics
-    rows.slice(1).forEach(row => { // skip header
-      if (row[0] && row[1] && row[2]) {
-        const mainCategory = row[0].trim();     // Column A: หมวดหลัก
-        const subCategory = row[1].trim();      // Column B: หมวดงาน  
-        const topic = row[2].trim();            // Column C: หัวข้อ
+    rows.slice(1).forEach((row, index) => { // skip header
+      if (row.length >= 3 && row[0] && row[1] && row[2]) {
+        const mainCategory = row[0].trim();     // Column A: หมวดหลัก (โครงสร้าง/สถาปัตย์)
+        const subCategory = row[1].trim();      // Column B: หมวดงาน (ฐานราก/เสา/ผนัง ฯลฯ)
+        const topic = row[2].trim();            // Column C: หัวข้อการตรวจ
         
+        // สร้าง nested structure
         if (!topics[mainCategory]) {
           topics[mainCategory] = {};
+          console.log(`📁 Created main category: ${mainCategory}`);
         }
         
         if (!topics[mainCategory][subCategory]) {
           topics[mainCategory][subCategory] = [];
+          console.log(`📂 Created sub category: ${mainCategory} > ${subCategory}`);
         }
         
         topics[mainCategory][subCategory].push(topic);
+        console.log(`📄 Added topic ${index}: ${mainCategory} > ${subCategory} > ${topic}`);
+      } else {
+        console.log(`⚠️ Skipped incomplete row ${index + 2}:`, row);
       }
     });
     
-    console.log('🔥 QC Topics structure:', Object.keys(topics));
+    // แสดงสรุปโครงสร้าง
+    console.log('🔥 QC Topics structure summary:');
+    Object.entries(topics).forEach(([mainCat, subCats]) => {
+      console.log(`  📁 ${mainCat}:`);
+      Object.entries(subCats).forEach(([subCat, topicList]) => {
+        console.log(`    📂 ${subCat}: ${topicList.length} topics`);
+      });
+    });
+    
     return topics;
   } catch (error) {
-    console.error('Error reading QC topics:', error);
+    console.error('❌ Error reading QC topics:', error);
     throw error;
   }
 }
@@ -245,6 +261,8 @@ async function getCompletedTopics(criteria) {
     const sheets = getSheetsClient();
     const { building, foundation, mainCategory, subCategory } = criteria;
     
+    console.log(`🔍 Getting completed topics for: ${mainCategory} > ${subCategory} (${building}-${foundation})`);
+    
     // ดึงข้อมูลจาก Master_Photos_Log
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
@@ -296,7 +314,7 @@ async function getCompletedTopicsFullMatch(criteria) {
     const sheets = getSheetsClient();
     const { building, foundation, mainCategory, subCategory, dynamicFields } = criteria;
     
-    console.log('🔍 Full Match search criteria:', {
+    console.log('🔍 Full Match search criteria (3-level):', {
       mainCategory,
       subCategory,
       dynamicFields
@@ -374,6 +392,8 @@ async function logPhoto(photoData) {
   try {
     const sheets = getSheetsClient();
     
+    console.log(`📝 Logging photo: ${photoData.mainCategory} > ${photoData.subCategory} > ${photoData.topic}`);
+    
     // สร้าง Unique ID
     const uniqueId = generateUniqueId();
     const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
@@ -386,13 +406,13 @@ async function logPhoto(photoData) {
       timestamp,                          // B: วันเวลา
       photoData.building,                 // C: อาคาร
       photoData.foundation,               // D: ฐานราก/เสาเบอร์/ชั้น
-      photoData.subCategory,              // E: หมวดงาน
-      photoData.topic,                    // F: หัวข้อ
+      photoData.subCategory,              // E: หมวดงาน (ฐานราก/เสา/ผนัง)
+      photoData.topic,                    // F: หัวข้อการตรวจ
       photoData.filename,                 // G: ไฟล์
       photoData.driveUrl || '',           // H: URL
       photoData.location || '',           // I: สถานที่
       dynamicFieldsJSON,                  // J: Dynamic Fields JSON
-      photoData.mainCategory || ''        // K: หมวดหลัก 🔥 NEW
+      photoData.mainCategory || ''        // K: หมวดหลัก (โครงสร้าง/สถาปัตย์)
     ]];
 
     await sheets.spreadsheets.values.append({
@@ -614,6 +634,8 @@ async function getFieldValues(fieldName, subCategory) {
 async function logReport(reportData) {
   try {
     const sheets = getSheetsClient();
+    
+    console.log(`📊 Logging report: ${reportData.mainCategory} > ${reportData.subCategory}`);
     
     // สร้าง Unique ID
     const uniqueId = generateUniqueId();

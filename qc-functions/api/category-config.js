@@ -11,8 +11,7 @@ async function getDynamicFields(subCategory) {
     if (subCategory === 'ฐานราก') {
       return {
         useExisting: true,
-        category: 'ฐานราก',
-        subCategory: 'ฐานราก', // 🔥 NEW: เพิ่ม subCategory
+        subCategory: 'ฐานราก',     // หมวดงาน
         fields: [
           { 
             name: 'อาคาร', 
@@ -82,8 +81,7 @@ async function getDynamicFields(subCategory) {
     
     return {
       useExisting: false,
-      category: subCategory,      // 🔥 For backward compatibility
-      subCategory: subCategory,   // 🔥 NEW: explicit subCategory
+      subCategory: subCategory,   // หมวดงาน (ฐานราก/เสา/ผนัง ฯลฯ)
       fields: fields
     };
     
@@ -100,8 +98,7 @@ async function getDynamicFields(subCategory) {
 function createDefaultFields(subCategory) {
   return {
     useExisting: false,
-    category: subCategory,      // 🔥 For backward compatibility
-    subCategory: subCategory,   // 🔥 NEW: explicit subCategory
+    subCategory: subCategory,   // หมวดงาน (ฐานราก/เสา/ผนัง ฯลฯ)
     fields: [
       {
         name: 'อาคาร',
@@ -145,7 +142,7 @@ async function getCategoryConfig(subCategory) {
 // 🔥 UPDATED: ดึงรายการหมวดงานทั้งหมดที่มี config (ตอนนี้เป็น sub categories)
 async function getAllCategories() {
   try {
-    console.log('Getting all configured sub categories');
+    console.log('Getting all configured sub categories (หมวดงาน)');
     
     const sheets = getSheetsClient();
     
@@ -189,7 +186,7 @@ async function createCategoryConfigSheet() {
   try {
     const sheets = getSheetsClient();
     
-    console.log('Creating Category_Config sheet...');
+    console.log('Creating Category_Config sheet for 3-level structure...');
     
     // เพิ่ม sheet ใหม่
     await sheets.spreadsheets.batchUpdate({
@@ -243,7 +240,6 @@ async function createCategoryConfigSheet() {
 function isDynamicCategory(subCategory) {
   return subCategory !== 'ฐานราก';
 }
-
 // 🔥 UPDATED: แปลง dynamic fields เป็น building/foundation สำหรับ Master data (ใช้ subCategory)
 function convertDynamicFieldsToMasterData(subCategory, dynamicFields) {
   if (!dynamicFields || typeof dynamicFields !== 'object') {
@@ -344,6 +340,7 @@ async function getMainCategories() {
 // ดึงรายการหมวดงานตามหมวดหลัก
 async function getSubCategoriesByMainCategory(mainCategory) {
   try {
+    console.log(`Getting sub categories for main category: ${mainCategory}`);
     return await getSheetsSubCategories(mainCategory);
   } catch (error) {
     console.error(`Error getting sub categories for "${mainCategory}":`, error);

@@ -3,8 +3,8 @@ import { addWatermark, formatThaiDateTime } from '../utils/watermark';
 import { api } from '../utils/api';
 
 const Camera = () => {
-  // Form States - เพิ่ม workType
-  const [qcTopics, setQcTopics] = useState({}); // 🔥 ตอนนี้เป็น nested object
+  // Form States - 3-level structure: mainCategory > subCategory > topics
+  const [qcTopics, setQcTopics] = useState({}); // 🔥 3-level nested object
   const [masterData, setMasterData] = useState({
     buildings: [],
     foundations: [],
@@ -12,8 +12,8 @@ const Camera = () => {
   });
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
   const [formData, setFormData] = useState({
-    mainCategory: '',
-    subCategory: ''
+    mainCategory: '',      // หมวดหลัก (โครงสร้าง/สถาปัตย์)
+    subCategory: ''        // หมวดงาน (ฐานราก/เสา/ผนัง ฯลฯ)
   });
 
   // Dynamic Fields States
@@ -46,10 +46,10 @@ const Camera = () => {
 
   // Load field values when workType, category, or fields change
   useEffect(() => {
-    if (formData.workType && formData.category && categoryFields.length > 0) {
-      loadFieldValues(formData.workType, formData.category, categoryFields);
+    if (formData.mainCategory && formData.subCategory && categoryFields.length > 0) {
+      loadFieldValues(formData.subCategory, categoryFields);
     }
-  }, [formData.workType, formData.category, categoryFields]);
+  }, [formData.mainCategory, formData.subCategory, categoryFields]);
 
   // Load data on mount
   useEffect(() => {
@@ -60,65 +60,66 @@ const Camera = () => {
 
   // Load category fields when workType AND category change
   useEffect(() => {
-    if (formData.workType && formData.category) {
-      loadCategoryFields(formData.workType, formData.category);
+    if (formData.subCategory) {
+      loadCategoryFields(formData.subCategory);
     } else {
       setCategoryFields([]);
       setDynamicFields({});
     }
-  }, [formData.workType, formData.category]);
+  }, [formData.subCategory]);
 
   // Load progress when dynamic fields and both workType & category are ready
   useEffect(() => {
-    if (formData.workType && formData.category && isFieldsComplete()) {
+    if (formData.mainCategory && formData.subCategory && isFieldsComplete()) {
       loadProgress();
     }
-  }, [formData.workType, formData.category, dynamicFields]);
+  }, [formData.mainCategory, formData.subCategory, dynamicFields]);
 
-  const loadFieldValues = async (workType, category, fields) => {
+  const loadFieldValues = async (subCategory, fields) => {
     try {
+      console.log(`📋 Loading field values for sub category: ${subCategory}`);
       const newFieldValues = {};
       
       for (const field of fields) {
-        const values = await api.getFieldValues(field.name, category);
+        const values = await api.getFieldValues(field.name, subCategory);
         newFieldValues[field.name] = values;
-        console.log(`Loaded ${values.length} values for ${field.name}:`, values);
+        console.log(`✅ Loaded ${values.length} values for ${field.name} in ${subCategory}`);
       }
       
       setFieldValues(newFieldValues);
     } catch (error) {
-      console.error('Error loading field values:', error);
+      console.error('❌ Error loading field values:', error);
     }
   };
 
   // 🔥 NEW: Load dynamic fields for selected category
-  const loadCategoryFields = async (workType, category) => {
+  const loadCategoryFields = async (subCategory) => {
     setIsLoadingFields(true);
     try {
-      console.log(`Loading fields for: ${workType} > ${category}`);
+      console.log(`📋 Loading fields for sub category: ${subCategory}`);
       
-      const response = await api.getDynamicFields(workType, category);
+      const response = await api.getDynamicFields(subCategory);
       if (response.success) {
         setCategoryFields(response.data.fields || []);
         
-        // Reset dynamic fields when workType/category changes
+        // Reset dynamic fields when subCategory changes
         const newDynamicFields = {};
         response.data.fields.forEach(field => {
           newDynamicFields[field.name] = '';
         });
         setDynamicFields(newDynamicFields);
         
-        console.log(`Loaded ${response.data.fields.length} fields for ${workType}>${category}:`, 
+        console.log(`✅ Loaded ${response.data.fields.length} fields for ${subCategory}:`, 
                    response.data.fields.map(f => f.name));
       }
     } catch (error) {
-      console.error('Error loading category fields:', error);
+      console.error('❌ Error loading category fields:', error);
       // Fallback: create default fields
       setCategoryFields([
         { name: 'อาคาร', type: 'combobox', required: true, placeholder: 'เลือกหรือพิมพ์อาคาร' },
-        { name: `${category}เบอร์`, type: 'combobox', required: true, placeholder: `เลือกหรือพิมพ์เลข${category}` }
+        { name: `${subCategory}เบอร์`, type: 'combobox', required: true, placeholder: `เลือกหรือพิมพ์เลข${subCategory}` }
       ]);
-      setDynamicFields({ 'อาคาร': '', [`${category}เบอร์`]: '' });
+      setDynamicFields({ 'อาคาร': '', [`${subCategory}เบอร์`]: '' });
     } finally {
       setIsLoadingFields(false);
     }
@@ -134,7 +135,7 @@ const Camera = () => {
 
   // 🔥 NEW: Check if required fields are complete
   const isFieldsComplete = () => {
-    if (!formData.workType || !formData.category || categoryFields.length === 0) return false;
+    if (!formData.mainCategory || !formData.subCategory || categoryFields.length === 0) return false;
     
     // Check that all required fields have values
     return categoryFields.every(field => {
@@ -221,8 +222,8 @@ const Camera = () => {
   };
 
   // 🔥 NEW: Convert dynamic fields to master data format
-  const convertDynamicFieldsToMasterData = (category, fields) => {
-    if (category === 'ฐานราก') {
+  const convertDynamicFieldsToMasterData = (subCategory, fields) => {
+    if (subCategory === 'ฐานราก') {
       return {
         building: fields['อาคาร'] || '',
         foundation: fields['ฐานรากเบอร์'] || ''
@@ -253,54 +254,59 @@ const Camera = () => {
 
   const loadQCTopics = async () => {
     try {
+      console.log('📊 Loading QC topics with 3-level structure...');
       const response = await api.getQCTopics();
       if (response.success) {
         setQcTopics(response.data);
         
-        // Set default selections from first available options
-        const workTypes = Object.keys(response.data);
-        if (workTypes.length > 0) {
-          const firstWorkType = workTypes[0];
-          const categories = Object.keys(response.data[firstWorkType] || {});
+        // Set default selections from first available options (3-level)
+        const mainCategories = Object.keys(response.data);
+        if (mainCategories.length > 0) {
+          const firstMainCategory = mainCategories[0];
+          const subCategories = Object.keys(response.data[firstMainCategory] || {});
           
           setFormData({
-            workType: firstWorkType,
-            category: categories.length > 0 ? categories[0] : ''
+            mainCategory: firstMainCategory,      // หมวดหลัก
+            subCategory: subCategories.length > 0 ? subCategories[0] : ''  // หมวดงาน
           });
+          
+          console.log(`✅ Set default: ${firstMainCategory} > ${subCategories[0] || 'none'}`);
         }
       }
     } catch (error) {
-      console.error('Error loading QC topics:', error);
+      console.error('❌ Error loading QC topics:', error);
       alert('ไม่สามารถโหลดหัวข้อการตรวจ QC ได้');
     }
   };
 
   const loadProgress = async () => {
-    if (!formData.workType || !formData.category || !isFieldsComplete()) {
+    if (!formData.mainCategory || !formData.subCategory || !isFieldsComplete()) {
       setCompletedTopics(new Set());
       return;
     }
     
     setIsLoadingProgress(true);
     try {
-      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      console.log(`📊 Loading progress for: ${formData.mainCategory} > ${formData.subCategory}`);
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.subCategory, dynamicFields);
       
       const response = await api.getCompletedTopicsFullMatch({
         building: masterDataFields.building,
         foundation: masterDataFields.foundation,
-        workType: formData.workType,     // เพิ่ม workType
-        category: formData.category,
+        mainCategory: formData.mainCategory,     // หมวดหลัก
+        subCategory: formData.subCategory,       // หมวดงาน
         dynamicFields: dynamicFields
       });
       
       if (response.success) {
         const completedTopicsArray = response.data.completedTopics || [];
         setCompletedTopics(new Set(completedTopicsArray));
+        console.log(`✅ Progress loaded: ${completedTopicsArray.length} completed topics`);
       } else {
         setCompletedTopics(new Set());
       }
     } catch (error) {
-      console.error('Error loading progress:', error);
+      console.error('❌ Error loading progress:', error);
       setCompletedTopics(new Set());
     } finally {
       setIsLoadingProgress(false);
@@ -429,8 +435,8 @@ const Camera = () => {
 
   // 🔥 UPDATED: One-Click Topic Selection with Auto-Add
   const selectTopicAndOpenCamera = async (topic) => {
-    if (!formData.category || !isFieldsComplete()) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+    if (!formData.mainCategory || !formData.subCategory || !isFieldsComplete()) {
+      alert('กรุณาเลือกหมวดหลัก หมวดงาน และกรอกข้อมูลให้ครบถ้วน');
       return;
     }
 
@@ -445,6 +451,7 @@ const Camera = () => {
       const confirmed = window.confirm(
         `⚠️ การถ่ายรูปซ้ำ\n\n` +
         `หัวข้อ: "${topic}"\n` +
+        `หมวด: ${formData.mainCategory} > ${formData.subCategory}\n` +
         `${photoCount > 0 ? `มีรูปอยู่แล้ว: ${photoCount} รูป` : 'มีข้อมูลในระบบแล้ว'}${serverStatus}\n\n` +
         `❓ ต้องการถ่ายรูปใหม่หรือไม่?\n\n` +
         `✅ ตกลง = ถ่ายใหม่ (รูปใหม่จะใช้ในรายงาน)\n` +
@@ -459,7 +466,7 @@ const Camera = () => {
       console.log(`User confirmed duplicate photo for topic: ${topic}`);
     }
 
-    console.log(`Selected topic: ${topic}, checking dynamic fields:`, dynamicFields);
+    console.log(`Selected topic: ${topic} in ${formData.mainCategory} > ${formData.subCategory}`, dynamicFields);
     
     // Auto-add ข้อมูลใหม่ (ถ้ามี) ก่อนถ่ายรูป
     await autoAddNewData();
@@ -496,7 +503,7 @@ const Camera = () => {
       // Process image: resize + crop + watermark
       const processedBlob = await processImageForQC(file);
       
-      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.subCategory, dynamicFields);
       
       const photoData = {
         id: Date.now() + Math.random(),
@@ -504,7 +511,8 @@ const Camera = () => {
         url: URL.createObjectURL(processedBlob),
         building: masterDataFields.building,
         foundation: masterDataFields.foundation,
-        category: formData.category,
+        mainCategory: formData.mainCategory,    // หมวดหลัก
+        subCategory: formData.subCategory,      // หมวดงาน
         topic: selectedTopic,
         location: currentLocation,
         timestamp: new Date().toISOString(),
@@ -652,10 +660,11 @@ const Camera = () => {
           const result = await api.uploadPhoto(photo.blob, {
             building: photo.building,
             foundation: photo.foundation,
-            category: photo.category,
+            mainCategory: photo.mainCategory,    // หมวดหลัก
+            subCategory: photo.subCategory,      // หมวดงาน  
             topic: photo.topic,
             location: photo.location,
-            dynamicFields: photo.dynamicFields // 🔥 NEW: ส่ง dynamic fields ไปด้วย
+            dynamicFields: photo.dynamicFields
           });
           
           if (result.success) {
@@ -730,7 +739,11 @@ const Camera = () => {
 
   // Progress stats
   const getProgressStats = () => {
-    const currentTopics = qcTopics[formData.category] || [];
+    if (!formData.mainCategory || !formData.subCategory) {
+      return { completed: 0, total: 0, percentage: 0 };
+    }
+    
+    const currentTopics = qcTopics[formData.mainCategory]?.[formData.subCategory] || [];
     const completed = currentTopics.filter(topic => completedTopics.has(topic)).length;
     const total = currentTopics.length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -740,11 +753,11 @@ const Camera = () => {
 
   // ฟังก์ชันเรียงรูปตามลำดับหัวข้อสำหรับการแสดงผล
   const getSortedPhotosForDisplay = () => {
-    if (!formData.category || !qcTopics[formData.category]) {
+    if (!formData.mainCategory || !formData.subCategory || !qcTopics[formData.mainCategory]?.[formData.subCategory]) {
       return capturedPhotos;
     }
     
-    const orderedTopics = qcTopics[formData.category];
+    const orderedTopics = qcTopics[formData.mainCategory][formData.subCategory];
     const photosByTopic = new Map();
     
     // จัดกลุ่มรูปตามหัวข้อ
@@ -778,14 +791,21 @@ const Camera = () => {
       <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           
-          {/* Category Select */}
+          {/* Main Category Select */}
           <div>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              หมวดงาน:
+              หมวดหลัก:
             </label>
             <select 
-              value={formData.category}
-              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+              value={formData.mainCategory}
+              onChange={(e) => {
+                const newMainCategory = e.target.value;
+                setFormData(prev => ({ 
+                  ...prev, 
+                  mainCategory: newMainCategory,
+                  subCategory: '' // Reset sub category when main category changes
+                }));
+              }}
               style={{ 
                 width: '100%', 
                 padding: '8px', 
@@ -795,10 +815,36 @@ const Camera = () => {
               }}
               disabled={captureMode}
             >
-              <option value="">เลือกหมวดงาน...</option>
-              {Object.keys(qcTopics).map(category => (
-                <option key={category} value={category}>{category}</option>
+              <option value="">เลือกหมวดหลัก...</option>
+              {Object.keys(qcTopics).map(mainCategory => (
+                <option key={mainCategory} value={mainCategory}>{mainCategory}</option>
               ))}
+            </select>
+          </div>
+
+          {/* Sub Category Select */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              หมวดงาน:
+            </label>
+            <select 
+              value={formData.subCategory}
+              onChange={(e) => setFormData(prev => ({ ...prev, subCategory: e.target.value }))}
+              style={{ 
+                width: '100%', 
+                padding: '8px', 
+                fontSize: '14px',
+                border: '1px solid #ced4da',
+                borderRadius: '4px'
+              }}
+              disabled={captureMode || !formData.mainCategory}
+            >
+              <option value="">เลือกหมวดงาน...</option>
+              {formData.mainCategory && qcTopics[formData.mainCategory] && 
+                Object.keys(qcTopics[formData.mainCategory]).map(subCategory => (
+                  <option key={subCategory} value={subCategory}>{subCategory}</option>
+                ))
+              }
             </select>
           </div>
 
@@ -840,7 +886,7 @@ const Camera = () => {
             fontSize: '14px', 
             color: '#666'
           }}>
-            กำลังโหลด fields สำหรับ {formData.category}...
+            {`กำลังโหลด fields สำหรับ ${formData.mainCategory} > ${formData.subCategory}...`}
           </div>
         )}
         
@@ -941,7 +987,7 @@ const Camera = () => {
       {!captureMode ? (
         // Topic Selection Mode
         <>
-          {formData.category && isFieldsComplete() && qcTopics[formData.category] ? (
+          {formData.mainCategory && formData.subCategory && isFieldsComplete() && qcTopics[formData.mainCategory]?.[formData.subCategory] ? (
             <div style={{ 
               marginBottom: '20px', 
               padding: '15px', 
@@ -954,11 +1000,20 @@ const Camera = () => {
               </h3>
               
               <div style={{ 
+                marginBottom: '10px', 
+                fontSize: '14px', 
+                color: '#666',
+                fontWeight: 'bold'
+              }}>
+                📁 {formData.mainCategory} → 📂 {formData.subCategory}
+              </div>
+              
+              <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
                 gap: '10px' 
               }}>
-                {qcTopics[formData.category].map((topic, index) => {
+                {qcTopics[formData.mainCategory][formData.subCategory].map((topic, index) => {
                   const isCompleted = completedTopics.has(topic);
                   const photosForThisTopic = sortedPhotosForDisplay.filter(p => p.topic === topic);
                   
@@ -1033,7 +1088,10 @@ const Camera = () => {
               color: '#856404',
               border: '1px solid #ffeaa7'
             }}>
-              ⚠️ กรุณาเลือกหมวดงานและกรอกข้อมูลให้ครบถ้วนเพื่อแสดงรายการหัวข้อ
+              ⚠️ กรุณาเลือกหมวดหลัก → หมวดงาน และกรอกข้อมูลให้ครบถ้วนเพื่อแสดงรายการหัวข้อ
+              {!formData.mainCategory && <div style={{ fontSize: '12px', marginTop: '5px' }}>🔸 ยังไม่ได้เลือกหมวดหลัก</div>}
+              {formData.mainCategory && !formData.subCategory && <div style={{ fontSize: '12px', marginTop: '5px' }}>🔸 ยังไม่ได้เลือกหมวดงาน</div>}
+              {formData.mainCategory && formData.subCategory && !isFieldsComplete() && <div style={{ fontSize: '12px', marginTop: '5px' }}>🔸 ยังไม่ได้กรอกข้อมูลให้ครบ</div>}
             </div>
           )}
         </>
@@ -1187,7 +1245,7 @@ const Camera = () => {
                   onClick={() => {
                     const newWindow = window.open('', '_blank');
                     
-                    // 🔥 NEW: แสดง dynamic fields ใน popup
+                    // 🔥 UPDATED: แสดง dynamic fields และ 3-level structure ใน popup
                     const fieldsDisplay = Object.entries(photo.dynamicFields || {})
                       .filter(([key, value]) => value && value.trim())
                       .map(([key, value]) => `${key}: ${value}`)
@@ -1201,7 +1259,8 @@ const Camera = () => {
                           <img src="${photo.url}" style="max-width:100%; height:auto;" />
                           <p style="margin-top:10px; font-size:14px; color:#666;">
                             ${fieldsDisplay}<br/>
-                            หมวดงาน: ${photo.category}<br/>
+                            หมวดหลัก: ${photo.mainCategory || 'N/A'}<br/>
+                            หมวดงาน: ${photo.subCategory || photo.category || 'N/A'}<br/>
                             ${new Date(photo.timestamp).toLocaleString('th-TH')}
                           </p>
                         </body>

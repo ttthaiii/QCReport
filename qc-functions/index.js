@@ -42,7 +42,7 @@ app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
     timestamp: new Date().toISOString(),
-    message: "QC Report API is running with MainCategory + SubCategory support" 
+    message: "QC Report API is running with 3-Level Structure (MainCategory > SubCategory > Topics)" 
   });
 });
 
@@ -72,10 +72,25 @@ app.post("/migrate-system", async (req, res) => {
 // 🔥 UPDATED: Get QC Topics (now supports 3-level structure)
 app.get("/qc-topics", async (req, res) => {
   try {
+    console.log('📊 Fetching QC topics with 3-level structure...');
     const topics = await getQCTopics();
+    
+    // Log structure summary
+    const mainCategoryCount = Object.keys(topics).length;
+    let totalSubCategories = 0;
+    let totalTopics = 0;
+    
+    Object.values(topics).forEach(subCats => {
+      totalSubCategories += Object.keys(subCats).length;
+      Object.values(subCats).forEach(topicList => {
+        totalTopics += topicList.length;
+      });
+    });
+    
+    console.log(`✅ Loaded: ${mainCategoryCount} main categories, ${totalSubCategories} sub categories, ${totalTopics} topics`);
     res.json({ success: true, data: topics });
   } catch (error) {
-    console.error('Error fetching QC topics:', error);
+    console.error('❌ Error fetching QC topics:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
@@ -135,12 +150,12 @@ app.get("/topics/:mainCategory/:subCategory", async (req, res) => {
 // Get dynamic fields for a sub category
 async function getDynamicFieldsHandler(req, res) {
   try {
-    const { subCategory } = req.params; // 🔥 เปลี่ยนจาก category เป็น subCategory
+    const { subCategory } = req.params;
     
     if (!subCategory) {
       return res.status(400).json({
         success: false,
-        error: 'Sub category is required'
+        error: 'Sub category (หมวดงาน) is required'
       });
     }
     
@@ -148,10 +163,11 @@ async function getDynamicFieldsHandler(req, res) {
     
     const result = await getDynamicFields(decodeURIComponent(subCategory));
     
+    console.log(`✅ Dynamic fields loaded for ${decodeURIComponent(subCategory)}: ${result.fields?.length || 0} fields`);
     res.json({ success: true, data: result });
     
   } catch (error) {
-    console.error('Error getting dynamic fields:', error);
+    console.error('❌ Error getting dynamic fields:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
@@ -162,12 +178,12 @@ async function getDynamicFieldsHandler(req, res) {
 // Validate dynamic fields
 async function validateDynamicFieldsHandler(req, res) {
   try {
-    const { subCategory, dynamicFields } = req.body; // 🔥 เปลี่ยนจาก category
+    const { subCategory, dynamicFields } = req.body;
     
     if (!subCategory || !dynamicFields) {
       return res.status(400).json({
         success: false,
-        error: 'Sub category and dynamicFields are required'
+        error: 'Sub category (หมวดงาน) and dynamicFields are required'
       });
     }
     
@@ -196,12 +212,12 @@ async function validateDynamicFieldsHandler(req, res) {
 // Add master data with dynamic fields
 async function addMasterDataDynamicHandler(req, res) {
   try {
-    const { subCategory, dynamicFields } = req.body; // 🔥 เปลี่ยนจาก category
+    const { subCategory, dynamicFields } = req.body;
     
     if (!subCategory || !dynamicFields) {
       return res.status(400).json({
         success: false,
-        error: 'Sub category and dynamicFields are required'
+        error: 'Sub category (หมวดงาน) and dynamicFields are required'
       });
     }
     
@@ -241,16 +257,16 @@ async function addMasterDataDynamicHandler(req, res) {
 // 🔥 UPDATED: Get completed topics with dynamic fields (now with mainCategory + subCategory)
 async function getCompletedTopicsDynamicHandler(req, res) {
   try {
-    const { mainCategory, subCategory, dynamicFields } = req.body; // 🔥 เพิ่ม mainCategory
+    const { mainCategory, subCategory, dynamicFields } = req.body;
     
     if (!mainCategory || !subCategory || !dynamicFields) {
       return res.status(400).json({
         success: false,
-        error: 'Main category, sub category and dynamicFields are required'
+        error: 'Main category (หมวดหลัก), sub category (หมวดงาน) and dynamicFields are required'
       });
     }
     
-    console.log(`API: Getting completed topics for ${mainCategory}/${subCategory}:`, dynamicFields);
+    console.log(`API: Getting completed topics for ${mainCategory} > ${subCategory}:`, dynamicFields);
     
     // Convert dynamic fields to building+foundation format
     const masterData = convertDynamicFieldsToMasterData(subCategory, dynamicFields);
@@ -341,16 +357,16 @@ app.post("/master-data", async (req, res) => {
 // 🔥 UPDATED: Get Completed Topics (now with mainCategory + subCategory)
 app.post("/completed-topics", async (req, res) => {
   try {
-    const { building, foundation, mainCategory, subCategory } = req.body; // 🔥 เพิ่ม mainCategory, เปลี่ยน category เป็น subCategory
+    const { building, foundation, mainCategory, subCategory } = req.body;
     
     if (!building || !foundation || !mainCategory || !subCategory) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: building, foundation, mainCategory, subCategory'
+        error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน)'
       });
     }
     
-    console.log(`Getting completed topics for: ${building}-${foundation}-${mainCategory}/${subCategory}`);
+    console.log(`Getting completed topics for: ${building}-${foundation} in ${mainCategory} > ${subCategory}`);
     
     const result = await getCompletedTopics({ 
       building, 
@@ -373,18 +389,18 @@ app.post("/completed-topics", async (req, res) => {
 // 🔥 UPDATED: Generate PDF Report - รองรับ MainCategory + SubCategory + Dynamic Fields
 app.post("/generate-report", async (req, res) => {
   try {
-    console.log('🎯 Optimized Puppeteer PDF generation request received');
+    console.log('🎯 PDF generation request with 3-level structure received');
     
-    const { building, foundation, mainCategory, subCategory, dynamicFields } = req.body; // 🔥 เพิ่ม mainCategory, เปลี่ยน category
+    const { building, foundation, mainCategory, subCategory, dynamicFields } = req.body;
     
     if (!building || !foundation || !mainCategory || !subCategory) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: building, foundation, mainCategory, subCategory'
+        error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน)'
       });
     }
     
-    console.log(`🚀 Generating PDF for: ${building}-${foundation}-${mainCategory}/${subCategory}`);
+    console.log(`🚀 Generating PDF for: ${building}-${foundation} in ${mainCategory} > ${subCategory}`);
     if (dynamicFields) {
       console.log('📋 Dynamic fields:', dynamicFields);
     }
@@ -476,9 +492,9 @@ async function getPhotosForReport(building, foundation, mainCategory, subCategor
     const sheets = getSheetsClient();
     const SHEETS_ID = '1ez_Dox16jf9lr5TEsLL5BEOfKZDNGkVD31YSBtx3Qa8';
     
-    console.log(`🔍 Full Match photo search:`, {
-      mainCategory,
-      subCategory,
+    console.log(`🔍 Photo search for 3-level structure:`, {
+      path: `${mainCategory} > ${subCategory}`,
+      criteria: { building, foundation },
       dynamicFields
     });
     
@@ -657,9 +673,9 @@ function extractFileIdFromUrl(url) {
 // 🔥 UPDATED: Upload photo with base64 (รองรับ MainCategory + SubCategory)
 app.post("/upload-photo-base64", async (req, res) => {
   try {
-    console.log('Base64 upload request received');
+    console.log('Base64 upload request received for 3-level structure');
     
-    const { photo, building, foundation, mainCategory, subCategory, topic, location, dynamicFields } = req.body; // 🔥 เพิ่ม mainCategory, เปลี่ยน category
+    const { photo, building, foundation, mainCategory, subCategory, topic, location, dynamicFields } = req.body;
     
     if (!photo) {
       return res.status(400).json({
@@ -671,11 +687,11 @@ app.post("/upload-photo-base64", async (req, res) => {
     if (!building || !foundation || !mainCategory || !subCategory || !topic) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: building, foundation, mainCategory, subCategory, topic'
+        error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน), topic'
       });
     }
     
-    console.log(`Processing base64 upload for: ${building}-${foundation}-${mainCategory}/${subCategory}-${topic}`);
+    console.log(`Processing upload for: ${mainCategory} > ${subCategory} > ${topic} (${building}-${foundation})`);
     if (dynamicFields) {
       console.log('📋 Dynamic fields:', dynamicFields);
     }
@@ -765,16 +781,16 @@ app.post("/upload-photo", (req, res) => {
         size: req.file.size
       });
       
-      const { building, foundation, mainCategory, subCategory, topic, location, dynamicFields } = req.body; // 🔥 เพิ่ม mainCategory
+      const { building, foundation, mainCategory, subCategory, topic, location, dynamicFields } = req.body;
       
       if (!building || !foundation || !mainCategory || !subCategory || !topic) {
         return res.status(400).json({
           success: false,
-          error: 'Missing required fields: building, foundation, mainCategory, subCategory, topic'
+          error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน), topic'
         });
       }
       
-      console.log(`Processing upload for: ${building}-${foundation}-${mainCategory}/${subCategory}-${topic}`);
+      console.log(`Processing upload for: ${mainCategory} > ${subCategory} > ${topic} (${building}-${foundation})`);
       
       // Generate filename
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -861,16 +877,16 @@ app.post("/log-report", async (req, res) => {
 // 🔥 UPDATED: Full Match completed topics (รองรับ MainCategory + SubCategory)
 app.post("/completed-topics-full-match", async (req, res) => {
   try {
-    const { building, foundation, mainCategory, subCategory, dynamicFields } = req.body; // 🔥 เพิ่ม mainCategory
+    const { building, foundation, mainCategory, subCategory, dynamicFields } = req.body;
     
     if (!building || !foundation || !mainCategory || !subCategory) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: building, foundation, mainCategory, subCategory'
+        error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน)'
       });
     }
     
-    console.log(`Getting completed topics with Full Match: ${building}-${foundation}-${mainCategory}/${subCategory}`);
+    console.log(`Getting completed topics with Full Match for: ${mainCategory} > ${subCategory} (${building}-${foundation})`);
     console.log('Dynamic fields:', dynamicFields);
     
     const result = await getCompletedTopicsFullMatch({ 
@@ -895,9 +911,9 @@ app.post("/completed-topics-full-match", async (req, res) => {
 // 🔥 UPDATED: Get field values for datalist (รองรับ subCategory)
 app.get("/field-values/:fieldName/:subCategory", async (req, res) => {
   try {
-    const { fieldName, subCategory } = req.params; // 🔥 เปลี่ยนจาก category เป็น subCategory
+    const { fieldName, subCategory } = req.params;
     
-    console.log(`Getting field values: ${fieldName} for ${subCategory}`);
+    console.log(`Getting field values: ${fieldName} for sub category ${subCategory}`);
     
     const values = await getFieldValues(decodeURIComponent(fieldName), decodeURIComponent(subCategory));
     
