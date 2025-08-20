@@ -405,27 +405,16 @@ app.post("/generate-report", async (req, res) => {
       console.log('📋 Dynamic fields:', dynamicFields);
     }
     
-    // ดึงรูปภาพจาก Google Sheets ที่ตรงกับเงื่อนไข
-    const photos = await getPhotosForReport(building, foundation, mainCategory, subCategory, dynamicFields);
-    
-    if (!photos || photos.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No photos found for the specified criteria'
-      });
-    }
-    
-    console.log(`📸 Found ${photos.length} photos for PDF`);
     
     // 🔥 สร้าง PDF ด้วย Optimized Puppeteer + Dynamic Fields + MainCategory
     const reportData = {
       building,
       foundation,
-      mainCategory,        // 🔥 NEW
-      subCategory,         // 🔥 เปลี่ยนจาก category
-      photos,
+      category: subCategory,        // 🔥 เพิ่มสำหรับ backward compatibility
+      mainCategory,
+      subCategory,
       projectName: 'Escent Nakhon si',
-      dynamicFields: dynamicFields || null // 🔥 NEW: ส่ง dynamic fields ไป PDF
+      dynamicFields: dynamicFields || null
     };
     
     const pdfBuffer = await generateOptimizedPDF(reportData);
@@ -453,11 +442,11 @@ app.post("/generate-report", async (req, res) => {
     const reportData2 = {
       building,
       foundation,
-      mainCategory,      // 🔥 NEW
-      subCategory,       // 🔥 เปลี่ยนจาก category
+      mainCategory,
+      subCategory,
       filename: driveResult.filename,
       driveUrl: driveResult.driveUrl,
-      photoCount: photos.length
+      photoCount: 0 // จะได้จาก PDF generation result
     };
     
     const sheetResult = await logReport(reportData2);
@@ -468,7 +457,7 @@ app.post("/generate-report", async (req, res) => {
       success: true,
       data: {
         ...driveResult,
-        photoCount: photos.length,
+        photoCount: 0,
         sheetTimestamp: sheetResult,
         generatedWith: 'Optimized-Puppeteer-MainCategory-SubCategory',
         mainCategory: mainCategory,        // 🔥 NEW

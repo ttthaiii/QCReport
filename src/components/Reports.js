@@ -49,10 +49,13 @@ const Reports = () => {
     }
   }, [formData.subCategory]);
 
-  // 🔥 Load progress when dynamic fields and category are ready
+  // 🔥 FIX: Load progress when dynamic fields and category are ready
   useEffect(() => {
     if (formData.mainCategory && formData.subCategory && isFieldsComplete() && Object.keys(qcTopics).length > 0) {
       loadCurrentCategoryProgress();
+    } else {
+      // Reset progress when conditions are not met
+      setCurrentCategoryProgress({ completed: 0, total: 0, percentage: 0, completedTopics: [] });
     }
   }, [formData.mainCategory, formData.subCategory, dynamicFields, qcTopics]);
 
@@ -217,7 +220,7 @@ const Reports = () => {
     }
   };
 
-  // 🔥 NEW: Load progress สำหรับหมวดปัจจุบันเท่านั้น
+  // 🔥 FIX: Load progress สำหรับหมวดปัจจุบันเท่านั้น
   const loadCurrentCategoryProgress = async () => {
     if (!formData.mainCategory || !formData.subCategory || !isFieldsComplete()) {
       setCurrentCategoryProgress({ completed: 0, total: 0, percentage: 0, completedTopics: [] });
@@ -228,9 +231,12 @@ const Reports = () => {
     try {
       console.log(`📊 Loading progress for: ${formData.mainCategory} > ${formData.subCategory}`);
       
+      // 🔥 FIX: ใช้ convertDynamicFieldsToMasterData เพื่อแปลง dynamic fields
+      const masterDataFields = api.convertDynamicFieldsToMasterData(formData.subCategory, dynamicFields);
+      
       const response = await api.getCompletedTopicsFullMatch({
-        building: dynamicFields['อาคาร'] || '',
-        foundation: Object.values(dynamicFields)[1] || '',
+        building: masterDataFields.building,
+        foundation: masterDataFields.foundation,
         mainCategory: formData.mainCategory,     // หมวดหลัก
         subCategory: formData.subCategory,       // หมวดงาน
         dynamicFields: dynamicFields
@@ -251,10 +257,18 @@ const Reports = () => {
         });
         
         console.log(`✅ Progress: ${completed}/${total} (${percentage}%)`);
+        
+        // 🔥 FIX: ตั้งค่า dataStatusMessage หากไม่มีข้อมูล
+        if (completed === 0 && total > 0) {
+          setDataStatusMessage('ไม่พบข้อมูลรูปภาพสำหรับข้อมูลที่เลือก');
+        } else {
+          setDataStatusMessage(null);
+        }
       }
     } catch (error) {
       console.error('❌ Error loading progress:', error);
       setCurrentCategoryProgress({ completed: 0, total: 0, percentage: 0, completedTopics: [] });
+      setDataStatusMessage('ไม่สามารถโหลดข้อมูลความครบถ้วนได้');
     } finally {
       setIsLoadingProgress(false);
     }
@@ -266,19 +280,30 @@ const Reports = () => {
       return;
     }
 
+    // 🔥 FIX: เช็คว่ามีข้อมูลรูปภาพหรือไม่
+    if (currentCategoryProgress.completed === 0) {
+      alert('ไม่พบข้อมูลรูปภาพสำหรับข้อมูลที่เลือก กรุณาตรวจสอบข้อมูลที่กรอกหรือถ่ายรูปก่อน');
+      return;
+    }
+
     setIsGenerating(true);
     
     try {
       console.log(`📊 Generating report for: ${formData.mainCategory} > ${formData.subCategory}`);
       
+      // 🔥 FIX: ใช้ convertDynamicFieldsToMasterData เพื่อแปลง dynamic fields
+      const masterDataFields = api.convertDynamicFieldsToMasterData(formData.subCategory, dynamicFields);
+      
       const reportData = {
         mainCategory: formData.mainCategory,     // หมวดหลัก
         subCategory: formData.subCategory,       // หมวดงาน
-        building: dynamicFields['อาคาร'] || '',
-        foundation: Object.values(dynamicFields)[1] || '',
+        building: masterDataFields.building,
+        foundation: masterDataFields.foundation,
         dynamicFields: dynamicFields,
         useFullMatch: true
       };
+      
+      console.log('🔧 Report data being sent:', reportData);
       
       const response = await api.generateReport(reportData);
       
@@ -290,7 +315,7 @@ const Reports = () => {
           .map(([key, value]) => `${key}: ${value}`)
           .join(', ');
         
-        alert(`✅ สร้างรายงาน 3-level สำเร็จ!\nไฟล์: ${response.data.filename}\nข้อมูล: ${formData.mainCategory} > ${formData.subCategory}\n${fieldsDisplay}`);
+        alert(`✅ สร้างรายงาน สำเร็จ!\nไฟล์: ${response.data.filename}\nข้อมูล: ${formData.mainCategory} > ${formData.subCategory}\n${fieldsDisplay}\n`);
       }
     } catch (error) {
       console.error('❌ Error generating report:', error);
@@ -401,10 +426,57 @@ const Reports = () => {
     );
   };
 
-
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>📋 สร้างรายงาน QC</h1>
+      
+      {/* 🔥 FIX: แสดง Progress Bar ที่หน้า Reports */}
+      {formData.mainCategory && formData.subCategory && isFieldsComplete() && (
+        <div style={{ 
+          marginBottom: '20px', 
+          padding: '15px', 
+          backgroundColor: '#e3f2fd', 
+          borderRadius: '8px',
+          border: '1px solid #1976d2'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1565c0' }}>
+              📊 ความครบถ้วน: {currentCategoryProgress.completed}/{currentCategoryProgress.total} ({currentCategoryProgress.percentage}%)
+            </span>
+            {isLoadingProgress && (
+              <span style={{ fontSize: '12px', color: '#666' }}>กำลังโหลด...</span>
+            )}
+          </div>
+          
+          {currentCategoryProgress.total > 0 && (
+            <div style={{ 
+              height: '8px',
+              backgroundColor: '#bbdefb',
+              borderRadius: '4px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${currentCategoryProgress.percentage}%`,
+                backgroundColor: currentCategoryProgress.percentage === 100 ? '#4caf50' : '#2196f3',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          )}
+          
+          <div style={{ fontSize: '12px', marginTop: '8px', color: '#1565c0' }}>
+            หมวด: {`${formData.mainCategory} > ${formData.subCategory}`}
+            {Object.keys(dynamicFields).length > 0 && (
+              <span style={{ marginLeft: '10px' }}>
+                | {Object.entries(dynamicFields)
+                  .filter(([key, value]) => value && value.trim())
+                  .map(([key, value]) => `${key}: ${value}`)
+                  .join(', ')}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       
       {/* Report Generation Form */}
       <div style={{ 
@@ -449,20 +521,6 @@ const Reports = () => {
           </div>
         )}
 
-        {/* Data Summary */}
-        {/*{!isLoadingMasterData && masterData.buildings.length > 0 && (
-          <div style={{ 
-            marginBottom: '15px',
-            padding: '10px',
-            backgroundColor: '#e3f2fd',
-            borderRadius: '4px',
-            fontSize: '14px',
-            color: '#1565c0'
-          }}>
-            📊 ข้อมูลในระบบ: {masterData.buildings.length} อาคาร, {masterData.foundations.length} รายการ, {masterData.combinations.length} รายการรวม
-          </div>
-        )}*/}
-
         {/* Validation Warning */}
         {(!formData.mainCategory || !formData.subCategory || !isFieldsComplete()) && (
           <div style={{
@@ -479,6 +537,26 @@ const Reports = () => {
             {!formData.mainCategory && <div style={{ fontSize: '12px', marginTop: '5px' }}>🔸 ยังไม่ได้เลือกหมวดหลัก</div>}
             {formData.mainCategory && !formData.subCategory && <div style={{ fontSize: '12px', marginTop: '5px' }}>🔸 ยังไม่ได้เลือกหมวดงาน</div>}
             {formData.mainCategory && formData.subCategory && !isFieldsComplete() && <div style={{ fontSize: '12px', marginTop: '5px' }}>🔸 ยังไม่ได้กรอกข้อมูลให้ครบ</div>}
+          </div>
+        )}
+
+        {/* 🔥 FIX: Data Status Message - แสดงเมื่อไม่มีข้อมูล */}
+        {dataStatusMessage && (
+          <div style={{ 
+            marginBottom: '15px',
+            padding: '12px',
+            backgroundColor: '#f8d7da',
+            borderRadius: '6px',
+            border: '1px solid #f5c6cb',
+            fontSize: '14px',
+            color: '#721c24',
+            textAlign: 'center'
+          }}>
+            <span style={{ marginRight: '8px' }}>⚠️</span>
+            {dataStatusMessage}
+            <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>
+              💡 ลองตรวจสอบข้อมูลที่กรอก หรือถ่ายรูปสำหรับข้อมูลชุดนี้ก่อน
+            </div>
           </div>
         )}
 
@@ -507,7 +585,7 @@ const Reports = () => {
       </div>
 
       {/* Topics Preview for Selected Category */}
-      {formData.category && qcTopics[formData.category] && (
+      {formData.mainCategory && formData.subCategory && qcTopics[formData.mainCategory]?.[formData.subCategory] && (
         <div style={{ 
           marginBottom: '20px',
           padding: '20px',
@@ -518,101 +596,52 @@ const Reports = () => {
           <h4 style={{ color: '#495057', marginBottom: '15px', marginTop: 0 }}>
             {`📝 หัวข้อในหมวด "${formData.mainCategory} > ${formData.subCategory}":`}
           </h4>
-
-          {/* 🔥 UPDATED: Data Status Message */}
-          {dataStatusMessage && (
-            <div style={{ 
-              marginBottom: '15px',
-              padding: '12px',
-              backgroundColor: '#fff3cd',
-              borderRadius: '6px',
-              border: '1px solid #ffeaa7',
-              fontSize: '14px',
-              color: '#856404',
-              textAlign: 'center'
-            }}>
-              <span style={{ marginRight: '8px' }}>⚠️</span>
-              {dataStatusMessage}
-              <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>
-                💡 ลองตรวจสอบข้อมูลที่กรอก หรือถ่ายรูปสำหรับข้อมูลชุดนี้
-              </div>
-            </div>
-          )}
-
-          {currentCategoryProgress.total > 0 && (
-            <div style={{ marginBottom: '15px' }}>
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginBottom: '5px'
-              }}>
-              <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1565c0' }}>
-                ความครบถ้วน: {currentCategoryProgress.completed}/{currentCategoryProgress.total} ({currentCategoryProgress.percentage}%)
-                {isLoadingProgress && <span style={{ marginLeft: '8px', fontSize: '12px' }}>กำลังโหลด...</span>}
-              </span>
-              </div>
-              <div style={{ 
-                height: '6px',
-                backgroundColor: '#bbdefb',
-                borderRadius: '3px',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  height: '100%',
-                  width: `${currentCategoryProgress.percentage}%`,
-                  backgroundColor: currentCategoryProgress.percentage === 100 ? '#4caf50' : '#2196f3',
-                  transition: 'width 0.3s ease'
-                }} />
-              </div>
-            </div>
-          )}
           
-            <div style={{ 
-              backgroundColor: 'white',
-              padding: '15px',
-              borderRadius: '4px',
-              border: '1px solid #dee2e6',
-              maxHeight: '200px',
-              overflowY: 'auto'
-            }}>
-              {qcTopics[formData.mainCategory][formData.subCategory].map((topic, index) => {
-                const isCompleted = currentCategoryProgress.completedTopics.includes(topic);
-                
-                return (
-                  <div key={index} style={{ 
-                    padding: '5px 0',
-                    borderBottom: index < qcTopics[formData.mainCategory][formData.subCategory].length - 1 ? '1px solid #e9ecef' : 'none',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
+          <div style={{ 
+            backgroundColor: 'white',
+            padding: '15px',
+            borderRadius: '4px',
+            border: '1px solid #dee2e6',
+            maxHeight: '200px',
+            overflowY: 'auto'
+          }}>
+            {qcTopics[formData.mainCategory][formData.subCategory].map((topic, index) => {
+              const isCompleted = currentCategoryProgress.completedTopics.includes(topic);
+              
+              return (
+                <div key={index} style={{ 
+                  padding: '5px 0',
+                  borderBottom: index < qcTopics[formData.mainCategory][formData.subCategory].length - 1 ? '1px solid #e9ecef' : 'none',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{ 
+                    color: isCompleted ? '#28a745' : '#6c757d',
+                    fontSize: '12px',
+                    minWidth: '16px'
                   }}>
-                    <span style={{ 
-                      color: isCompleted ? '#28a745' : '#6c757d',
-                      fontSize: '12px',
-                      minWidth: '16px'
-                    }}>
-                      {isCompleted ? '✅' : '⏳'}
-                    </span>
-                    <span style={{ 
-                      color: isCompleted ? '#28a745' : '#495057',
-                      fontWeight: isCompleted ? '500' : 'normal'
-                    }}>
-                      {index + 1}. {topic}
-                    </span>
-                  </div>
-                );
-              })}
-              <div style={{ 
-                marginTop: '10px', 
-                fontSize: '12px', 
-                color: '#6c757d',
-                fontStyle: 'italic'
-              }}>
-                รวม {qcTopics[formData.mainCategory][formData.subCategory].length} หัวข้อ
-              </div>
+                    {isCompleted ? '✅' : '⏳'}
+                  </span>
+                  <span style={{ 
+                    color: isCompleted ? '#28a745' : '#495057',
+                    fontWeight: isCompleted ? '500' : 'normal'
+                  }}>
+                    {index + 1}. {topic}
+                  </span>
+                </div>
+              );
+            })}
+            <div style={{ 
+              marginTop: '10px', 
+              fontSize: '12px', 
+              color: '#6c757d',
+              fontStyle: 'italic'
+            }}>
+              รวม {qcTopics[formData.mainCategory][formData.subCategory].length} หัวข้อ (เสร็จแล้ว {currentCategoryProgress.completed} หัวข้อ)
             </div>
+          </div>
         </div>
       )}
 
@@ -642,6 +671,7 @@ const Reports = () => {
             
             <p><strong>หมวดหลัก:</strong> {formData.mainCategory}</p>
             <p><strong>หมวดงาน:</strong> {formData.subCategory}</p>
+            {/*<p><strong>จำนวนรูป:</strong> {generatedReport.photoCount || 0} รูป</p>*/}
             <p><strong>เวลาที่สร้าง:</strong> {generatedReport.sheetTimestamp?.timestamp}</p>
           </div>
           

@@ -6,9 +6,6 @@ const { getDriveClient } = require('./google-auth');
 const { getSheetsClient } = require('./google-auth'); // ✅ เก็บแค่นี้
 const { Readable } = require('stream');
 
-// 🔥 Import เฉพาะ isFullMatch จาก sheets.js
-const { isFullMatch } = require('../api/sheets');
-
 const SHEETS_ID = '1ez_Dox16jf9lr5TEsLL5BEOfKZDNGkVD31YSBtx3Qa8';
 
 // Cache browser instance เพื่อลด cold start
@@ -60,6 +57,46 @@ async function getBrowser() {
   }
 }
 
+// 🔥 เพิ่มฟังก์ชันนี้ในไฟล์ optimized-puppeteer-generator.js
+function isFullMatch(criteria, rowData) {
+  try {
+    // ตรวจสอบ category/subCategory
+    const categoryMatch = rowData.category === criteria.category;
+    
+    if (!categoryMatch) return false;
+    
+    // ถ้าไม่มี dynamicFields ให้ใช้การเช็คแบบ building + foundation
+    if (!criteria.dynamicFields || Object.keys(criteria.dynamicFields).length === 0) {
+      return rowData.building === criteria.building && 
+             rowData.foundation === criteria.foundation;
+    }
+    
+    // ถ้ามี dynamicFields ให้เช็ค Full Match
+    if (!rowData.dynamicFieldsJSON) return false;
+    
+    try {
+      const rowDynamicFields = JSON.parse(rowData.dynamicFieldsJSON);
+      
+      // เช็คทุก field ที่มีค่า
+      for (const [fieldName, fieldValue] of Object.entries(criteria.dynamicFields)) {
+        if (fieldValue && fieldValue.trim()) {
+          const rowFieldValue = rowDynamicFields[fieldName];
+          if (!rowFieldValue || rowFieldValue.trim() !== fieldValue.trim()) {
+            return false;
+          }
+        }
+      }
+      
+      return true;
+    } catch (parseError) {
+      return false;
+    }
+  } catch (error) {
+    console.error('Error in isFullMatch:', error);
+    return false;
+  }
+}
+
 // 🔥 NEW: ฟังก์ชันดึงลำดับหัวข้อ QC จาก Google Sheets
 async function getQCTopicsOrder(category) {
   try {
@@ -68,7 +105,7 @@ async function getQCTopicsOrder(category) {
     const sheets = getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:B',
+      range: 'หัวข้อการตรวจ QC!A:C',
     });
     
     const rows = response.data.values || [];
@@ -76,12 +113,13 @@ async function getQCTopicsOrder(category) {
     
     // กรองเฉพาะหัวข้อของหมวดงานที่ต้องการ และเรียงตามลำดับในชีท
     rows.slice(1).forEach(row => { // skip header
-      if (row[0] && row[1]) {
-        const rowCategory = row[0].trim();
-        const topic = row[1].trim();
+      if (row[0] && row[1] && row[2]) {  // ต้องมีครบ 3 คอลัมน์
+        const mainCategory = row[0].trim();     // คอลัมน์ A = โครงสร้าง
+        const subCategory = row[1].trim();      // คอลัมน์ B = เสา
+        const topic = row[2].trim();            // คอลัมน์ C = หัวข้อ
         
-        if (rowCategory === category) {
-          orderedTopics.push(topic);
+        if (subCategory === category) {         // เปลี่ยนจาก row[0] เป็น row[1]
+          orderedTopics.push(topic);            // เปลี่ยนจาก row[1] เป็น row[2]
         }
       }
     });
@@ -165,14 +203,13 @@ async function createFullLayoutPhotos(photos, category) {
 function createOptimizedHTML(reportData) {
   const { photos, projectName, category, dynamicFields, building, foundation } = reportData;
   
-  // แบ่งหน้าปกติ (6 รูปต่อหน้า) แต่ไม่เติมช่องว่าง
+  // 🔥 แบ่งรูปเป็น 6 รูปต่อหน้า (3 แถว แถวละ 2 รูป) - ไม่เติมช่องว่าง
   const photosPerPage = 6;
   const pages = [];
   
   for (let i = 0; i < photos.length; i += photosPerPage) {
     const pagePhotos = photos.slice(i, i + photosPerPage);
-    // ลบการเติมช่องว่าง - แสดงเฉพาะรูปที่มี
-    pages.push(pagePhotos);
+    pages.push(pagePhotos); // ไม่เติมช่องว่าง แสดงเฉพาะรูปที่มี
   }
 
   const pageHTML = pages.map((pagePhotos, pageIndex) => `
@@ -377,12 +414,20 @@ function create4FieldHeader(fields, category, projectName, currentDate, pageNumb
 
 // 🔥 UPDATED: Photos Grid - แสดงชื่อหัวข้อจริงจาก Google Sheets
 function createPhotosGrid(photos, pageIndex) {
-  // คำนวณจำนวนแถวที่ต้องการ (2 รูปต่อแถว)
-  const rowCount = Math.ceil(photos.length / 2);
+  // เติม placeholder เพื่อให้รูปคี่ไม่อยู่ตรงกลาง
+  const adjustedPhotos = [...photos];
+  if (adjustedPhotos.length % 2 === 1) {
+    adjustedPhotos.push({
+      isPlaceholder: true,
+      topic: '',
+      imageBase64: null,
+      isEmpty: true // flag พิเศษสำหรับ empty placeholder
+    });
+  }
   
   const rows = [];
-  for (let i = 0; i < photos.length; i += 2) {
-    rows.push(photos.slice(i, i + 2));
+  for (let i = 0; i < adjustedPhotos.length; i += 2) {
+    rows.push(adjustedPhotos.slice(i, i + 2));
   }
   
   const rowsHTML = rows.map((rowPhotos, rowIndex) => {
@@ -557,9 +602,11 @@ function getInlineCSS() {
       
       .info-grid-3 .info-item,
       .info-grid-4 .info-item {
-        font-size: 9px;
-        margin-bottom: 2px;
+        font-size: 10px; /* เพิ่มจาก 9px */
+        margin-bottom: 3px; /* เพิ่มจาก 2px */
       }
+
+
       
       .label {
         font-weight: bold;
@@ -571,8 +618,7 @@ function getInlineCSS() {
       
       .info-grid-3 .label,
       .info-grid-4 .label {
-        min-width: 40px;
-        font-size: 9px;
+        font-size: 10px; /* เพิ่มจาก 9px */
       }
       
       .value {
@@ -594,19 +640,20 @@ function getInlineCSS() {
       
       .photo-row {
         display: flex;
-        height: 250px;  /* กำหนดความสูงคงที่แทน flex: 1 */
-        margin-bottom: 5px;
+        justify-content: flex-start;  /* จัดซ้ายแทนกึ่งกลาง */
       }
       
       .photo-row:last-child {
         margin-bottom: 0;
       }
       
+      .photo-frame.empty-placeholder {
+        visibility: hidden; /* ซ่อนแต่ยังคงที่ว่างไว้ */
+      }
+
       .photo-frame {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        margin: 0 3px;
+        flex: 0 0 calc(50% - 6px); /* กำหนดขนาดคงที่ */
+        max-width: calc(50% - 6px);
       }
       
       .photo-frame:first-child {
@@ -709,59 +756,105 @@ async function getLatestPhotosForReport(reportCriteria) {
     const sheets = getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:J'
+      range: 'Master_Photos_Log!A:K'
     });
     
     const rows = response.data.values || [];
     const photosByTopic = new Map();
     
+    console.log(`📊 Found ${rows.length} total rows in sheet`);
+    
     // ประมวลผลแต่ละ row
     rows.slice(1).forEach((row, rowIndex) => {
       if (row.length >= 6) {
-        const [id, timestamp, building, foundation, category, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
+        const [id, timestamp, building, foundation, category, topic, filename, driveUrl, location, dynamicFieldsJSON, mainCategory] = row;
         
-        // สร้าง rowData สำหรับ Full Match check
-        const rowData = {
-          building: building,
-          foundation: foundation,
-          category: category,
-          dynamicFieldsJSON: dynamicFieldsJSON
+        // 🔥 เช็ค category ก่อน (รองรับทั้งโครงสร้างใหม่และเก่า)
+        const categoryMatch = category === reportCriteria.category;
+        
+        if (!categoryMatch) {
+          console.log(`❌ Category mismatch for row ${rowIndex + 2}: expected "${reportCriteria.category}", got "${category}"`);
+          return; // skip row นี้
+        }
+        
+        console.log(`✅ Category match for row ${rowIndex + 2}: ${category}`);
+        
+        // 🔥 เช็ค dynamic fields (Full Match)
+        if (reportCriteria.dynamicFields && Object.keys(reportCriteria.dynamicFields).length > 0) {
+          // ถ้ามี dynamic fields ต้องเช็ค Full Match
+          if (!dynamicFieldsJSON) {
+            console.log(`⚠️ Row ${rowIndex + 2}: No dynamic fields data, skipping`);
+            return; // skip ข้อมูลเก่าที่ไม่มี dynamic fields
+          }
+          
+          try {
+            const rowDynamicFields = JSON.parse(dynamicFieldsJSON);
+            
+            // ✅ Full Match: ตรวจสอบทุก field ที่มีค่า
+            let isMatch = true;
+            for (const [fieldName, fieldValue] of Object.entries(reportCriteria.dynamicFields)) {
+              if (fieldValue && fieldValue.trim()) {
+                const rowFieldValue = rowDynamicFields[fieldName];
+                if (!rowFieldValue || rowFieldValue.trim() !== fieldValue.trim()) {
+                  console.log(`❌ Field mismatch for ${fieldName}: expected "${fieldValue}", got "${rowFieldValue}"`);
+                  isMatch = false;
+                  break;
+                }
+              }
+            }
+            
+            if (!isMatch) {
+              console.log(`❌ Dynamic fields mismatch for row ${rowIndex + 2}`);
+              return; // skip row นี้
+            }
+            
+            console.log(`✅ Full Match found for row ${rowIndex + 2}: ${topic}`);
+            
+          } catch (parseError) {
+            console.log(`⚠️ Row ${rowIndex + 2}: Cannot parse dynamic fields, skipping`);
+            return;
+          }
+        } else {
+          // ถ้าไม่มี dynamic fields ให้เช็คแบบ building + foundation
+          if (building !== reportCriteria.building || foundation !== reportCriteria.foundation) {
+            console.log(`❌ Building/Foundation mismatch for row ${rowIndex + 2}: expected "${reportCriteria.building}-${reportCriteria.foundation}", got "${building}-${foundation}"`);
+            return; // skip row นี้
+          }
+          
+          console.log(`✅ Building/Foundation match for row ${rowIndex + 2}: ${building}-${foundation}`);
+        }
+        
+        // ✅ Row นี้ผ่านการเช็คแล้ว - เก็บข้อมูลรูป
+        const photoData = {
+          topic: topic,
+          timestamp: timestamp,
+          filename: filename,
+          driveUrl: driveUrl,
+          location: location || '',
+          imageBase64: null,
+          id: id,
+          rowIndex: rowIndex + 2 // เก็บ row index สำหรับ debug
         };
         
-        // ✅ ใช้ Full Match เพื่อความแม่นยำ
-        if (isFullMatch(reportCriteria, rowData)) {
+        // 🔥 จัดการรูปซ้ำ - เก็บรูปล่าสุด
+        if (!photosByTopic.has(topic)) {
+          console.log(`➕ First photo for topic "${topic}": ${timestamp}`);
+          photosByTopic.set(topic, photoData);
+        } else {
+          const existing = photosByTopic.get(topic);
+          const shouldReplace = isNewerPhoto(photoData, existing);
           
-          const photoData = {
-            topic: topic,
-            timestamp: timestamp,
-            filename: filename,
-            driveUrl: driveUrl,
-            location: location || '',
-            imageBase64: null,
-            id: id,
-            rowIndex: rowIndex + 2 // เก็บ row index สำหรับ debug
-          };
-          
-          // 🔥 ปรับปรุงการจัดการรูปซ้ำ
-          if (!photosByTopic.has(topic)) {
-            console.log(`➕ First photo for topic "${topic}": ${timestamp}`);
+          if (shouldReplace) {
+            console.log(`🔄 Replacing photo for topic "${topic}":`, {
+              old: `${existing.timestamp} (row ${existing.rowIndex})`,
+              new: `${timestamp} (row ${photoData.rowIndex})`
+            });
             photosByTopic.set(topic, photoData);
           } else {
-            const existing = photosByTopic.get(topic);
-            const shouldReplace = isNewerPhoto(photoData, existing);
-            
-            if (shouldReplace) {
-              console.log(`🔄 Replacing photo for topic "${topic}":`, {
-                old: `${existing.timestamp} (row ${existing.rowIndex})`,
-                new: `${timestamp} (row ${photoData.rowIndex})`
-              });
-              photosByTopic.set(topic, photoData);
-            } else {
-              console.log(`⏩ Keeping existing photo for topic "${topic}":`, {
-                keeping: `${existing.timestamp} (row ${existing.rowIndex})`,
-                skipping: `${timestamp} (row ${photoData.rowIndex})`
-              });
-            }
+            console.log(`⏩ Keeping existing photo for topic "${topic}":`, {
+              keeping: `${existing.timestamp} (row ${existing.rowIndex})`,
+              skipping: `${timestamp} (row ${photoData.rowIndex})`
+            });
           }
         }
       }
@@ -1084,21 +1177,9 @@ async function generateOptimizedPDF(reportData) {
   let page = null;
   
   try {
-    console.log('🎯 Starting Optimized PDF generation with LATEST PHOTOS only...');
+    console.log('🎯 Starting Optimized PDF generation...');
     
-    // 🔥 Test Drive access first
-    const driveAccessOk = await testDriveAccess();
-    if (!driveAccessOk) {
-      console.log('⚠️ Drive access issues detected, continuing anyway...');
-    }
-    
-    console.log(`📊 Report data:`, {
-      category: reportData.category,
-      dynamicFields: reportData.dynamicFields,
-      useFullMatch: reportData.useFullMatch
-    });
-    
-    // 🔥 ใช้ getLatestPhotosForReport แทน getPhotosForReport
+    // 🔥 ใช้ getLatestPhotosForReport เพื่อหารูปล่าสุด
     const latestPhotos = await getLatestPhotosForReport({
       building: reportData.building,
       foundation: reportData.foundation,
@@ -1106,41 +1187,36 @@ async function generateOptimizedPDF(reportData) {
       dynamicFields: reportData.dynamicFields
     });
     
-    console.log(`✅ Using LATEST photos only: ${latestPhotos.length} photos`);
+    console.log(`✅ Found ${latestPhotos.length} latest photos`);
     
-    // Log photo details
-    latestPhotos.forEach((photo, index) => {
-      console.log(`📷 Photo ${index + 1}: "${photo.topic}" - ${photo.imageBase64 ? 'Image loaded' : 'No image'}`);
-    });
-    
-    // 🔥 สร้าง Full Layout รวมทั้งรูปที่ถ่ายและ placeholder
+    // สร้าง Full Layout รวมทั้งรูปที่ถ่ายและ placeholder
     const fullLayoutPhotos = await createFullLayoutPhotos(latestPhotos, reportData.category);
-    
-    // ใช้ fullLayoutPhotos แทน reportData.photos
+
+    // แล้วค่อยแบ่งหน้า fullLayoutPhotos (ที่มี placeholder แล้ว)
     const updatedReportData = {
       ...reportData,
-      photos: fullLayoutPhotos
+      photos: fullLayoutPhotos  // ใช้ photos ที่มี placeholder
     };
     
-    console.log(`✅ Using full layout: ${fullLayoutPhotos.length} items (latest photos + placeholders)`);
+    console.log(`✅ Created full layout: ${fullLayoutPhotos.length} items`);
     
     const html = createOptimizedHTML(updatedReportData);
-    console.log('📄 HTML template created with latest photos only');
+    console.log('📄 HTML template created');
     
     browser = await getBrowser();
     page = await browser.newPage();
     
-    // ตั้งค่า viewport และ performance
+    // ตั้งค่า viewport
     await page.setViewport({ 
       width: 1200, 
       height: 800, 
-      deviceScaleFactor: 2  // สำหรับ high-DPI
+      deviceScaleFactor: 2
     });
     
-    // ปิด JavaScript และ animations เพื่อประสิทธิภาพ
+    // ปิด JavaScript เพื่อประสิทธิภาพ
     await page.setJavaScriptEnabled(false);
     
-    // โหลด HTML พร้อม timeout ที่เหมาะสม
+    // โหลด HTML
     await page.setContent(html, { 
       waitUntil: ['domcontentloaded'],
       timeout: 45000
@@ -1148,7 +1224,7 @@ async function generateOptimizedPDF(reportData) {
     
     console.log('🌐 HTML content loaded');
     
-    // รอให้รูปโหลดเสร็จ (ถ้ามี)
+    // รอสักครู่ให้รูปโหลดเสร็จ
     await page.waitForTimeout(2000);
     
     // สร้าง PDF
@@ -1165,15 +1241,15 @@ async function generateOptimizedPDF(reportData) {
       timeout: 60000
     });
     
-    console.log(`✅ Optimized PDF generated with LATEST PHOTOS only! Size: ${pdfBuffer.length} bytes`);
+    console.log(`✅ PDF generated! Size: ${pdfBuffer.length} bytes`);
     
-    // ปิด page แต่เก็บ browser ไว้ reuse
+    // ปิด page
     await page.close();
     
     return pdfBuffer;
     
   } catch (error) {
-    console.error('❌ Error in Optimized PDF generation:', error);
+    console.error('❌ Error generating PDF:', error);
     
     // Cleanup
     if (page) {
