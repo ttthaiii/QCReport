@@ -14,13 +14,13 @@ function generateUniqueId() {
   return `${timestamp}-${random}`;
 }
 
-// 🔥 NEW: อ่านข้อมูลหัวข้อการตรวจ QC แบบโครงสร้างใหม่ (3 columns)
+// 🔥 UPDATED: อ่านข้อมูลหัวข้อการตรวจ QC แบบ 3 columns (MainCategory -> SubCategory -> Topics)
 async function getQCTopics() {
   try {
     const sheets = getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:C', // 🔥 เปลี่ยนจาก A:B เป็น A:C
+      range: 'หัวข้อการตรวจ QC!A:C', // 🔥 3 columns: A=หมวดหลัก, B=หมวดงาน, C=หัวข้อ
     });
     
     const rows = response.data.values || [];
@@ -45,56 +45,10 @@ async function getQCTopics() {
       }
     });
     
-    console.log('🔥 NEW QC Topics structure:', Object.keys(topics));
+    console.log('🔥 QC Topics structure:', Object.keys(topics));
     return topics;
   } catch (error) {
     console.error('Error reading QC topics:', error);
-    
-    // 🔥 Fallback: ถ้ายังเป็นโครงสร้างเก่า ให้อ่านแบบเก่าและแปลง
-    try {
-      console.log('📦 Fallback: trying old structure...');
-      return await getQCTopicsLegacy();
-    } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
-      throw error;
-    }
-  }
-}
-
-// 🔥 NEW: Fallback สำหรับอ่านข้อมูลแบบโครงสร้างเก่า (2 columns)
-async function getQCTopicsLegacy() {
-  try {
-    const sheets = getSheetsClient();
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:B',
-    });
-    
-    const rows = response.data.values || [];
-    const legacyTopics = {};
-    
-    // อ่านแบบเก่า (2 columns)
-    rows.slice(1).forEach(row => {
-      if (row[0] && row[1]) {
-        const category = row[0].trim();
-        const topic = row[1].trim();
-        
-        if (!legacyTopics[category]) {
-          legacyTopics[category] = [];
-        }
-        legacyTopics[category].push(topic);
-      }
-    });
-    
-    // แปลงเป็นโครงสร้างใหม่ (สมมติว่าทั้งหมดเป็น "โครงสร้าง")
-    const newStructure = {
-      'โครงสร้าง': legacyTopics
-    };
-    
-    console.log('📦 Converted legacy structure to new structure');
-    return newStructure;
-  } catch (error) {
-    console.error('Error reading legacy QC topics:', error);
     throw error;
   }
 }
@@ -285,7 +239,7 @@ async function addMasterData(building, foundation) {
   }
 }
 
-// 🔥 UPDATED: ดึงรายการรูปที่ถ่ายแล้ว (สำหรับ progress tracking) - รองรับโครงสร้างใหม่
+// 🔥 UPDATED: ดึงรายการรูปที่ถ่ายแล้ว (รองรับ mainCategory + subCategory)
 async function getCompletedTopics(criteria) {
   try {
     const sheets = getSheetsClient();
@@ -294,7 +248,7 @@ async function getCompletedTopics(criteria) {
     // ดึงข้อมูลจาก Master_Photos_Log
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:K' // 🔥 เพิ่ม column K สำหรับ mainCategory
+      range: 'Master_Photos_Log!A:K' // Column K สำหรับ mainCategory
     });
     
     const rows = response.data.values || [];
@@ -336,54 +290,7 @@ async function getCompletedTopics(criteria) {
   }
 }
 
-
-// 🔥 UPDATED: ฟังก์ชันเปรียบเทียบแบบ Full Match - รองรับโครงสร้างใหม่
-function isFullMatch(searchCriteria, rowData) {
-  const { building, foundation, mainCategory, subCategory, dynamicFields } = searchCriteria;
-  const { building: rowBuilding, foundation: rowFoundation, mainCategory: rowMainCategory, subCategory: rowSubCategory, dynamicFieldsJSON } = rowData;
-  
-  // ตรวจสอบ basic fields ก่อน
-  if (building !== rowBuilding || foundation !== rowFoundation) {
-    return false;
-  }
-  
-  // 🔥 ตรวจสอบ category แบบใหม่
-  const categoryMatch = rowMainCategory 
-    ? (rowMainCategory === mainCategory && rowSubCategory === subCategory) // โครงสร้างใหม่
-    : (rowSubCategory === subCategory); // backward compatibility
-  
-  if (!categoryMatch) {
-    return false;
-  }
-  
-  // ถ้าไม่มี dynamic fields (legacy mode) ให้ match basic fields อย่างเดียว
-  if (!dynamicFields || Object.keys(dynamicFields).length === 0) {
-    return true;
-  }
-  
-  // ถ้ามี dynamic fields ให้เปรียบเทียบทุก field ที่มีค่า
-  try {
-    const rowDynamicFields = dynamicFieldsJSON ? JSON.parse(dynamicFieldsJSON) : {};
-    
-    // เปรียบเทียบทุก field ใน dynamicFields ที่มีค่า
-    for (const [fieldName, fieldValue] of Object.entries(dynamicFields)) {
-      if (fieldValue && fieldValue.trim()) { // เฉพาะ field ที่มีค่า
-        const rowFieldValue = rowDynamicFields[fieldName];
-        if (!rowFieldValue || rowFieldValue.trim() !== fieldValue.trim()) {
-          return false;
-        }
-      }
-    }
-    
-    return true;
-    
-  } catch (parseError) {
-    console.log('Error parsing dynamic fields JSON, using basic match');
-    return true; // fallback เป็น basic match
-  }
-}
-
-// 🔥 UPDATED: ดึงรายการรูปที่ถ่ายแล้วแบบ Full Match - รองรับโครงสร้างใหม่
+// 🔥 UPDATED: ดึงรายการรูปที่ถ่ายแล้วแบบ Full Match (รองรับ mainCategory + subCategory)
 async function getCompletedTopicsFullMatch(criteria) {
   try {
     const sheets = getSheetsClient();
@@ -397,7 +304,7 @@ async function getCompletedTopicsFullMatch(criteria) {
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:K' // 🔥 เพิ่ม column K
+      range: 'Master_Photos_Log!A:K'
     });
     
     const rows = response.data.values || [];
@@ -471,7 +378,7 @@ async function logPhoto(photoData) {
     const uniqueId = generateUniqueId();
     const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
     
-    // 🔥 NEW: แปลง dynamic fields เป็น JSON string
+    // 🔥 แปลง dynamic fields เป็น JSON string
     const dynamicFieldsJSON = photoData.dynamicFields ? JSON.stringify(photoData.dynamicFields) : '';
 
     const values = [[
@@ -479,7 +386,7 @@ async function logPhoto(photoData) {
       timestamp,                          // B: วันเวลา
       photoData.building,                 // C: อาคาร
       photoData.foundation,               // D: ฐานราก/เสาเบอร์/ชั้น
-      photoData.subCategory,              // E: หมวดงาน (เก่า: category)
+      photoData.subCategory,              // E: หมวดงาน
       photoData.topic,                    // F: หัวข้อ
       photoData.filename,                 // G: ไฟล์
       photoData.driveUrl || '',           // H: URL
@@ -490,12 +397,12 @@ async function logPhoto(photoData) {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:K',     // 🔥 เปลี่ยนจาก J เป็น K
+      range: 'Master_Photos_Log!A:K',
       valueInputOption: 'RAW',
       requestBody: { values }
     });
 
-    // 🔥 NEW: เพิ่ม field values สำหรับ datalist
+    // 🔥 เพิ่ม field values สำหรับ datalist
     if (photoData.dynamicFields) {
       await addFieldValuesFromPhoto(photoData.dynamicFields, photoData.subCategory);
     }
@@ -508,7 +415,7 @@ async function logPhoto(photoData) {
   }
 }
 
-// 🔥 NEW: เพิ่ม field values จากการถ่ายรูป
+// 🔥 เพิ่ม field values จากการถ่ายรูป
 async function addFieldValuesFromPhoto(dynamicFields, subCategory) {
   if (!dynamicFields || typeof dynamicFields !== 'object') return;
   
@@ -524,7 +431,7 @@ async function addFieldValuesFromPhoto(dynamicFields, subCategory) {
   }
 }
 
-// 🔥 NEW: สร้าง Master_Field_Values Sheet
+// 🔥 สร้าง Master_Field_Values Sheet
 async function createFieldValuesSheet() {
   try {
     const sheets = getSheetsClient();
@@ -569,7 +476,7 @@ async function createFieldValuesSheet() {
   }
 }
 
-// 🔥 UPDATED: เพิ่ม/อัปเดต field value สำหรับ datalist - รองรับ subCategory
+// 🔥 เพิ่ม/อัปเดต field value สำหรับ datalist
 async function addFieldValue(fieldName, fieldValue, subCategory) {
   if (!fieldValue || !fieldValue.trim()) return;
   
@@ -625,7 +532,7 @@ async function addFieldValue(fieldName, fieldValue, subCategory) {
   }
 }
 
-// 🔥 UPDATED: ดึง field values สำหรับ datalist - รองรับ subCategory
+// 🔥 ดึง field values สำหรับ datalist
 async function getFieldValues(fieldName, subCategory) {
   try {
     const sheets = getSheetsClient();
@@ -647,7 +554,6 @@ async function getFieldValues(fieldName, subCategory) {
         
         console.log(`📋 Checking row: field="${rowFieldName}", value="${rowFieldValue}", subCategory="${rowSubCategory}"`);
         
-        // 🔥 แก้ไขเงื่อนไขการกรอง
         let shouldInclude = false;
         
         if (rowFieldName === fieldName) {
@@ -671,7 +577,7 @@ async function getFieldValues(fieldName, subCategory) {
             value: rowFieldValue.trim(),
             count: parseInt(count || 1),
             lastUsed: lastUsed,
-            subCategory: rowSubCategory // เก็บไว้เพื่อ debug
+            subCategory: rowSubCategory
           });
         }
       }
@@ -683,7 +589,7 @@ async function getFieldValues(fieldName, subCategory) {
       return new Date(b.lastUsed) - new Date(a.lastUsed);
     });
 
-    // ✅ Deduplicate แต่รักษาลำดับตาม count/usage
+    // Deduplicate แต่รักษาลำดับตาม count/usage
     const seen = new Set();
     const uniqueValues = values.filter(v => {
       if (seen.has(v.value)) return false;
@@ -714,7 +620,7 @@ async function logReport(reportData) {
     const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
     
     const values = [[
-      uniqueId,                      // A: ID (ใหม่)
+      uniqueId,                      // A: ID
       timestamp,                     // B: วันเวลา
       reportData.building,           // C: อาคาร
       reportData.foundation,         // D: ฐานราก
@@ -727,7 +633,7 @@ async function logReport(reportData) {
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Final_Reports_Log!A:I', // 🔥 เปลี่ยนจาก H เป็น I
+      range: 'Final_Reports_Log!A:I',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
@@ -744,201 +650,12 @@ async function logReport(reportData) {
   }
 }
 
-// 🔥 NEW: Data Migration Functions
-
-// Migrate QC Topics sheet from 2-column to 3-column structure
-async function migrateQCTopicsSheet() {
-  try {
-    const sheets = getSheetsClient();
-    
-    console.log('🔧 Starting QC Topics sheet migration...');
-    
-    // 1. อ่านข้อมูลเก่า (2 columns)
-    const oldResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:B',
-    });
-    
-    const oldRows = oldResponse.data.values || [];
-    
-    if (oldRows.length <= 1) {
-      console.log('⚠️ No data to migrate');
-      return { success: true, message: 'No data to migrate' };
-    }
-    
-    console.log(`📊 Found ${oldRows.length - 1} rows to migrate`);
-    
-    // 2. สร้างข้อมูลใหม่ (3 columns) - สมมติว่าทั้งหมดเป็น "โครงสร้าง"
-    const newRows = [
-      ['หมวดหลัก', 'หมวดงาน', 'หัวข้อ'] // header ใหม่
-    ];
-    
-    // แปลงข้อมูลเก่า
-    oldRows.slice(1).forEach(row => {
-      if (row[0] && row[1]) {
-        const oldCategory = row[0].trim();  // หมวดงานเก่า (จะเป็น หมวดงานใหม่)
-        const topic = row[1].trim();        // หัวข้อ
-        const mainCategory = 'โครงสร้าง';    // สมมติว่าทั้งหมดเป็นโครงสร้าง
-        
-        newRows.push([mainCategory, oldCategory, topic]);
-      }
-    });
-    
-    console.log(`✅ Created ${newRows.length - 1} new rows`);
-    
-    // 3. เคลียร์ข้อมูลเก่าและใส่ข้อมูลใหม่
-    await sheets.spreadsheets.values.clear({
-      spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:Z'
-    });
-    
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A1',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: newRows }
-    });
-    
-    console.log('✅ QC Topics migration completed successfully');
-    
-    return {
-      success: true,
-      message: `Migrated ${newRows.length - 1} rows to new structure`,
-      migratedRows: newRows.length - 1
-    };
-    
-  } catch (error) {
-    console.error('❌ Error migrating QC Topics sheet:', error);
-    throw error;
-  }
-}
-
-// Migrate Master_Photos_Log to include MainCategory column
-async function migrateMasterPhotosLog() {
-  try {
-    const sheets = getSheetsClient();
-    
-    console.log('🔧 Starting Master_Photos_Log migration...');
-    
-    // 1. อ่านข้อมูลเก่า
-    const oldResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:J', // อ่านจนถึง column J (เก่า)
-    });
-    
-    const oldRows = oldResponse.data.values || [];
-    
-    if (oldRows.length <= 1) {
-      console.log('⚠️ No Master_Photos_Log data to migrate');
-      return { success: true, message: 'No data to migrate' };
-    }
-    
-    console.log(`📊 Found ${oldRows.length - 1} photo log rows to migrate`);
-    
-    // 2. เพิ่ม column K (MainCategory) ให้ข้อมูลเก่า
-    const migratedRows = [];
-    
-    // Header row
-    if (oldRows[0]) {
-      const headerRow = [...oldRows[0]];
-      // เพิ่ม column K ใน header ถ้ายังไม่มี
-      if (headerRow.length < 11) {
-        headerRow[10] = 'หมวดหลัก'; // Column K
-      }
-      migratedRows.push(headerRow);
-    }
-    
-    // Data rows
-    oldRows.slice(1).forEach(row => {
-      const newRow = [...row];
-      
-      // เพิ่ม MainCategory = "โครงสร้าง" สำหรับข้อมูลเก่า
-      if (newRow.length < 11) {
-        newRow[10] = 'โครงสร้าง'; // Column K
-      }
-      
-      migratedRows.push(newRow);
-    });
-    
-    // 3. อัปเดตข้อมูลใหม่
-    await sheets.spreadsheets.values.clear({
-      spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:Z'
-    });
-    
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A1',
-      valueInputOption: 'RAW',
-      requestBody: { values: migratedRows }
-    });
-    
-    console.log('✅ Master_Photos_Log migration completed successfully');
-    
-    return {
-      success: true,
-      message: `Migrated ${migratedRows.length - 1} photo log rows`,
-      migratedRows: migratedRows.length - 1
-    };
-    
-  } catch (error) {
-    console.error('❌ Error migrating Master_Photos_Log:', error);
-    throw error;
-  }
-}
-
-// Run complete migration
-async function runCompleteMigration() {
-  try {
-    console.log('🚀 Starting complete system migration...');
-    
-    const results = {
-      qcTopics: null,
-      photosLog: null,
-      errors: []
-    };
-    
-    // 1. Migrate QC Topics
-    try {
-      results.qcTopics = await migrateQCTopicsSheet();
-      console.log('✅ QC Topics migration: SUCCESS');
-    } catch (error) {
-      console.error('❌ QC Topics migration: FAILED', error);
-      results.errors.push('QC Topics migration failed: ' + error.message);
-    }
-    
-    // 2. Migrate Photos Log
-    try {
-      results.photosLog = await migrateMasterPhotosLog();
-      console.log('✅ Photos Log migration: SUCCESS');
-    } catch (error) {
-      console.error('❌ Photos Log migration: FAILED', error);
-      results.errors.push('Photos Log migration failed: ' + error.message);
-    }
-    
-    console.log('🎉 Complete migration finished');
-    console.log('📊 Results:', results);
-    
-    return {
-      success: results.errors.length === 0,
-      message: results.errors.length === 0 ? 'All migrations completed successfully' : 'Some migrations failed',
-      results: results,
-      errors: results.errors
-    };
-    
-  } catch (error) {
-    console.error('❌ Complete migration failed:', error);
-    throw error;
-  }
-}
-
 module.exports = {
   getSheetsClient,
   generateUniqueId,
   
-  // 🔥 NEW: Enhanced QC Topics Functions
+  // 🔥 UPDATED: Enhanced QC Topics Functions
   getQCTopics,
-  getQCTopicsLegacy,
   getMainCategories,
   getSubCategories,
   getTopicsForCategory,
@@ -955,7 +672,6 @@ module.exports = {
   // Progress Tracking Functions
   getCompletedTopics,
   getCompletedTopicsFullMatch,
-  isFullMatch,
   
   // Field Values Functions  
   createFieldValuesSheet,
@@ -963,10 +679,5 @@ module.exports = {
   getFieldValues,
   
   // Report Functions
-  logReport,
-  
-  // 🔥 NEW: Migration Functions
-  migrateQCTopicsSheet,
-  migrateMasterPhotosLog,
-  runCompleteMigration
+  logReport
 };

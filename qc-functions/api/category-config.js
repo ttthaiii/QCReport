@@ -328,30 +328,13 @@ function validateDynamicFields(subCategory, dynamicFields) {
 
 // 🔥 NEW: Main Category Management Functions
 
+// Import ฟังก์ชันจาก sheets.js
+const { getMainCategories: getSheetsMainCategories, getSubCategories: getSheetsSubCategories, getTopicsForCategory: getSheetsTopicsForCategory } = require('./sheets');
+
 // ดึงรายการหมวดหลักจาก QC Topics
 async function getMainCategories() {
   try {
-    const sheets = getSheetsClient();
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:A',
-    });
-    
-    const rows = response.data.values || [];
-    const mainCategories = new Set();
-    
-    // skip header row (index 0)
-    rows.slice(1).forEach(row => {
-      if (row[0] && row[0].trim()) {
-        mainCategories.add(row[0].trim());
-      }
-    });
-    
-    const result = Array.from(mainCategories).sort();
-    console.log(`Found ${result.length} main categories:`, result);
-    
-    return result;
-    
+    return await getSheetsMainCategories();
   } catch (error) {
     console.error('Error getting main categories:', error);
     return ['โครงสร้าง']; // fallback
@@ -361,27 +344,7 @@ async function getMainCategories() {
 // ดึงรายการหมวดงานตามหมวดหลัก
 async function getSubCategoriesByMainCategory(mainCategory) {
   try {
-    const sheets = getSheetsClient();
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:B',
-    });
-    
-    const rows = response.data.values || [];
-    const subCategories = new Set();
-    
-    // skip header row และกรองตาม mainCategory
-    rows.slice(1).forEach(row => {
-      if (row[0] && row[1] && row[0].trim() === mainCategory) {
-        subCategories.add(row[1].trim());
-      }
-    });
-    
-    const result = Array.from(subCategories).sort();
-    console.log(`Found ${result.length} sub categories for "${mainCategory}":`, result);
-    
-    return result;
-    
+    return await getSheetsSubCategories(mainCategory);
   } catch (error) {
     console.error(`Error getting sub categories for "${mainCategory}":`, error);
     return [];
@@ -397,28 +360,7 @@ async function hasSubCategories(mainCategory) {
 // ดึง topics ตาม main category และ sub category
 async function getTopicsByCategories(mainCategory, subCategory) {
   try {
-    const sheets = getSheetsClient();
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:C',
-    });
-    
-    const rows = response.data.values || [];
-    const topics = [];
-    
-    // skip header row และกรองตาม mainCategory + subCategory
-    rows.slice(1).forEach(row => {
-      if (row[0] && row[1] && row[2] && 
-          row[0].trim() === mainCategory && 
-          row[1].trim() === subCategory) {
-        topics.push(row[2].trim());
-      }
-    });
-    
-    console.log(`Found ${topics.length} topics for "${mainCategory}/${subCategory}"`);
-    
-    return topics;
-    
+    return await getSheetsTopicsForCategory(mainCategory, subCategory);
   } catch (error) {
     console.error(`Error getting topics for "${mainCategory}/${subCategory}":`, error);
     return [];
