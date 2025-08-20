@@ -23,3 +23,4 @@ yarn-debug.log*
 yarn-error.log*
 ".firebase/**" 
 qc-functions/.env 
+.firebase/hosting.YnVpbGQ.cache
