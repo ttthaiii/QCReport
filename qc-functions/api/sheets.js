@@ -14,112 +14,35 @@ function generateUniqueId() {
   return `${timestamp}-${random}`;
 }
 
-// 🔥 UPDATED: อ่านข้อมูลหัวข้อการตรวจ QC แบบ 3 columns (MainCategory -> SubCategory -> Topics)
+// อ่านข้อมูลหัวข้อการตรวจ QC
 async function getQCTopics() {
   try {
     const sheets = getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'หัวข้อการตรวจ QC!A:C', // 🔥 3 columns: A=หมวดหลัก, B=หมวดงาน, C=หัวข้อ
+      range: 'หัวข้อการตรวจ QC!A:B',
     });
     
     const rows = response.data.values || [];
     const topics = {};
     
-    console.log(`📊 Processing ${rows.length} rows from QC Topics sheet...`);
-    
-    // จัดกลุ่มตาม mainCategory -> subCategory -> topics
-    rows.slice(1).forEach((row, index) => { // skip header
-      if (row.length >= 3 && row[0] && row[1] && row[2]) {
-        const mainCategory = row[0].trim();     // Column A: หมวดหลัก (โครงสร้าง/สถาปัตย์)
-        const subCategory = row[1].trim();      // Column B: หมวดงาน (ฐานราก/เสา/ผนัง ฯลฯ)
-        const topic = row[2].trim();            // Column C: หัวข้อการตรวจ
+    // กลุ่มตามหมวดงาน
+    rows.slice(1).forEach(row => { // skip header
+      if (row[0] && row[1]) {
+        const category = row[0].trim();
+        const topic = row[1].trim();
         
-        // สร้าง nested structure
-        if (!topics[mainCategory]) {
-          topics[mainCategory] = {};
-          console.log(`📁 Created main category: ${mainCategory}`);
+        if (!topics[category]) {
+          topics[category] = [];
         }
-        
-        if (!topics[mainCategory][subCategory]) {
-          topics[mainCategory][subCategory] = [];
-          console.log(`📂 Created sub category: ${mainCategory} > ${subCategory}`);
-        }
-        
-        topics[mainCategory][subCategory].push(topic);
-        console.log(`📄 Added topic ${index}: ${mainCategory} > ${subCategory} > ${topic}`);
-      } else {
-        console.log(`⚠️ Skipped incomplete row ${index + 2}:`, row);
+        topics[category].push(topic);
       }
-    });
-    
-    // แสดงสรุปโครงสร้าง
-    console.log('🔥 QC Topics structure summary:');
-    Object.entries(topics).forEach(([mainCat, subCats]) => {
-      console.log(`  📁 ${mainCat}:`);
-      Object.entries(subCats).forEach(([subCat, topicList]) => {
-        console.log(`    📂 ${subCat}: ${topicList.length} topics`);
-      });
     });
     
     return topics;
   } catch (error) {
-    console.error('❌ Error reading QC topics:', error);
+    console.error('Error reading QC topics:', error);
     throw error;
-  }
-}
-
-// 🔥 NEW: ดึงรายการหมวดหลักทั้งหมด
-async function getMainCategories() {
-  try {
-    const topics = await getQCTopics();
-    const mainCategories = Object.keys(topics);
-    
-    console.log(`📊 Found ${mainCategories.length} main categories:`, mainCategories);
-    return mainCategories;
-  } catch (error) {
-    console.error('Error getting main categories:', error);
-    return ['โครงสร้าง']; // fallback
-  }
-}
-
-// 🔥 NEW: ดึงรายการหมวดงานตามหมวดหลัก
-async function getSubCategories(mainCategory) {
-  try {
-    const topics = await getQCTopics();
-    
-    if (!topics[mainCategory]) {
-      console.log(`⚠️ Main category "${mainCategory}" not found`);
-      return [];
-    }
-    
-    const subCategories = Object.keys(topics[mainCategory]);
-    
-    console.log(`📊 Found ${subCategories.length} sub categories for "${mainCategory}":`, subCategories);
-    return subCategories;
-  } catch (error) {
-    console.error(`Error getting sub categories for "${mainCategory}":`, error);
-    return [];
-  }
-}
-
-// 🔥 NEW: ดึงรายการหัวข้อตามหมวดหลักและหมวดงาน
-async function getTopicsForCategory(mainCategory, subCategory) {
-  try {
-    const topics = await getQCTopics();
-    
-    if (!topics[mainCategory] || !topics[mainCategory][subCategory]) {
-      console.log(`⚠️ Category "${mainCategory}/${subCategory}" not found`);
-      return [];
-    }
-    
-    const categoryTopics = topics[mainCategory][subCategory];
-    
-    console.log(`📊 Found ${categoryTopics.length} topics for "${mainCategory}/${subCategory}"`);
-    return categoryTopics;
-  } catch (error) {
-    console.error(`Error getting topics for "${mainCategory}/${subCategory}":`, error);
-    return [];
   }
 }
 
@@ -255,18 +178,16 @@ async function addMasterData(building, foundation) {
   }
 }
 
-// 🔥 UPDATED: ดึงรายการรูปที่ถ่ายแล้ว (รองรับ mainCategory + subCategory)
+// 🔥 ดึงรายการรูปที่ถ่ายแล้ว (สำหรับ progress tracking)
 async function getCompletedTopics(criteria) {
   try {
     const sheets = getSheetsClient();
-    const { building, foundation, mainCategory, subCategory } = criteria;
-    
-    console.log(`🔍 Getting completed topics for: ${mainCategory} > ${subCategory} (${building}-${foundation})`);
+    const { building, foundation, category } = criteria;
     
     // ดึงข้อมูลจาก Master_Photos_Log
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:K' // Column K สำหรับ mainCategory
+      range: 'Master_Photos_Log!A:J' // 🔥 เพิ่ม column J สำหรับ dynamic fields
     });
     
     const rows = response.data.values || [];
@@ -275,16 +196,11 @@ async function getCompletedTopics(criteria) {
     // กรองข้อมูลตามเงื่อนไข (skip header row)
     rows.slice(1).forEach(row => {
       if (row.length >= 6) {
-        const [id, timestamp, rowBuilding, rowFoundation, rowSubCategory, topic, filename, driveUrl, location, dynamicFieldsJSON, rowMainCategory] = row;
-        
-        // 🔥 เช็คทั้ง mainCategory และ subCategory
-        const categoryMatch = rowMainCategory 
-          ? (rowMainCategory === mainCategory && rowSubCategory === subCategory) // โครงสร้างใหม่
-          : (rowSubCategory === subCategory); // backward compatibility กับข้อมูลเก่า
+        const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic] = row;
         
         if (rowBuilding === building && 
             rowFoundation === foundation && 
-            categoryMatch &&
+            rowCategory === category && 
             topic) {
           completedTopics.add(topic.trim());
         }
@@ -308,21 +224,58 @@ async function getCompletedTopics(criteria) {
   }
 }
 
-// 🔥 UPDATED: ดึงรายการรูปที่ถ่ายแล้วแบบ Full Match (รองรับ mainCategory + subCategory)
+
+// 🔥 NEW: ฟังก์ชันเปรียบเทียบแบบ Full Match
+function isFullMatch(searchCriteria, rowData) {
+  const { building, foundation, category, dynamicFields } = searchCriteria;
+  const { building: rowBuilding, foundation: rowFoundation, category: rowCategory, dynamicFieldsJSON } = rowData;
+  
+  // ตรวจสอบ basic fields ก่อน
+  if (building !== rowBuilding || foundation !== rowFoundation || category !== rowCategory) {
+    return false;
+  }
+  
+  // ถ้าไม่มี dynamic fields (legacy mode) ให้ match basic fields อย่างเดียว
+  if (!dynamicFields || Object.keys(dynamicFields).length === 0) {
+    return true;
+  }
+  
+  // ถ้ามี dynamic fields ให้เปรียบเทียบทุก field ที่มีค่า
+  try {
+    const rowDynamicFields = dynamicFieldsJSON ? JSON.parse(dynamicFieldsJSON) : {};
+    
+    // เปรียบเทียบทุก field ใน dynamicFields ที่มีค่า
+    for (const [fieldName, fieldValue] of Object.entries(dynamicFields)) {
+      if (fieldValue && fieldValue.trim()) { // เฉพาะ field ที่มีค่า
+        const rowFieldValue = rowDynamicFields[fieldName];
+        if (!rowFieldValue || rowFieldValue.trim() !== fieldValue.trim()) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+    
+  } catch (parseError) {
+    console.log('Error parsing dynamic fields JSON, using basic match');
+    return true; // fallback เป็น basic match
+  }
+}
+
+// 🔥 NEW: ดึงรายการรูปที่ถ่ายแล้วแบบ Full Match
 async function getCompletedTopicsFullMatch(criteria) {
   try {
     const sheets = getSheetsClient();
-    const { building, foundation, mainCategory, subCategory, dynamicFields } = criteria;
+    const { building, foundation, category, dynamicFields } = criteria;
     
-    console.log('🔍 Full Match search criteria (3-level):', {
-      mainCategory,
-      subCategory,
+    console.log('🔍 Full Match search criteria:', {
+      category,
       dynamicFields
     });
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:K'
+      range: 'Master_Photos_Log!A:J'
     });
     
     const rows = response.data.values || [];
@@ -330,14 +283,10 @@ async function getCompletedTopicsFullMatch(criteria) {
     
     rows.slice(1).forEach(row => {
       if (row.length >= 6) {
-        const [id, timestamp, rowBuilding, rowFoundation, rowSubCategory, topic, filename, driveUrl, location, dynamicFieldsJSON, rowMainCategory] = row;
+        const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
         
-        // ✅ เช็ค category ก่อน (รองรับทั้งโครงสร้างใหม่และเก่า)
-        const categoryMatch = rowMainCategory 
-          ? (rowMainCategory === mainCategory && rowSubCategory === subCategory)
-          : (rowSubCategory === subCategory);
-        
-        if (!categoryMatch) return;
+        // ✅ เช็ค category ก่อน
+        if (rowCategory !== category) return;
         
         // ✅ ถ้าไม่มี dynamic fields ใน row (ข้อมูลเก่า) ให้ skip
         if (!dynamicFieldsJSON) return;
@@ -387,44 +336,41 @@ async function getCompletedTopicsFullMatch(criteria) {
   }
 }
 
-// 🔥 UPDATED: บันทึกข้อมูลรูปถ่าย พร้อม Dynamic Fields JSON และ MainCategory
+// 🔥 UPDATED: บันทึกข้อมูลรูปถ่าย พร้อม Dynamic Fields JSON
 async function logPhoto(photoData) {
   try {
     const sheets = getSheetsClient();
-    
-    console.log(`📝 Logging photo: ${photoData.mainCategory} > ${photoData.subCategory} > ${photoData.topic}`);
     
     // สร้าง Unique ID
     const uniqueId = generateUniqueId();
     const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
     
-    // 🔥 แปลง dynamic fields เป็น JSON string
+    // 🔥 NEW: แปลง dynamic fields เป็น JSON string
     const dynamicFieldsJSON = photoData.dynamicFields ? JSON.stringify(photoData.dynamicFields) : '';
 
     const values = [[
-      uniqueId,                           // A: ID
-      timestamp,                          // B: วันเวลา
-      photoData.building,                 // C: อาคาร
-      photoData.foundation,               // D: ฐานราก/เสาเบอร์/ชั้น
-      photoData.subCategory,              // E: หมวดงาน (ฐานราก/เสา/ผนัง)
-      photoData.topic,                    // F: หัวข้อการตรวจ
-      photoData.filename,                 // G: ไฟล์
-      photoData.driveUrl || '',           // H: URL
-      photoData.location || '',           // I: สถานที่
-      dynamicFieldsJSON,                  // J: Dynamic Fields JSON
-      photoData.mainCategory || ''        // K: หมวดหลัก (โครงสร้าง/สถาปัตย์)
+      uniqueId,                    // A: ID
+      timestamp,                   // B: วันเวลา
+      photoData.building,          // C: อาคาร
+      photoData.foundation,        // D: ฐานราก/เสาเบอร์/ชั้น
+      photoData.category,          // E: หมวดงาน
+      photoData.topic,             // F: หัวข้อ
+      photoData.filename,          // G: ไฟล์
+      photoData.driveUrl || '',    // H: URL
+      photoData.location || '',    // I: สถานที่
+      dynamicFieldsJSON            // J: Dynamic Fields JSON 🔥 NEW
     ]];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:K',
-      valueInputOption: 'RAW',
+      range: 'Master_Photos_Log!A:J', 
+      valueInputOption: 'RAW', // ✅ บังคับให้เป็น text ไม่ auto-format
       requestBody: { values }
     });
 
-    // 🔥 เพิ่ม field values สำหรับ datalist
+    // 🔥 NEW: เพิ่ม field values สำหรับ datalist
     if (photoData.dynamicFields) {
-      await addFieldValuesFromPhoto(photoData.dynamicFields, photoData.subCategory);
+      await addFieldValuesFromPhoto(photoData.dynamicFields, photoData.category);
     }
     
     return { success: true, timestamp, uniqueId };
@@ -435,14 +381,14 @@ async function logPhoto(photoData) {
   }
 }
 
-// 🔥 เพิ่ม field values จากการถ่ายรูป
-async function addFieldValuesFromPhoto(dynamicFields, subCategory) {
+// 🔥 NEW: เพิ่ม field values จากการถ่ายรูป
+async function addFieldValuesFromPhoto(dynamicFields, category) {
   if (!dynamicFields || typeof dynamicFields !== 'object') return;
   
   try {
     for (const [fieldName, fieldValue] of Object.entries(dynamicFields)) {
       if (fieldValue && fieldValue.trim()) {
-        await addFieldValue(fieldName, fieldValue.trim(), subCategory);
+        await addFieldValue(fieldName, fieldValue.trim(), category);
       }
     }
   } catch (error) {
@@ -451,7 +397,7 @@ async function addFieldValuesFromPhoto(dynamicFields, subCategory) {
   }
 }
 
-// 🔥 สร้าง Master_Field_Values Sheet
+// 🔥 NEW: สร้าง Master_Field_Values Sheet
 async function createFieldValuesSheet() {
   try {
     const sheets = getSheetsClient();
@@ -478,7 +424,7 @@ async function createFieldValuesSheet() {
     
     // เพิ่ม header
     const values = [
-      ['field_name', 'field_value', 'sub_category', 'count', 'last_used', 'created_date']
+      ['field_name', 'field_value', 'category', 'count', 'last_used', 'created_date']
     ];
     
     await sheets.spreadsheets.values.update({
@@ -496,8 +442,8 @@ async function createFieldValuesSheet() {
   }
 }
 
-// 🔥 เพิ่ม/อัปเดต field value สำหรับ datalist
-async function addFieldValue(fieldName, fieldValue, subCategory) {
+// 🔥 NEW: เพิ่ม/อัปเดต field value สำหรับ datalist
+async function addFieldValue(fieldName, fieldValue, category) {
   if (!fieldValue || !fieldValue.trim()) return;
   
   const sheets = getSheetsClient();
@@ -514,10 +460,10 @@ async function addFieldValue(fieldName, fieldValue, subCategory) {
     let existingRowIndex = -1;
     let existingCount = 0;
     
-    // หาแถวที่มีค่าซ้ำ (field_name + field_value + sub_category)
+    // หาแถวที่มีค่าซ้ำ
     for (let i = 1; i < rows.length; i++) {
-      const [rowFieldName, rowFieldValue, rowSubCategory] = rows[i];
-      if (rowFieldName === fieldName && rowFieldValue === trimmedValue && rowSubCategory === subCategory) {
+      const [rowFieldName, rowFieldValue, rowCategory] = rows[i];
+      if (rowFieldName === fieldName && rowFieldValue === trimmedValue && rowCategory === category) {
         existingRowIndex = i + 1;
         existingCount = parseInt(rows[i][3] || 1);
         break;
@@ -531,12 +477,12 @@ async function addFieldValue(fieldName, fieldValue, subCategory) {
         range: `Master_Field_Values!A${existingRowIndex}:F${existingRowIndex}`,
         valueInputOption: 'RAW',
         requestBody: {
-          values: [[fieldName, trimmedValue, subCategory, existingCount + 1, timestamp, rows[existingRowIndex - 1][5]]]
+          values: [[fieldName, trimmedValue, category, existingCount + 1, timestamp, rows[existingRowIndex - 1][5]]]
         }
       });
     } else {
       // เพิ่มค่าใหม่
-      const values = [[fieldName, trimmedValue, subCategory, 1, timestamp, timestamp]];
+      const values = [[fieldName, trimmedValue, category, 1, timestamp, timestamp]];
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEETS_ID,
         range: 'Master_Field_Values!A:F',
@@ -547,13 +493,13 @@ async function addFieldValue(fieldName, fieldValue, subCategory) {
   } catch (sheetError) {
     if (sheetError.message.includes('Unable to parse range')) {
       await createFieldValuesSheet();
-      await addFieldValue(fieldName, fieldValue, subCategory); // เรียกซ้ำ
+      await addFieldValue(fieldName, fieldValue, category); // เรียกซ้ำ
     }
   }
 }
 
-// 🔥 ดึง field values สำหรับ datalist
-async function getFieldValues(fieldName, subCategory) {
+// 🔥 NEW: ดึง field values สำหรับ datalist
+async function getFieldValues(fieldName, category) {
   try {
     const sheets = getSheetsClient();
     
@@ -565,39 +511,22 @@ async function getFieldValues(fieldName, subCategory) {
     const rows = response.data.values || [];
     const values = [];
     
-    console.log(`🔍 Getting field values for: fieldName="${fieldName}", subCategory="${subCategory}"`);
-    
     // กรองและเรียงข้อมูล
     rows.slice(1).forEach(row => {
       if (row.length >= 3) {
-        const [rowFieldName, rowFieldValue, rowSubCategory, count, lastUsed] = row;
+        const [rowFieldName, rowFieldValue, rowCategory, count, lastUsed] = row;
         
-        console.log(`📋 Checking row: field="${rowFieldName}", value="${rowFieldValue}", subCategory="${rowSubCategory}"`);
+        // ✅ แก้เงื่อนไข: อาคารใช้ร่วมกันได้ แต่ field อื่นต้องตรง category
+        const shouldInclude = rowFieldName === fieldName && (
+          (fieldName === 'อาคาร') || // อาคารใช้ร่วมกันได้ทุก category  
+          (rowCategory === category)  // field อื่นต้องตรง category เท่านั้น
+        );
         
-        let shouldInclude = false;
-        
-        if (rowFieldName === fieldName) {
-          if (fieldName === 'อาคาร') {
-            // อาคารใช้ร่วมกันได้ทุก subCategory (ไม่กรอง subCategory)
-            shouldInclude = true;
-            console.log(`✅ Including "${rowFieldValue}" - อาคารใช้ร่วมกัน`);
-          } else {
-            // Field อื่นต้องตรง subCategory เท่านั้น
-            if (rowSubCategory === subCategory) {
-              shouldInclude = true;
-              console.log(`✅ Including "${rowFieldValue}" - subCategory match: ${subCategory}`);
-            } else {
-              console.log(`❌ Excluding "${rowFieldValue}" - subCategory mismatch: ${rowSubCategory} vs ${subCategory}`);
-            }
-          }
-        }
-        
-        if (shouldInclude && rowFieldValue && rowFieldValue.trim()) {
+        if (shouldInclude) {
           values.push({
-            value: rowFieldValue.trim(),
+            value: rowFieldValue,
             count: parseInt(count || 1),
-            lastUsed: lastUsed,
-            subCategory: rowSubCategory
+            lastUsed: lastUsed
           });
         }
       }
@@ -609,7 +538,7 @@ async function getFieldValues(fieldName, subCategory) {
       return new Date(b.lastUsed) - new Date(a.lastUsed);
     });
 
-    // Deduplicate แต่รักษาลำดับตาม count/usage
+    // ✅ Deduplicate แต่รักษาลำดับตาม count/usage
     const seen = new Set();
     const uniqueValues = values.filter(v => {
       if (seen.has(v.value)) return false;
@@ -617,45 +546,37 @@ async function getFieldValues(fieldName, subCategory) {
       return true;
     });
 
-    const result = uniqueValues.map(v => v.value);
-    
-    console.log(`📊 Final result for ${fieldName} in ${subCategory}:`, result);
-    console.log(`📈 Total values: ${result.length}`);
-    
-    return result;
+    return uniqueValues.map(v => v.value);
     
   } catch (error) {
-    console.error('❌ Error getting field values:', error);
+    console.error('Error getting field values:', error);
     return [];
   }
 }
 
-// 🔥 UPDATED: บันทึกข้อมูลรายงาน พร้อม Unique ID และ MainCategory
+// บันทึกข้อมูลรายงาน พร้อม Unique ID
 async function logReport(reportData) {
   try {
     const sheets = getSheetsClient();
-    
-    console.log(`📊 Logging report: ${reportData.mainCategory} > ${reportData.subCategory}`);
     
     // สร้าง Unique ID
     const uniqueId = generateUniqueId();
     const timestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
     
     const values = [[
-      uniqueId,                      // A: ID
+      uniqueId,                      // A: ID (ใหม่)
       timestamp,                     // B: วันเวลา
       reportData.building,           // C: อาคาร
       reportData.foundation,         // D: ฐานราก
-      reportData.subCategory,        // E: หมวดงาน
+      reportData.category,           // E: หมวดงาน
       reportData.filename,           // F: ไฟล์
       reportData.driveUrl || '',     // G: URL
-      reportData.photoCount || 0,    // H: จำนวนรูป
-      reportData.mainCategory || ''  // I: หมวดหลัก 🔥 NEW
+      reportData.photoCount || 0     // H: จำนวนรูป
     ]];
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEETS_ID,
-      range: 'Final_Reports_Log!A:I',
+      range: 'Final_Reports_Log!A:H',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
@@ -674,32 +595,18 @@ async function logReport(reportData) {
 
 module.exports = {
   getSheetsClient,
-  generateUniqueId,
-  
-  // 🔥 UPDATED: Enhanced QC Topics Functions
   getQCTopics,
-  getMainCategories,
-  getSubCategories,
-  getTopicsForCategory,
-  
-  // Master Data Functions
+  logPhoto,
+  logReport,
   getMasterData,
   addMasterData,
-  createMasterDataSheet,
-  
-  // Photo Logging Functions
-  logPhoto,
-  addFieldValuesFromPhoto,
-  
-  // Progress Tracking Functions
   getCompletedTopics,
+  // 🔥 NEW: Full Match Functions
   getCompletedTopicsFullMatch,
-  
-  // Field Values Functions  
+  isFullMatch,
+  // 🔥 NEW: Field Values Functions  
   createFieldValuesSheet,
   addFieldValue,
   getFieldValues,
-  
-  // Report Functions
-  logReport
+  addFieldValuesFromPhoto
 };
