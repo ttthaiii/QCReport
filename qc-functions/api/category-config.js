@@ -2,16 +2,17 @@ const { getSheetsClient } = require('../services/google-auth');
 
 const SHEETS_ID = '1ez_Dox16jf9lr5TEsLL5BEOfKZDNGkVD31YSBtx3Qa8';
 
-// 🔥 NEW: ดึง Dynamic Fields สำหรับหมวดงานใดๆ
-async function getDynamicFields(category) {
+// 🔥 UPDATED: ดึง Dynamic Fields สำหรับหมวดงานใดๆ (รองรับโครงสร้างใหม่)
+async function getDynamicFields(subCategory) {
   try {
-    console.log(`Getting dynamic fields for category: ${category}`);
+    console.log(`Getting dynamic fields for sub category: ${subCategory}`);
     
     // ถ้าเป็นฐานราก ให้ใช้ logic เดิม (Hybrid Approach)
-    if (category === 'ฐานราก') {
+    if (subCategory === 'ฐานราก') {
       return {
         useExisting: true,
         category: 'ฐานราก',
+        subCategory: 'ฐานราก', // 🔥 NEW: เพิ่ม subCategory
         fields: [
           { 
             name: 'อาคาร', 
@@ -43,13 +44,13 @@ async function getDynamicFields(category) {
       throw new Error('Category_Config sheet is empty');
     }
     
-    // หาหมวดงานที่ต้องการ
-    const targetRow = rows.find(row => row[0] && row[0].trim() === category);
+    // หาหมวดงานที่ต้องการ (ใช้ subCategory แทน category)
+    const targetRow = rows.find(row => row[0] && row[0].trim() === subCategory);
     
     if (!targetRow) {
-      console.warn(`Category "${category}" not found in Category_Config sheet`);
+      console.warn(`Sub category "${subCategory}" not found in Category_Config sheet`);
       // Fallback: สร้าง default fields
-      return createDefaultFields(category);
+      return createDefaultFields(subCategory);
     }
     
     // แปลง row เป็น field configuration
@@ -72,16 +73,17 @@ async function getDynamicFields(category) {
     }
     
     if (fields.length === 0) {
-      console.warn(`No fields configured for category "${category}"`);
-      return createDefaultFields(category);
+      console.warn(`No fields configured for sub category "${subCategory}"`);
+      return createDefaultFields(subCategory);
     }
     
-    console.log(`Found ${fields.length} dynamic fields for category: ${category}`);
+    console.log(`Found ${fields.length} dynamic fields for sub category: ${subCategory}`);
     console.log('Fields:', fields.map(f => f.name));
     
     return {
       useExisting: false,
-      category: category,
+      category: subCategory,      // 🔥 For backward compatibility
+      subCategory: subCategory,   // 🔥 NEW: explicit subCategory
       fields: fields
     };
     
@@ -89,16 +91,17 @@ async function getDynamicFields(category) {
     console.error('Error getting dynamic fields:', error);
     
     // Graceful fallback: สร้าง default fields
-    console.log(`Fallback: creating default fields for category "${category}"`);
-    return createDefaultFields(category);
+    console.log(`Fallback: creating default fields for sub category "${subCategory}"`);
+    return createDefaultFields(subCategory);
   }
 }
 
-// 🔥 NEW: สร้าง default fields เมื่อไม่พบใน sheet
-function createDefaultFields(category) {
+// 🔥 UPDATED: สร้าง default fields เมื่อไม่พบใน sheet (รองรับ subCategory)
+function createDefaultFields(subCategory) {
   return {
     useExisting: false,
-    category: category,
+    category: subCategory,      // 🔥 For backward compatibility
+    subCategory: subCategory,   // 🔥 NEW: explicit subCategory
     fields: [
       {
         name: 'อาคาร',
@@ -107,10 +110,10 @@ function createDefaultFields(category) {
         placeholder: 'เลือกหรือพิมพ์อาคาร เช่น A, B, C'
       },
       {
-        name: `${category}เบอร์`,
+        name: `${subCategory}เบอร์`,
         type: 'combobox', 
         required: true,
-        placeholder: `เลือกหรือพิมพ์เลข${category}`
+        placeholder: `เลือกหรือพิมพ์เลข${subCategory}`
       }
     ]
   };
@@ -125,21 +128,24 @@ function createPlaceholder(fieldName) {
     'Gridline': 'เลือกหรือพิมพ์ Gridline เช่น A1, B2',
     'WWTP.NO': 'เลือกหรือพิมพ์หมายเลข WWTP',
     'ชั้น': 'เลือกหรือพิมพ์ชั้น เช่น 1F, 2F, B1',
-    'Zone': 'เลือกหรือพิมพ์ Zone เช่น A, B, C'
+    'Zone': 'เลือกหรือพิมพ์ Zone เช่น A, B, C',
+    'ผนังเบอร์': 'เลือกหรือพิมพ์เลขผนัง เช่น W01, W02',
+    'หลังคาเบอร์': 'เลือกหรือพิมพ์เลขหลังคา เช่น R01, R02',
+    'บันไดเบอร์': 'เลือกหรือพิมพ์เลขบันได เช่น S01, S02'
   };
   
   return placeholders[fieldName] || `เลือกหรือพิมพ์${fieldName}`;
 }
 
-// ดึง configuration ของหมวดงาน (เดิม - สำหรับ backward compatibility)
-async function getCategoryConfig(category) {
-  return await getDynamicFields(category);
+// 🔥 UPDATED: ดึง configuration ของหมวดงาน (backward compatibility - ใช้ subCategory)
+async function getCategoryConfig(subCategory) {
+  return await getDynamicFields(subCategory);
 }
 
-// ดึงรายการหมวดงานทั้งหมดที่มี config
+// 🔥 UPDATED: ดึงรายการหมวดงานทั้งหมดที่มี config (ตอนนี้เป็น sub categories)
 async function getAllCategories() {
   try {
-    console.log('Getting all configured categories');
+    console.log('Getting all configured sub categories');
     
     const sheets = getSheetsClient();
     
@@ -149,22 +155,22 @@ async function getAllCategories() {
     });
     
     const rows = response.data.values || [];
-    const categories = [];
+    const subCategories = [];
     
     // skip header row (index 0)
     for (let i = 1; i < rows.length; i++) {
-      const category = rows[i][0];
-      if (category && category.trim()) {
-        categories.push(category.trim());
+      const subCategory = rows[i][0];
+      if (subCategory && subCategory.trim()) {
+        subCategories.push(subCategory.trim());
       }
     }
     
-    console.log(`Found ${categories.length} configured categories:`, categories);
+    console.log(`Found ${subCategories.length} configured sub categories:`, subCategories);
     
-    return categories;
+    return subCategories;
     
   } catch (error) {
-    console.error('Error getting all categories:', error);
+    console.error('Error getting all sub categories:', error);
     
     // ถ้า sheet ยังไม่มี ให้สร้างใหม่
     if (error.message.includes('Unable to parse range') || 
@@ -178,7 +184,7 @@ async function getAllCategories() {
   }
 }
 
-// สร้าง Category_Config sheet (ครั้งแรก)
+// 🔥 UPDATED: สร้าง Category_Config sheet (ครั้งแรก) - รองรับโครงสร้างใหม่
 async function createCategoryConfigSheet() {
   try {
     const sheets = getSheetsClient();
@@ -207,21 +213,25 @@ async function createCategoryConfigSheet() {
     const values = [
       // Header row
       ['หมวดงาน', 'field1_name', 'field2_name', 'field3_name', 'field4_name'],
-      // Default data
+      // Default data - สำหรับ sub categories
       ['ฐานราก', 'อาคาร', 'ฐานรากเบอร์', '', ''],
       ['เสา', 'อาคาร', 'เสาเบอร์', 'Gridline', ''],
       ['บอบบิ้งค์น้ำเสีย', 'อาคาร', 'WWTP.NO', 'Gridline', ''],
-      ['พื้นคอนกรีตอิดแรง', 'อาคาร', 'ชั้น', 'Zone', 'Gridline']
+      ['พื้นคอนกรีตอิดแรง', 'อาคาร', 'ชั้น', 'Zone', 'Gridline'],
+      // 🔥 NEW: เพิ่มตัวอย่างสำหรับสถาปัตย์
+      ['ผนัง', 'อาคาร', 'ผนังเบอร์', 'ชั้น', ''],
+      ['หลังคา', 'อาคาร', 'หลังคาเบอร์', 'Zone', ''],
+      ['บันได', 'อาคาร', 'บันไดเบอร์', 'ชั้น', '']
     ];
     
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEETS_ID,
-      range: 'Category_Config!A1:E5',
+      range: 'Category_Config!A1:E8',  // 🔥 ขยายขนาด range
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
     
-    console.log('Category_Config sheet created successfully with sample data');
+    console.log('Category_Config sheet created successfully with enhanced sample data');
     
   } catch (error) {
     console.error('Error creating Category_Config sheet:', error);
@@ -229,19 +239,19 @@ async function createCategoryConfigSheet() {
   }
 }
 
-// 🔥 NEW: ตรวจสอบว่าหมวดงานใช้ dynamic fields หรือไม่
-function isDynamicCategory(category) {
-  return category !== 'ฐานราก';
+// 🔥 UPDATED: ตรวจสอบว่าหมวดงานใช้ dynamic fields หรือไม่ (ใช้ subCategory)
+function isDynamicCategory(subCategory) {
+  return subCategory !== 'ฐานราก';
 }
 
-// 🔥 NEW: แปลง dynamic fields เป็น building/foundation สำหรับ Master data
-function convertDynamicFieldsToMasterData(category, dynamicFields) {
+// 🔥 UPDATED: แปลง dynamic fields เป็น building/foundation สำหรับ Master data (ใช้ subCategory)
+function convertDynamicFieldsToMasterData(subCategory, dynamicFields) {
   if (!dynamicFields || typeof dynamicFields !== 'object') {
     return { building: '', foundation: '' };
   }
   
   // สำหรับฐานราก ใช้ mapping ตรงๆ
-  if (category === 'ฐานราก') {
+  if (subCategory === 'ฐานราก') {
     return {
       building: dynamicFields['อาคาร'] || '',
       foundation: dynamicFields['ฐานรากเบอร์'] || ''
@@ -256,9 +266,9 @@ function convertDynamicFieldsToMasterData(category, dynamicFields) {
   };
 }
 
-// 🔥 NEW: แปลง building/foundation กลับเป็น dynamic fields
-function convertMasterDataToDynamicFields(category, building, foundation) {
-  if (category === 'ฐานราก') {
+// 🔥 UPDATED: แปลง building/foundation กลับเป็น dynamic fields (ใช้ subCategory)
+function convertMasterDataToDynamicFields(subCategory, building, foundation) {
+  if (subCategory === 'ฐานราก') {
     return {
       'อาคาร': building || '',
       'ฐานรากเบอร์': foundation || ''
@@ -269,14 +279,14 @@ function convertMasterDataToDynamicFields(category, building, foundation) {
   // ตอนนี้ return ค่าเริ่มต้น (จะต้องเรียก getDynamicFields เพื่อได้ field names จริง)
   return {
     'อาคาร': building || '',
-    [`${category}เบอร์`]: foundation || ''
+    [`${subCategory}เบอร์`]: foundation || ''
   };
 }
 
-// 🔥 NEW: สร้างคำอธิบายสำหรับ combination (สำหรับ logging/display)
-function createCombinationDescription(category, dynamicFields) {
+// 🔥 UPDATED: สร้างคำอธิบายสำหรับ combination (สำหรับ logging/display) - ใช้ subCategory
+function createCombinationDescription(subCategory, dynamicFields) {
   if (!dynamicFields || typeof dynamicFields !== 'object') {
-    return category;
+    return subCategory;
   }
   
   const values = Object.entries(dynamicFields)
@@ -284,17 +294,17 @@ function createCombinationDescription(category, dynamicFields) {
     .map(([key, value]) => `${key}:${value}`)
     .join(', ');
     
-  return values || category;
+  return values || subCategory;
 }
 
-// 🔥 NEW: ตรวจสอบว่า field values มีความถูกต้องหรือไม่
-function validateDynamicFields(category, dynamicFields) {
+// 🔥 UPDATED: ตรวจสอบว่า field values มีความถูกต้องหรือไม่ (ใช้ subCategory)
+function validateDynamicFields(subCategory, dynamicFields) {
   if (!dynamicFields || typeof dynamicFields !== 'object') {
     return { valid: false, error: 'Dynamic fields is required' };
   }
   
   // ตรวจสอบว่ามี field ครบตาม config หรือไม่
-  const requiredFieldCount = category === 'ฐานราก' ? 2 : Object.keys(dynamicFields).length;
+  const requiredFieldCount = subCategory === 'ฐานราก' ? 2 : Object.keys(dynamicFields).length;
   const actualFieldCount = Object.values(dynamicFields).filter(value => value && value.trim()).length;
   
   if (actualFieldCount === 0) {
@@ -316,13 +326,118 @@ function validateDynamicFields(category, dynamicFields) {
   return { valid: true };
 }
 
+// 🔥 NEW: Main Category Management Functions
+
+// ดึงรายการหมวดหลักจาก QC Topics
+async function getMainCategories() {
+  try {
+    const sheets = getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'หัวข้อการตรวจ QC!A:A',
+    });
+    
+    const rows = response.data.values || [];
+    const mainCategories = new Set();
+    
+    // skip header row (index 0)
+    rows.slice(1).forEach(row => {
+      if (row[0] && row[0].trim()) {
+        mainCategories.add(row[0].trim());
+      }
+    });
+    
+    const result = Array.from(mainCategories).sort();
+    console.log(`Found ${result.length} main categories:`, result);
+    
+    return result;
+    
+  } catch (error) {
+    console.error('Error getting main categories:', error);
+    return ['โครงสร้าง']; // fallback
+  }
+}
+
+// ดึงรายการหมวดงานตามหมวดหลัก
+async function getSubCategoriesByMainCategory(mainCategory) {
+  try {
+    const sheets = getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'หัวข้อการตรวจ QC!A:B',
+    });
+    
+    const rows = response.data.values || [];
+    const subCategories = new Set();
+    
+    // skip header row และกรองตาม mainCategory
+    rows.slice(1).forEach(row => {
+      if (row[0] && row[1] && row[0].trim() === mainCategory) {
+        subCategories.add(row[1].trim());
+      }
+    });
+    
+    const result = Array.from(subCategories).sort();
+    console.log(`Found ${result.length} sub categories for "${mainCategory}":`, result);
+    
+    return result;
+    
+  } catch (error) {
+    console.error(`Error getting sub categories for "${mainCategory}":`, error);
+    return [];
+  }
+}
+
+// ตรวจสอบว่า main category มี sub categories หรือไม่
+async function hasSubCategories(mainCategory) {
+  const subCategories = await getSubCategoriesByMainCategory(mainCategory);
+  return subCategories.length > 0;
+}
+
+// ดึง topics ตาม main category และ sub category
+async function getTopicsByCategories(mainCategory, subCategory) {
+  try {
+    const sheets = getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'หัวข้อการตรวจ QC!A:C',
+    });
+    
+    const rows = response.data.values || [];
+    const topics = [];
+    
+    // skip header row และกรองตาม mainCategory + subCategory
+    rows.slice(1).forEach(row => {
+      if (row[0] && row[1] && row[2] && 
+          row[0].trim() === mainCategory && 
+          row[1].trim() === subCategory) {
+        topics.push(row[2].trim());
+      }
+    });
+    
+    console.log(`Found ${topics.length} topics for "${mainCategory}/${subCategory}"`);
+    
+    return topics;
+    
+  } catch (error) {
+    console.error(`Error getting topics for "${mainCategory}/${subCategory}":`, error);
+    return [];
+  }
+}
+
 module.exports = {
-  // 🔥 NEW APIs
+  // 🔥 UPDATED APIs (ใช้ subCategory แทน category)
   getDynamicFields,
   validateDynamicFields,
   convertDynamicFieldsToMasterData,
   convertMasterDataToDynamicFields,
   createCombinationDescription,
+  
+  // 🔥 NEW: Main Category APIs
+  getMainCategories,
+  getSubCategoriesByMainCategory,
+  hasSubCategories,
+  getTopicsByCategories,
   
   // Existing APIs (for backward compatibility)
   getCategoryConfig,

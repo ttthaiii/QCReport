@@ -3,8 +3,8 @@ import { addWatermark, formatThaiDateTime } from '../utils/watermark';
 import { api } from '../utils/api';
 
 const Camera = () => {
-  // Form States
-  const [qcTopics, setQcTopics] = useState({});
+  // Form States - เพิ่ม workType
+  const [qcTopics, setQcTopics] = useState({}); // 🔥 ตอนนี้เป็น nested object
   const [masterData, setMasterData] = useState({
     buildings: [],
     foundations: [],
@@ -12,10 +12,11 @@ const Camera = () => {
   });
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
   const [formData, setFormData] = useState({
-    category: ''
+    mainCategory: '',
+    subCategory: ''
   });
 
-  // 🔥 NEW: Dynamic Fields States
+  // Dynamic Fields States
   const [categoryFields, setCategoryFields] = useState([]);
   const [dynamicFields, setDynamicFields] = useState({});
   const [isLoadingFields, setIsLoadingFields] = useState(false);
@@ -43,11 +44,12 @@ const Camera = () => {
   // Native Camera Input Ref
   const cameraInputRef = useRef(null);
 
+  // Load field values when workType, category, or fields change
   useEffect(() => {
-    if (formData.category && categoryFields.length > 0) {
-      loadFieldValues(formData.category, categoryFields);
+    if (formData.workType && formData.category && categoryFields.length > 0) {
+      loadFieldValues(formData.workType, formData.category, categoryFields);
     }
-  }, [formData.category, categoryFields]);  
+  }, [formData.workType, formData.category, categoryFields]);
 
   // Load data on mount
   useEffect(() => {
@@ -56,24 +58,24 @@ const Camera = () => {
     getCurrentLocation();
   }, []);
 
-  // 🔥 NEW: Load category fields when category changes
+  // Load category fields when workType AND category change
   useEffect(() => {
-    if (formData.category) {
-      loadCategoryFields(formData.category);
+    if (formData.workType && formData.category) {
+      loadCategoryFields(formData.workType, formData.category);
     } else {
       setCategoryFields([]);
       setDynamicFields({});
     }
-  }, [formData.category]);
+  }, [formData.workType, formData.category]);
 
-  // Load progress when dynamic fields and category are ready
+  // Load progress when dynamic fields and both workType & category are ready
   useEffect(() => {
-    if (formData.category && isFieldsComplete()) {
+    if (formData.workType && formData.category && isFieldsComplete()) {
       loadProgress();
     }
-  }, [formData.category, dynamicFields]);
+  }, [formData.workType, formData.category, dynamicFields]);
 
-  const loadFieldValues = async (category, fields) => {
+  const loadFieldValues = async (workType, category, fields) => {
     try {
       const newFieldValues = {};
       
@@ -90,23 +92,23 @@ const Camera = () => {
   };
 
   // 🔥 NEW: Load dynamic fields for selected category
-  const loadCategoryFields = async (category) => {
+  const loadCategoryFields = async (workType, category) => {
     setIsLoadingFields(true);
     try {
-      console.log(`Loading fields for category: ${category}`);
+      console.log(`Loading fields for: ${workType} > ${category}`);
       
-      const response = await api.getDynamicFields(category);
+      const response = await api.getDynamicFields(workType, category);
       if (response.success) {
         setCategoryFields(response.data.fields || []);
         
-        // Reset dynamic fields when category changes
+        // Reset dynamic fields when workType/category changes
         const newDynamicFields = {};
         response.data.fields.forEach(field => {
           newDynamicFields[field.name] = '';
         });
         setDynamicFields(newDynamicFields);
         
-        console.log(`Loaded ${response.data.fields.length} fields for ${category}:`, 
+        console.log(`Loaded ${response.data.fields.length} fields for ${workType}>${category}:`, 
                    response.data.fields.map(f => f.name));
       }
     } catch (error) {
@@ -132,26 +134,26 @@ const Camera = () => {
 
   // 🔥 NEW: Check if required fields are complete
   const isFieldsComplete = () => {
-    if (!formData.category || categoryFields.length === 0) return false;
+    if (!formData.workType || !formData.category || categoryFields.length === 0) return false;
     
-    // ✅ เช็คทุก field ที่มี required: true
+    // Check that all required fields have values
     return categoryFields.every(field => {
       if (field.required) {
         const value = dynamicFields[field.name];
         return value && value.trim();
       }
-      return true; // field ที่ไม่ required ถือว่าผ่าน
+      return true;
     });
   };
 
   // 🔥 NEW: Get field options from master data
   const getFieldOptions = (fieldName) => {
-    // ใช้ field values ที่โหลดมา
+    // Use field values loaded from backend
     if (fieldValues[fieldName]) {
       return fieldValues[fieldName];
     }
     
-    // Fallback: ใช้ master data เดิม
+    // Fallback: use master data
     if (fieldName === 'อาคาร') {
       return masterData.buildings || [];
     }
@@ -200,7 +202,6 @@ const Camera = () => {
     if (!isFieldsComplete()) return;
     
     try {
-      // Convert dynamic fields to building+foundation for master data
       const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
       
       console.log(`Auto-adding master data:`, masterDataFields);
@@ -211,13 +212,11 @@ const Camera = () => {
       );
       
       if (response.success && !response.data.duplicate) {
-        // Reload master data เพื่อให้ dropdown อัปเดต
         await loadMasterData();
-        console.log(`✅ Auto-added: ${masterDataFields.building}-${masterDataFields.foundation}`);
+        console.log(`Auto-added: ${masterDataFields.building}-${masterDataFields.foundation}`);
       }
     } catch (error) {
       console.error('Auto-add error:', error);
-      // ไม่แสดง error ให้ user เพื่อไม่ให้รบกวนการทำงาน
     }
   };
 
@@ -230,7 +229,6 @@ const Camera = () => {
       };
     }
     
-    // สำหรับหมวดอื่น: field แรกเป็น building, field ที่ 2 เป็น foundation
     const fieldValues = Object.values(fields);
     return {
       building: fieldValues[0] || '',
@@ -258,9 +256,17 @@ const Camera = () => {
       const response = await api.getQCTopics();
       if (response.success) {
         setQcTopics(response.data);
-        const categories = Object.keys(response.data);
-        if (categories.length > 0) {
-          setFormData(prev => ({ ...prev, category: categories[0] }));
+        
+        // Set default selections from first available options
+        const workTypes = Object.keys(response.data);
+        if (workTypes.length > 0) {
+          const firstWorkType = workTypes[0];
+          const categories = Object.keys(response.data[firstWorkType] || {});
+          
+          setFormData({
+            workType: firstWorkType,
+            category: categories.length > 0 ? categories[0] : ''
+          });
         }
       }
     } catch (error) {
@@ -270,40 +276,31 @@ const Camera = () => {
   };
 
   const loadProgress = async () => {
-    if (!formData.category || !isFieldsComplete()) {
+    if (!formData.workType || !formData.category || !isFieldsComplete()) {
       setCompletedTopics(new Set());
       return;
     }
     
     setIsLoadingProgress(true);
     try {
-      console.log(`📊 Loading progress for category: ${formData.category}`);
-      console.log(`📊 Dynamic fields:`, dynamicFields);
-      
-      // 🔥 แก้ไข: ใช้ dynamic fields conversion แทน hardcode
       const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
-      
-      console.log(`📊 Converted to master data format:`, masterDataFields);
       
       const response = await api.getCompletedTopicsFullMatch({
         building: masterDataFields.building,
         foundation: masterDataFields.foundation,
+        workType: formData.workType,     // เพิ่ม workType
         category: formData.category,
-        dynamicFields: dynamicFields // ✅ ส่ง full dynamic fields สำหรับ Full Match
+        dynamicFields: dynamicFields
       });
       
       if (response.success) {
         const completedTopicsArray = response.data.completedTopics || [];
         setCompletedTopics(new Set(completedTopicsArray));
-        
-        console.log(`✅ Progress loaded: ${completedTopicsArray.length} completed topics`);
-        console.log(`✅ Completed topics:`, completedTopicsArray);
       } else {
-        console.log(`❌ Progress load failed:`, response);
         setCompletedTopics(new Set());
       }
     } catch (error) {
-      console.error('❌ Error loading progress:', error);
+      console.error('Error loading progress:', error);
       setCompletedTopics(new Set());
     } finally {
       setIsLoadingProgress(false);
@@ -551,11 +548,9 @@ const Camera = () => {
   const processImageForQC = async (imageFile) => {
     console.log('Starting image processing...');
     
-    // Step 1: Resize and crop to 1600x1200
     const resizedBlob = await resizeAndCropImage(imageFile, 1600, 1200);
     console.log('Image resized and cropped');
     
-    // Step 2: Add watermark
     const watermarkText = formatThaiDateTime();
     const location = currentLocation || 'ไม่สามารถระบุตำแหน่งได้';
     const watermarkedBlob = await addWatermark(resizedBlob, watermarkText, location);
@@ -573,41 +568,31 @@ const Camera = () => {
       
       img.onload = () => {
         try {
-          const targetRatio = targetWidth / targetHeight; // 4:3
+          const targetRatio = targetWidth / targetHeight;
           const imageWidth = img.width;
           const imageHeight = img.height;
           const imageRatio = imageWidth / imageHeight;
           
-          console.log(`Processing: ${imageWidth}x${imageHeight} → ${targetWidth}x${targetHeight}`);
-          
-          // Set canvas to target size
           canvas.width = targetWidth;
           canvas.height = targetHeight;
           
-          // Calculate crop area (center crop)
           let sourceX = 0, sourceY = 0, sourceWidth = imageWidth, sourceHeight = imageHeight;
           
           if (imageRatio > targetRatio) {
-            // Image is wider - crop sides
             sourceWidth = imageHeight * targetRatio;
             sourceX = (imageWidth - sourceWidth) / 2;
           } else {
-            // Image is taller - crop top/bottom
             sourceHeight = imageWidth / targetRatio;
             sourceY = (imageHeight - sourceHeight) / 2;
           }
           
-          console.log(`Crop area: ${sourceX}, ${sourceY}, ${sourceWidth}, ${sourceHeight}`);
-          
-          // Fill with white background
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, targetWidth, targetHeight);
           
-          // Draw cropped and resized image
           ctx.drawImage(
             img,
-            sourceX, sourceY, sourceWidth, sourceHeight,  // source (crop area)
-            0, 0, targetWidth, targetHeight               // destination (canvas)
+            sourceX, sourceY, sourceWidth, sourceHeight,
+            0, 0, targetWidth, targetHeight
           );
           
           canvas.toBlob((blob) => {
@@ -616,7 +601,7 @@ const Camera = () => {
             } else {
               reject(new Error('Failed to create blob from canvas'));
             }
-          }, 'image/jpeg', 0.9); // High quality
+          }, 'image/jpeg', 0.9);
           
         } catch (error) {
           reject(error);

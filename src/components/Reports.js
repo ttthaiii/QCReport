@@ -11,7 +11,8 @@ const Reports = () => {
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(false);
   
   const [formData, setFormData] = useState({
-    category: ''
+    mainCategory: '',
+    subCategory: ''
   });
   
   // 🔥 NEW: Dynamic Fields States
@@ -210,26 +211,24 @@ const Reports = () => {
 
   // 🔥 NEW: Load progress สำหรับหมวดปัจจุบันเท่านั้น
   const loadCurrentCategoryProgress = async () => {
-    if (!formData.category || !isFieldsComplete()) {
+    if (!formData.workType || !formData.category || !isFieldsComplete()) {
       setCurrentCategoryProgress({ completed: 0, total: 0, percentage: 0, completedTopics: [] });
       return;
     }
 
     setIsLoadingProgress(true);
     try {
-      console.log(`📊 Loading progress for current category: ${formData.category}`);
-      
-      // ใช้ Full Match สำหรับหมวดปัจจุบัน
       const response = await api.getCompletedTopicsFullMatch({
         building: dynamicFields['อาคาร'] || '',
         foundation: Object.values(dynamicFields)[1] || '',
+        workType: formData.workType,        // เพิ่ม workType
         category: formData.category,
         dynamicFields: dynamicFields
       });
       
       if (response.success) {
         const completedTopics = new Set(response.data.completedTopics || []);
-        const totalTopics = qcTopics[formData.category] || [];
+        const totalTopics = qcTopics[formData.workType]?.[formData.category] || [];
         const completed = totalTopics.filter(topic => completedTopics.has(topic)).length;
         const total = totalTopics.length;
         const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -240,16 +239,9 @@ const Reports = () => {
           percentage,
           completedTopics: Array.from(completedTopics)
         });
-        
-        console.log(`✅ Progress for ${formData.category}: ${completed}/${total} (${percentage}%)`);
-        setDataStatusMessage(
-          completed === 0 && total > 0 
-            ? `🔍 ไม่พบข้อมูลสำหรับ ${Object.entries(dynamicFields).filter(([k,v]) => v && v.trim()).map(([k,v]) => `${k}:${v}`).join(', ')} ในระบบ`
-            : null
-        );        
       }
     } catch (error) {
-      console.error('❌ Error loading current category progress:', error);
+      console.error('Error loading progress:', error);
       setCurrentCategoryProgress({ completed: 0, total: 0, percentage: 0, completedTopics: [] });
     } finally {
       setIsLoadingProgress(false);
@@ -257,26 +249,21 @@ const Reports = () => {
   };
 
   const generateReport = async () => {
-    if (!formData.category || !isFieldsComplete()) {
-      alert('กรุณาเลือกหมวดงานและกรอกข้อมูลให้ครบถ้วน');
+    if (!formData.workType || !formData.category || !isFieldsComplete()) {
+      alert('กรุณาเลือกประเภทงาน หมวดงาน และกรอกข้อมูลให้ครบถ้วน');
       return;
     }
 
     setIsGenerating(true);
     
     try {
-      console.log('🎯 Generating Full Match report with dynamic fields:', {
-        category: formData.category,
-        dynamicFields: dynamicFields
-      });
-      
-      // ✅ ใช้ dynamic fields โดยตรง สำหรับ Full Match
       const reportData = {
+        workType: formData.workType,           // เพิ่ม workType
         category: formData.category,
-        building: dynamicFields['อาคาร'] || '',           // ✅ ใช้ dynamic fields โดยตรง
-        foundation: Object.values(dynamicFields)[1] || '', // ✅ field ที่ 2 โดยตรง
-        dynamicFields: dynamicFields,                      // ✅ ส่ง full dynamic fields
-        useFullMatch: true                                 // ✅ flag บอกให้ใช้ Full Match
+        building: dynamicFields['อาคาร'] || '',
+        foundation: Object.values(dynamicFields)[1] || '',
+        dynamicFields: dynamicFields,
+        useFullMatch: true
       };
       
       const response = await api.generateReport(reportData);
@@ -284,19 +271,15 @@ const Reports = () => {
       if (response.success) {
         setGeneratedReport(response.data);
         
-        // ✅ แสดงข้อมูล Full Match
         const fieldsDisplay = Object.entries(dynamicFields)
           .filter(([key, value]) => value && value.trim())
           .map(([key, value]) => `${key}: ${value}`)
           .join(', ');
         
-        alert(`✅ สร้างรายงาน Full Match สำเร็จ!\nไฟล์: ${response.data.filename}\n📋 ข้อมูล: ${fieldsDisplay}`);
-      } else {
-        throw new Error('Failed to generate report');
+        alert(`สร้างรายงาน 3-level สำเร็จ!\nไฟล์: ${response.data.filename}\nข้อมูล: ${formData.workType} > ${formData.category}\n${fieldsDisplay}`);
       }
-      
     } catch (error) {
-      console.error('Error generating Full Match report:', error);
+      console.error('Error generating report:', error);
       alert('เกิดข้อผิดพลาดในการสร้างรายงาน: ' + error.message);
     } finally {
       setIsGenerating(false);
