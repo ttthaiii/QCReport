@@ -3,8 +3,11 @@
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const { getDriveClient } = require('./google-auth');
-const { getSheetsClient } = require('./google-auth'); // แก้ไข path ให้ถูกต้อง
+const { getSheetsClient } = require('./google-auth'); // ✅ เก็บแค่นี้
 const { Readable } = require('stream');
+
+// 🔥 Import เฉพาะ isFullMatch จาก sheets.js
+const { isFullMatch } = require('../api/sheets');
 
 const SHEETS_ID = '1ez_Dox16jf9lr5TEsLL5BEOfKZDNGkVD31YSBtx3Qa8';
 
@@ -162,23 +165,13 @@ async function createFullLayoutPhotos(photos, category) {
 function createOptimizedHTML(reportData) {
   const { photos, projectName, category, dynamicFields, building, foundation } = reportData;
   
-  // สำหรับทุกหมวดงาน - แบ่งหน้าปกติ (6 รูปต่อหน้า)
+  // แบ่งหน้าปกติ (6 รูปต่อหน้า) แต่ไม่เติมช่องว่าง
   const photosPerPage = 6;
   const pages = [];
   
   for (let i = 0; i < photos.length; i += photosPerPage) {
     const pagePhotos = photos.slice(i, i + photosPerPage);
-    
-    // 🔥 ไม่ต้องเติม placeholder เพิ่ม เพราะ createFullLayoutPhotos ทำให้แล้ว
-    // แค่ตรวจสอบว่าถ้าหน้านี้ไม่ครบ 6 ให้เติมช่องว่างเปล่า
-    while (pagePhotos.length < photosPerPage) {
-      pagePhotos.push({
-        topic: '', // ช่องว่างเปล่า
-        imageBase64: null,
-        isEmpty: true // flag สำหรับช่องว่างเปล่า
-      });
-    }
-    
+    // ลบการเติมช่องว่าง - แสดงเฉพาะรูปที่มี
     pages.push(pagePhotos);
   }
 
@@ -384,7 +377,9 @@ function create4FieldHeader(fields, category, projectName, currentDate, pageNumb
 
 // 🔥 UPDATED: Photos Grid - แสดงชื่อหัวข้อจริงจาก Google Sheets
 function createPhotosGrid(photos, pageIndex) {
-  // แบ่งรูป 6 รูปเป็น 3 แถว แถวละ 2 รูป
+  // คำนวณจำนวนแถวที่ต้องการ (2 รูปต่อแถว)
+  const rowCount = Math.ceil(photos.length / 2);
+  
   const rows = [];
   for (let i = 0; i < photos.length; i += 2) {
     rows.push(photos.slice(i, i + 2));
@@ -392,26 +387,9 @@ function createPhotosGrid(photos, pageIndex) {
   
   const rowsHTML = rows.map((rowPhotos, rowIndex) => {
     const photosHTML = rowPhotos.map((photo, photoIndex) => {
-      // 🔥 ตรวจสอบประเภทของ item
-      if (photo.isEmpty) {
-        // ช่องว่างเปล่า - ไม่แสดงอะไร
-        return `
-          <div class="photo-frame">
-            <div class="photo-container">
-              <div class="photo-placeholder"></div>
-            </div>
-            <div class="photo-caption">
-              <span class="photo-title"></span>
-            </div>
-          </div>
-        `;
-      }
-      
-      // 🔥 ใช้ topicOrder ถ้ามี ไม่งั้นใช้ global index
       const displayNumber = photo.topicOrder || 
         ((pageIndex * 6) + (rowIndex * 2) + photoIndex + 1);
       
-      // 🔥 แสดงชื่อหัวข้อจริงจาก Google Sheets
       const topicName = photo.topic || `หัวข้อที่ ${displayNumber}`;
       
       return `
@@ -480,7 +458,7 @@ function getInlineCSS() {
         flex-direction: column;
       }
       
-      /* Header Styles */
+      /* Header Styles - ไม่เปลี่ยน */
       .header {
         margin-bottom: 10px;
         flex-shrink: 0;
@@ -536,7 +514,7 @@ function getInlineCSS() {
         min-height: 60px;
       }
       
-      /* 🔥 NEW: 2-column layout (เดิม) */
+      /* 2-column layout */
       .info-column {
         display: table-cell;
         width: 50%;
@@ -548,7 +526,7 @@ function getInlineCSS() {
         border-left: 1px solid #ddd;
       }
       
-      /* 🔥 NEW: 3-field grid layout */
+      /* 3-field grid layout */
       .info-grid-3 {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
@@ -558,7 +536,7 @@ function getInlineCSS() {
         min-height: 60px;
       }
       
-      /* 🔥 NEW: 4-field grid layout */
+      /* 4-field grid layout */
       .info-grid-4 {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -577,7 +555,6 @@ function getInlineCSS() {
         align-items: center;
       }
       
-      /* 🔥 Grid layouts ใช้ขนาดฟอนต์เล็กกว่า */
       .info-grid-3 .info-item,
       .info-grid-4 .info-item {
         font-size: 9px;
@@ -605,7 +582,7 @@ function getInlineCSS() {
         flex: 1;
       }
       
-      /* Photos Grid - ขยายให้เต็มพื้นที่ */
+      /* Photos Grid - คืนขนาดเดิม ไม่ลดรูป */
       .photos-grid {
         width: 100%;
         overflow: hidden;
@@ -617,7 +594,7 @@ function getInlineCSS() {
       
       .photo-row {
         display: flex;
-        flex: 1;
+        height: 250px;  /* กำหนดความสูงคงที่แทน flex: 1 */
         margin-bottom: 5px;
       }
       
@@ -640,8 +617,9 @@ function getInlineCSS() {
         margin-right: 0;
       }
       
+      /* คืนขนาดรูปเดิม */
       .photo-container {
-        flex: 1;
+        flex: 1;  /* คืนค่าเดิม - ให้รูปขยายเต็มพื้นที่ */
         background: white;
         text-align: center;
         position: relative;
@@ -724,21 +702,419 @@ function getInlineCSS() {
   `;
 }
 
-// 🔥 UPDATED: สร้าง PDF ด้วย Optimized Puppeteer + Dynamic Fields
+async function getLatestPhotosForReport(reportCriteria) {
+  try {
+    console.log('🔍 Getting latest photos for report with criteria:', reportCriteria);
+    
+    const sheets = getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'Master_Photos_Log!A:J'
+    });
+    
+    const rows = response.data.values || [];
+    const photosByTopic = new Map();
+    
+    // ประมวลผลแต่ละ row
+    rows.slice(1).forEach((row, rowIndex) => {
+      if (row.length >= 6) {
+        const [id, timestamp, building, foundation, category, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
+        
+        // สร้าง rowData สำหรับ Full Match check
+        const rowData = {
+          building: building,
+          foundation: foundation,
+          category: category,
+          dynamicFieldsJSON: dynamicFieldsJSON
+        };
+        
+        // ✅ ใช้ Full Match เพื่อความแม่นยำ
+        if (isFullMatch(reportCriteria, rowData)) {
+          
+          const photoData = {
+            topic: topic,
+            timestamp: timestamp,
+            filename: filename,
+            driveUrl: driveUrl,
+            location: location || '',
+            imageBase64: null,
+            id: id,
+            rowIndex: rowIndex + 2 // เก็บ row index สำหรับ debug
+          };
+          
+          // 🔥 ปรับปรุงการจัดการรูปซ้ำ
+          if (!photosByTopic.has(topic)) {
+            console.log(`➕ First photo for topic "${topic}": ${timestamp}`);
+            photosByTopic.set(topic, photoData);
+          } else {
+            const existing = photosByTopic.get(topic);
+            const shouldReplace = isNewerPhoto(photoData, existing);
+            
+            if (shouldReplace) {
+              console.log(`🔄 Replacing photo for topic "${topic}":`, {
+                old: `${existing.timestamp} (row ${existing.rowIndex})`,
+                new: `${timestamp} (row ${photoData.rowIndex})`
+              });
+              photosByTopic.set(topic, photoData);
+            } else {
+              console.log(`⏩ Keeping existing photo for topic "${topic}":`, {
+                keeping: `${existing.timestamp} (row ${existing.rowIndex})`,
+                skipping: `${timestamp} (row ${photoData.rowIndex})`
+              });
+            }
+          }
+        }
+      }
+    });
+    
+    const latestPhotos = Array.from(photosByTopic.values());
+    console.log(`✅ Found ${latestPhotos.length} latest photos for report`);
+    
+    // 📊 แสดงสรุปรูปที่เลือก
+    latestPhotos.forEach((photo, index) => {
+      console.log(`📷 ${index + 1}. "${photo.topic}" - ${photo.timestamp} (row ${photo.rowIndex})`);
+    });
+    
+    // โหลดรูปจาก Google Drive
+    const photosWithImages = await loadImagesFromDrive(latestPhotos);
+    
+    return photosWithImages;
+    
+  } catch (error) {
+    console.error('❌ Error getting latest photos for report:', error);
+    return [];
+  }
+}
+
+function isNewerPhoto(newPhoto, existingPhoto) {
+  try {
+    // 1. เปรียบเทียบ timestamp
+    const newTime = parseTimestamp(newPhoto.timestamp);
+    const existingTime = parseTimestamp(existingPhoto.timestamp);
+    
+    // ถ้าทั้งคู่ parse ได้
+    if (newTime.isValid && existingTime.isValid) {
+      if (newTime.date.getTime() !== existingTime.date.getTime()) {
+        return newTime.date > existingTime.date;
+      }
+      console.log(`⚠️ Same timestamp detected for "${newPhoto.topic}": ${newPhoto.timestamp}`);
+    }
+    
+    // 2. Fallback: เปรียบเทียบ row index (รูปที่อยู่ล่างกว่าใน sheet น่าจะใหม่กว่า)
+    if (newPhoto.rowIndex && existingPhoto.rowIndex) {
+      console.log(`🔢 Using row index fallback: new=${newPhoto.rowIndex} vs existing=${existingPhoto.rowIndex}`);
+      return newPhoto.rowIndex > existingPhoto.rowIndex;
+    }
+    
+    // 3. Fallback: เปรียบเทียบ ID (ถ้า ID เป็นตัวเลข)
+    const newId = parseInt(newPhoto.id);
+    const existingId = parseInt(existingPhoto.id);
+    if (!isNaN(newId) && !isNaN(existingId)) {
+      console.log(`🆔 Using ID fallback: new=${newId} vs existing=${existingId}`);
+      return newId > existingId;
+    }
+    
+    // 4. Fallback สุดท้าย: เปรียบเทียบ filename
+    console.log(`📁 Using filename fallback: comparing "${newPhoto.filename}" vs "${existingPhoto.filename}"`);
+    return newPhoto.filename > existingPhoto.filename;
+    
+  } catch (error) {
+    console.error('❌ Error comparing photos:', error);
+    // ถ้า error ให้เก็บรูปเก่าไว้
+    return false;
+  }
+}
+
+function parseTimestamp(timestamp) {
+  if (!timestamp) {
+    return { isValid: false, date: null, error: 'Empty timestamp' };
+  }
+  
+  try {
+    // ลองหลายรูปแบบ timestamp ที่เป็นไปได้
+    const formats = [
+      // ISO format
+      () => new Date(timestamp),
+      // Thai format: DD/MM/YYYY HH:MM:SS
+      () => {
+        const match = timestamp.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+        if (match) {
+          const [, day, month, year, hour, minute, second] = match;
+          return new Date(year, month - 1, day, hour, minute, second);
+        }
+        return null;
+      },
+      // Google Sheets timestamp format
+      () => {
+        if (typeof timestamp === 'number') {
+          // Excel/Google Sheets serial date
+          return new Date((timestamp - 25569) * 86400 * 1000);
+        }
+        return null;
+      }
+    ];
+    
+    for (const formatFn of formats) {
+      const date = formatFn();
+      if (date && !isNaN(date.getTime())) {
+        return { 
+          isValid: true, 
+          date: date, 
+          format: formatFn.name || 'unknown' 
+        };
+      }
+    }
+    
+    return { 
+      isValid: false, 
+      date: null, 
+      error: `Cannot parse timestamp: ${timestamp}` 
+    };
+    
+  } catch (error) {
+    return { 
+      isValid: false, 
+      date: null, 
+      error: `Parse error: ${error.message}` 
+    };
+  }
+}
+
+async function debugPhotoSelection(reportCriteria) {
+  try {
+    console.log('🐛 === DEBUG: Photo Selection Process ===');
+    console.log('Search criteria:', reportCriteria);
+    
+    const sheets = getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEETS_ID,
+      range: 'Master_Photos_Log!A:J'
+    });
+    
+    const rows = response.data.values || [];
+    const matchingRows = [];
+    
+    // หาทุก row ที่ match
+    rows.slice(1).forEach((row, rowIndex) => {
+      if (row.length >= 6) {
+        const [id, timestamp, building, foundation, category, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
+        
+        const rowData = {
+          building: building,
+          foundation: foundation,
+          category: category,
+          dynamicFieldsJSON: dynamicFieldsJSON
+        };
+        
+        if (isFullMatch(reportCriteria, rowData)) {
+          matchingRows.push({
+            rowIndex: rowIndex + 2,
+            id, timestamp, building, foundation, category, topic, filename,
+            parsedTime: parseTimestamp(timestamp)
+          });
+        }
+      }
+    });
+    
+    console.log(`🔍 Found ${matchingRows.length} matching rows:`);
+    
+    // จัดกลุ่มตาม topic
+    const byTopic = {};
+    matchingRows.forEach(row => {
+      if (!byTopic[row.topic]) {
+        byTopic[row.topic] = [];
+      }
+      byTopic[row.topic].push(row);
+    });
+    
+    // แสดงผลการจัดกลุ่ม
+    Object.entries(byTopic).forEach(([topic, photos]) => {
+      console.log(`\n📸 Topic: "${topic}" (${photos.length} photos)`);
+      photos.forEach((photo, index) => {
+        console.log(`  ${index + 1}. Row ${photo.rowIndex}: ${photo.timestamp} (${photo.parsedTime.isValid ? 'valid' : 'invalid'}) - ${photo.filename}`);
+      });
+      
+      if (photos.length > 1) {
+        // แสดงการเลือกรูปล่าสุด
+        let selected = photos[0];
+        for (let i = 1; i < photos.length; i++) {
+          if (isNewerPhoto(photos[i], selected)) {
+            selected = photos[i];
+          }
+        }
+        console.log(`  ✅ Selected: Row ${selected.rowIndex} - ${selected.timestamp}`);
+      }
+    });
+    
+    return byTopic;
+    
+  } catch (error) {
+    console.error('❌ Debug error:', error);
+    return {};
+  }
+}
+
+async function loadImagesFromDrive(photos) {
+  if (!photos || photos.length === 0) {
+    console.log('⚠️ No photos to load');
+    return photos;
+  }
+  
+  console.log(`📥 Loading ${photos.length} images from Google Drive...`);
+  const drive = getDriveClient();
+  
+  const photosWithImages = [];
+  
+  for (let i = 0; i < photos.length; i++) {
+    const photo = photos[i];
+    console.log(`📷 Loading image ${i + 1}/${photos.length}: ${photo.topic}`);
+    
+    try {
+      // Extract file ID from Drive URL
+      let fileId = null;
+      
+      if (photo.driveUrl) {
+        // Handle different Google Drive URL formats
+        const urlMatch = photo.driveUrl.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
+        if (urlMatch) {
+          fileId = urlMatch[1];
+        } else {
+          // Try alternative format
+          const idMatch = photo.driveUrl.match(/id=([a-zA-Z0-9-_]+)/);
+          if (idMatch) {
+            fileId = idMatch[1];
+          }
+        }
+      }
+      
+      if (!fileId) {
+        console.log(`⚠️ Cannot extract file ID from URL: ${photo.driveUrl}`);
+        photosWithImages.push({
+          ...photo,
+          imageBase64: null,
+          loadError: 'Invalid Drive URL'
+        });
+        continue;
+      }
+      
+      console.log(`📁 Downloading file ID: ${fileId}`);
+      
+      // Download file from Google Drive
+      const response = await drive.files.get({
+        fileId: fileId,
+        alt: 'media',
+        supportsAllDrives: true
+      }, { responseType: 'arraybuffer' });
+      
+      // Convert to base64
+      const buffer = Buffer.from(response.data);
+      const base64 = buffer.toString('base64');
+      
+      console.log(`✅ Image loaded for "${photo.topic}": ${base64.length} chars`);
+      
+      photosWithImages.push({
+        ...photo,
+        imageBase64: base64,
+        loadError: null
+      });
+      
+    } catch (error) {
+      console.error(`❌ Error loading image for "${photo.topic}":`, error.message);
+      
+      photosWithImages.push({
+        ...photo,
+        imageBase64: null,
+        loadError: error.message
+      });
+    }
+  }
+  
+  const successCount = photosWithImages.filter(p => p.imageBase64).length;
+  const failCount = photosWithImages.filter(p => !p.imageBase64).length;
+  
+  console.log(`📊 Image loading results: ${successCount} success, ${failCount} failed`);
+  
+  return photosWithImages;
+}
+
+// 🔥 NEW: ฟังก์ชันทดสอบการเข้าถึง Google Drive
+async function testDriveAccess() {
+  try {
+    console.log('🔍 Testing Google Drive access...');
+    
+    const drive = getDriveClient();
+    
+    // Test basic access
+    const aboutResponse = await drive.about.get({
+      fields: 'user,storageQuota',
+      supportsAllDrives: true
+    });
+    
+    console.log('✅ Drive access successful:');
+    console.log('- User:', aboutResponse.data.user?.emailAddress);
+    console.log('- Storage:', aboutResponse.data.storageQuota);
+    
+    // Test listing files in target folder
+    const FOLDER_ID = '1abU3Kp24IjOyu6wMxQ-TFcoPirhoum2o';
+    
+    const filesResponse = await drive.files.list({
+      q: `'${FOLDER_ID}' in parents`,
+      fields: 'files(id, name, mimeType, size)',
+      pageSize: 5,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+    
+    console.log('📁 Sample files in folder:');
+    filesResponse.data.files?.forEach((file, index) => {
+      console.log(`${index + 1}. ${file.name} (${file.mimeType}) - ${file.size} bytes`);
+    });
+    
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Drive access test failed:', error);
+    return false;
+  }
+}
+
+// 🔥 UPDATED: generateOptimizedPDF with better error handling
 async function generateOptimizedPDF(reportData) {
   let browser = null;
   let page = null;
   
   try {
-    console.log('🎯 Starting Optimized PDF generation with dynamic fields...');
+    console.log('🎯 Starting Optimized PDF generation with LATEST PHOTOS only...');
+    
+    // 🔥 Test Drive access first
+    const driveAccessOk = await testDriveAccess();
+    if (!driveAccessOk) {
+      console.log('⚠️ Drive access issues detected, continuing anyway...');
+    }
+    
     console.log(`📊 Report data:`, {
       category: reportData.category,
       dynamicFields: reportData.dynamicFields,
-      originalPhotos: reportData.photos.length
+      useFullMatch: reportData.useFullMatch
+    });
+    
+    // 🔥 ใช้ getLatestPhotosForReport แทน getPhotosForReport
+    const latestPhotos = await getLatestPhotosForReport({
+      building: reportData.building,
+      foundation: reportData.foundation,
+      category: reportData.category,
+      dynamicFields: reportData.dynamicFields
+    });
+    
+    console.log(`✅ Using LATEST photos only: ${latestPhotos.length} photos`);
+    
+    // Log photo details
+    latestPhotos.forEach((photo, index) => {
+      console.log(`📷 Photo ${index + 1}: "${photo.topic}" - ${photo.imageBase64 ? 'Image loaded' : 'No image'}`);
     });
     
     // 🔥 สร้าง Full Layout รวมทั้งรูปที่ถ่ายและ placeholder
-    const fullLayoutPhotos = await createFullLayoutPhotos(reportData.photos, reportData.category);
+    const fullLayoutPhotos = await createFullLayoutPhotos(latestPhotos, reportData.category);
     
     // ใช้ fullLayoutPhotos แทน reportData.photos
     const updatedReportData = {
@@ -746,10 +1122,10 @@ async function generateOptimizedPDF(reportData) {
       photos: fullLayoutPhotos
     };
     
-    console.log(`✅ Using full layout: ${fullLayoutPhotos.length} items (photos + placeholders)`);
+    console.log(`✅ Using full layout: ${fullLayoutPhotos.length} items (latest photos + placeholders)`);
     
     const html = createOptimizedHTML(updatedReportData);
-    console.log('📄 HTML template created with dynamic fields support');
+    console.log('📄 HTML template created with latest photos only');
     
     browser = await getBrowser();
     page = await browser.newPage();
@@ -789,7 +1165,7 @@ async function generateOptimizedPDF(reportData) {
       timeout: 60000
     });
     
-    console.log(`✅ Optimized PDF generated with dynamic fields! Size: ${pdfBuffer.length} bytes`);
+    console.log(`✅ Optimized PDF generated with LATEST PHOTOS only! Size: ${pdfBuffer.length} bytes`);
     
     // ปิด page แต่เก็บ browser ไว้ reuse
     await page.close();
@@ -807,6 +1183,7 @@ async function generateOptimizedPDF(reportData) {
     throw error;
   }
 }
+
 
 // อัปโหลด PDF ไป Google Drive
 async function uploadPDFToDrive(pdfBuffer, filename) {
@@ -879,11 +1256,16 @@ module.exports = {
   generateOptimizedPDF,
   uploadPDFToDrive,
   cleanup,
-  // 🔥 Export ฟังก์ชันใหม่เพื่อให้ส่วนอื่นใช้ได้
+  getLatestPhotosForReport,
   createFullLayoutPhotos,
   getQCTopicsOrder,
-  createDynamicHeader, // 🔥 NEW: Export สำหรับ testing
-  create2FieldHeader,  // 🔥 NEW: Export สำหรับ testing  
-  create3FieldHeader,  // 🔥 NEW: Export สำหรับ testing
-  create4FieldHeader   // 🔥 NEW: Export สำหรับ testing
+  createDynamicHeader,
+  create2FieldHeader,  
+  create3FieldHeader,  
+  create4FieldHeader,
+  
+  // 🔥 ฟังก์ชันใหม่
+  isNewerPhoto,
+  parseTimestamp,
+  debugPhotoSelection
 };

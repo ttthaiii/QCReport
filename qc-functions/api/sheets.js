@@ -511,22 +511,40 @@ async function getFieldValues(fieldName, category) {
     const rows = response.data.values || [];
     const values = [];
     
+    console.log(`🔍 Getting field values for: fieldName="${fieldName}", category="${category}"`);
+    
     // กรองและเรียงข้อมูล
     rows.slice(1).forEach(row => {
       if (row.length >= 3) {
         const [rowFieldName, rowFieldValue, rowCategory, count, lastUsed] = row;
         
-        // ✅ แก้เงื่อนไข: อาคารใช้ร่วมกันได้ แต่ field อื่นต้องตรง category
-        const shouldInclude = rowFieldName === fieldName && (
-          (fieldName === 'อาคาร') || // อาคารใช้ร่วมกันได้ทุก category  
-          (rowCategory === category)  // field อื่นต้องตรง category เท่านั้น
-        );
+        console.log(`📋 Checking row: field="${rowFieldName}", value="${rowFieldValue}", category="${rowCategory}"`);
         
-        if (shouldInclude) {
+        // 🔥 แก้ไขเงื่อนไขการกรอง
+        let shouldInclude = false;
+        
+        if (rowFieldName === fieldName) {
+          if (fieldName === 'อาคาร') {
+            // อาคารใช้ร่วมกันได้ทุก category (ไม่กรอง category)
+            shouldInclude = true;
+            console.log(`✅ Including "${rowFieldValue}" - อาคารใช้ร่วมกัน`);
+          } else {
+            // Field อื่นต้องตรง category เท่านั้น
+            if (rowCategory === category) {
+              shouldInclude = true;
+              console.log(`✅ Including "${rowFieldValue}" - category match: ${category}`);
+            } else {
+              console.log(`❌ Excluding "${rowFieldValue}" - category mismatch: ${rowCategory} vs ${category}`);
+            }
+          }
+        }
+        
+        if (shouldInclude && rowFieldValue && rowFieldValue.trim()) {
           values.push({
-            value: rowFieldValue,
+            value: rowFieldValue.trim(),
             count: parseInt(count || 1),
-            lastUsed: lastUsed
+            lastUsed: lastUsed,
+            category: rowCategory // เก็บไว้เพื่อ debug
           });
         }
       }
@@ -546,10 +564,15 @@ async function getFieldValues(fieldName, category) {
       return true;
     });
 
-    return uniqueValues.map(v => v.value);
+    const result = uniqueValues.map(v => v.value);
+    
+    console.log(`📊 Final result for ${fieldName} in ${category}:`, result);
+    console.log(`📈 Total values: ${result.length}`);
+    
+    return result;
     
   } catch (error) {
-    console.error('Error getting field values:', error);
+    console.error('❌ Error getting field values:', error);
     return [];
   }
 }

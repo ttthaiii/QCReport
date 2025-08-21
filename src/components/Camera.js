@@ -270,27 +270,73 @@ const Camera = () => {
   };
 
   const loadProgress = async () => {
-    if (!formData.category || !isFieldsComplete()) return;
+    if (!formData.category || !isFieldsComplete()) {
+      setCompletedTopics(new Set());
+      return;
+    }
     
     setIsLoadingProgress(true);
     try {
-      // 🔥 ส่ง dynamic fields โดยตรง ไม่ convert
+      console.log(`📊 Loading progress for category: ${formData.category}`);
+      console.log(`📊 Dynamic fields:`, dynamicFields);
+      
+      // 🔥 แก้ไข: ใช้ dynamic fields conversion แทน hardcode
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      
+      console.log(`📊 Converted to master data format:`, masterDataFields);
+      
       const response = await api.getCompletedTopicsFullMatch({
-        building: dynamicFields['อาคาร'] || '',        // ✅ ใช้ dynamic fields โดยตรง
-        foundation: dynamicFields['เสาเบอร์'] || '',   // ✅ ใช้ dynamic fields โดยตรง
+        building: masterDataFields.building,
+        foundation: masterDataFields.foundation,
         category: formData.category,
-        dynamicFields: dynamicFields                   // ✅ ส่ง full dynamic fields
+        dynamicFields: dynamicFields // ✅ ส่ง full dynamic fields สำหรับ Full Match
       });
       
       if (response.success) {
-        setCompletedTopics(new Set(response.data.completedTopics || []));
+        const completedTopicsArray = response.data.completedTopics || [];
+        setCompletedTopics(new Set(completedTopicsArray));
+        
+        console.log(`✅ Progress loaded: ${completedTopicsArray.length} completed topics`);
+        console.log(`✅ Completed topics:`, completedTopicsArray);
+      } else {
+        console.log(`❌ Progress load failed:`, response);
+        setCompletedTopics(new Set());
       }
     } catch (error) {
-      console.error('Error loading progress:', error);
+      console.error('❌ Error loading progress:', error);
+      setCompletedTopics(new Set());
     } finally {
       setIsLoadingProgress(false);
     }
   };
+
+  // 🔥 เพิ่มฟังก์ชัน debug สำหรับตรวจสอบ
+  const debugProgress = async () => {
+    console.log('=== DEBUG PROGRESS ===');
+    console.log('Category:', formData.category);
+    console.log('Dynamic Fields:', dynamicFields);
+    console.log('Category Fields:', categoryFields);
+    console.log('Is Fields Complete:', isFieldsComplete());
+    
+    if (isFieldsComplete()) {
+      const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
+      console.log('Master Data Fields:', masterDataFields);
+      
+      try {
+        const response = await api.getCompletedTopicsFullMatch({
+          building: masterDataFields.building,
+          foundation: masterDataFields.foundation,
+          category: formData.category,
+          dynamicFields: dynamicFields
+        });
+        console.log('API Response:', response);
+      } catch (error) {
+        console.error('API Error:', error);
+      }
+    }
+    console.log('=== END DEBUG ===');
+  };
+
 
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -391,6 +437,31 @@ const Camera = () => {
       return;
     }
 
+    // 🔥 เช็คว่าหัวข้อนี้ถ่ายไปแล้วหรือยัง
+    const existingPhotos = capturedPhotos.filter(photo => photo.topic === topic);
+    const isCompletedFromServer = completedTopics.has(topic);
+    
+    if (existingPhotos.length > 0 || isCompletedFromServer) {
+      const photoCount = existingPhotos.length;
+      const serverStatus = isCompletedFromServer ? '\n(พบข้อมูลในระบบด้วย)' : '';
+      
+      const confirmed = window.confirm(
+        `⚠️ การถ่ายรูปซ้ำ\n\n` +
+        `หัวข้อ: "${topic}"\n` +
+        `${photoCount > 0 ? `มีรูปอยู่แล้ว: ${photoCount} รูป` : 'มีข้อมูลในระบบแล้ว'}${serverStatus}\n\n` +
+        `❓ ต้องการถ่ายรูปใหม่หรือไม่?\n\n` +
+        `✅ ตกลง = ถ่ายใหม่ (รูปใหม่จะใช้ในรายงาน)\n` +
+        `❌ ยกเลิก = ไม่ถ่าย`
+      );
+      
+      if (!confirmed) {
+        console.log(`User cancelled duplicate photo for topic: ${topic}`);
+        return; // ยกเลิกการถ่าย
+      }
+      
+      console.log(`User confirmed duplicate photo for topic: ${topic}`);
+    }
+
     console.log(`Selected topic: ${topic}, checking dynamic fields:`, dynamicFields);
     
     // Auto-add ข้อมูลใหม่ (ถ้ามี) ก่อนถ่ายรูป
@@ -428,7 +499,6 @@ const Camera = () => {
       // Process image: resize + crop + watermark
       const processedBlob = await processImageForQC(file);
       
-      // 🔥 UPDATED: Add photo with dynamic fields
       const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
       
       const photoData = {
@@ -442,10 +512,10 @@ const Camera = () => {
         location: currentLocation,
         timestamp: new Date().toISOString(),
         dimensions: '1600x1200',
-        dynamicFields: { ...dynamicFields } // 🔥 NEW: เก็บ dynamic fields
+        dynamicFields: { ...dynamicFields }
       };
 
-      // Add to captured photos array
+      // 🔥 เก็บรูปทุกรูป (ไม่แทนที่) เพื่อให้มี history
       setCapturedPhotos(prev => [...prev, photoData]);
       
       // Update completed topics
@@ -456,7 +526,16 @@ const Camera = () => {
       // Reset camera state
       resetCameraState();
       
-      alert(`✅ ถ่ายรูป "${selectedTopic}" เรียบร้อย!\n📏 ขนาด: 1600×1200\n📷 รูปทั้งหมด: ${capturedPhotos.length + 1} รูป`);
+      // 🔥 แก้ไขข้อความแจ้งเตือน - แสดงจำนวนหัวข้อที่ไม่ซ้ำ
+      const currentUniqueTopics = new Set([...capturedPhotos.map(p => p.topic), selectedTopic]).size;
+      const currentTotalPhotos = capturedPhotos.length + 1;
+      
+      alert(
+        `✅ ถ่ายรูป "${selectedTopic}" เรียบร้อย!\n` +
+        `📏 ขนาด: 1600×1200\n` +
+        `📷 หัวข้อที่ถ่ายแล้ว: ${currentUniqueTopics} หัวข้อ\n` +
+        `🔢 รูปทั้งหมด: ${currentTotalPhotos} รูป`
+      );
 
     } catch (error) {
       console.error('Error processing image:', error);
@@ -466,6 +545,7 @@ const Camera = () => {
       setIsProcessing(false);
     }
   };
+
 
   // Process image for QC (resize + crop + watermark)
   const processImageForQC = async (imageFile) => {
@@ -812,6 +892,11 @@ const Camera = () => {
     );
   };
 
+  const getUniqueTopicsCount = () => {
+    const uniqueTopics = new Set(sortedPhotosForDisplay.map(p => p.topic));
+    return uniqueTopics.size;
+  };
+
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>📸 ถ่ายรูป QC </h1>
@@ -827,12 +912,14 @@ const Camera = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1565c0' }}>
             📊 ความครบถ้วน: {progressStats.completed}/{progressStats.total} ({progressStats.percentage}%)
-            {sortedPhotosForDisplay.length > 0 && ` | 📷 ถ่ายแล้ว: ${sortedPhotosForDisplay.length} รูป`}
+            {/* 🔥 แก้ไข: นับเฉพาะหัวข้อที่ไม่ซ้ำ */}
+            {sortedPhotosForDisplay.length > 0 && ` | 📷 ถ่ายแล้ว: ${getUniqueTopicsCount()} หัวข้อ`}
           </span>
           {isLoadingProgress && (
             <span style={{ fontSize: '12px', color: '#666' }}>กำลังโหลด...</span>
           )}
         </div>
+        
         {progressStats.total > 0 && (
           <div style={{ 
             marginTop: '8px',
@@ -850,6 +937,7 @@ const Camera = () => {
           </div>
         )}
       </div>
+
       
       {/* 🔥 NEW: Dynamic Form */}
       {renderDynamicForm()}
@@ -889,6 +977,11 @@ const Camera = () => {
                   const isCompleted = completedTopics.has(topic);
                   const photosForThisTopic = sortedPhotosForDisplay.filter(p => p.topic === topic);
                   
+                  // 🔥 ลดรูปแบบการแสดงผล - ไม่แสดงสถานะซ้ำ
+                  let backgroundColor = isCompleted ? '#e8f5e8' : '#ffffff'; // เขียว = เสร็จ, ขาว = ยังไม่เสร็จ
+                  let statusIcon = isCompleted ? '✅' : '📷';
+                  let statusColor = isCompleted ? '#28a745' : '#007bff';
+                  
                   return (
                     <button
                       key={topic}
@@ -900,8 +993,8 @@ const Camera = () => {
                         border: '1px solid #dee2e6',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        backgroundColor: isCompleted ? '#e8f5e8' : '#ffffff',
-                        color: isCompleted ? '#2e7d32' : '#495057',
+                        backgroundColor: backgroundColor,
+                        color: '#495057',
                         transition: 'all 0.2s ease',
                         position: 'relative',
                         minHeight: '50px',
@@ -916,7 +1009,7 @@ const Camera = () => {
                         e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = isCompleted ? '#e8f5e8' : '#ffffff';
+                        e.target.style.backgroundColor = backgroundColor;
                         e.target.style.borderColor = '#dee2e6';
                         e.target.style.transform = 'translateY(0)';
                         e.target.style.boxShadow = 'none';
@@ -929,16 +1022,15 @@ const Camera = () => {
                         {photosForThisTopic.length > 0 && (
                           <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>
                             📷 ถ่ายแล้ว {photosForThisTopic.length} รูป
+                            {/* 🔥 ลบข้อความ "(ล่าสุดใช้ในรายงาน)" ออก */}
                           </div>
                         )}
                       </div>
                       
                       <div style={{ marginLeft: '10px' }}>
-                        {isCompleted ? (
-                          <span style={{ fontSize: '16px', color: '#28a745' }}>✅</span>
-                        ) : (
-                          <span style={{ fontSize: '16px', color: '#007bff' }}>📷</span>
-                        )}
+                        <span style={{ fontSize: '16px', color: statusColor }}>
+                          {statusIcon}
+                        </span>
                       </div>
                     </button>
                   );
@@ -1042,7 +1134,8 @@ const Camera = () => {
             marginBottom: '15px'
           }}>
             <h3 style={{ margin: 0, color: '#495057' }}>
-              📋 รูปที่ถ่ายแล้ว ({sortedPhotosForDisplay.length} รูป)
+              {/* 🔥 แก้ไข: แสดงทั้งจำนวนหัวข้อไม่ซ้ำ และรูปทั้งหมด */}
+              📋 รูปที่ถ่ายแล้ว ({getUniqueTopicsCount()} หัวข้อ, {sortedPhotosForDisplay.length} รูป)
             </h3>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button 
@@ -1081,6 +1174,7 @@ const Camera = () => {
               </button>
             </div>
           </div>
+
           
           <div style={{ 
             display: 'grid', 

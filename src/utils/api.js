@@ -1,4 +1,4 @@
-// Complete src/utils/api.js - รองรับโครงสร้างหมวดหลัก + หมวดงาน
+// แทนที่ไฟล์ src/utils/api.js ทั้งหมด
 
 // Simple fetch wrapper
 async function apiCall(endpoint, options = {}) {
@@ -48,8 +48,7 @@ async function uploadPhotoFile(photoBlob, photoData) {
         photo: base64,
         building: photoData.building,
         foundation: photoData.foundation,
-        mainCategory: photoData.mainCategory,     // 🔥 NEW
-        subCategory: photoData.subCategory,       // 🔥 เปลี่ยนจาก category
+        category: photoData.category,
         topic: photoData.topic,
         location: photoData.location || '',
         // 🔥 NEW: ส่ง dynamic fields ไปด้วย สำหรับ Full Match
@@ -84,50 +83,44 @@ function blobToBase64(blob) {
 
 // API functions
 export const api = {
-  // 🔥 UPDATED: QC Topics (3-level structure: mainCategory > subCategory > topics)
+  // Get QC topics
   getQCTopics: () => apiCall('/qc-topics'),
   
-  // 🔥 NEW: Main Categories APIs
-  getMainCategories: () => apiCall('/main-categories'),
-  getSubCategories: (mainCategory) => apiCall(`/sub-categories/${encodeURIComponent(mainCategory)}`),
-  getTopicsForCategory: (mainCategory, subCategory) => 
-    apiCall(`/topics/${encodeURIComponent(mainCategory)}/${encodeURIComponent(subCategory)}`),
-  
-  // 🔥 UPDATED: Dynamic Fields APIs (now with subCategory)
-  getDynamicFields: async (subCategory) => {
+  // 🔥 NEW: Dynamic Fields APIs
+  getDynamicFields: async (category) => {
     try {
-      console.log(`API: Getting dynamic fields for sub category (หมวดงาน): ${subCategory}`);
-      const result = await apiCall(`/dynamic-fields/${encodeURIComponent(subCategory)}`);
-      console.log(`API: Dynamic fields result for ${subCategory}:`, result);
+      console.log(`API: Getting dynamic fields for category: ${category}`);
+      const result = await apiCall(`/dynamic-fields/${encodeURIComponent(category)}`);
+      console.log(`API: Dynamic fields result:`, result);
       return result;
     } catch (error) {
-      console.error(`API: Error getting dynamic fields for ${subCategory}:`, error);
+      console.error(`API: Error getting dynamic fields for ${category}:`, error);
       
-      // 🔥 Graceful fallback: return default structure for 3-level
+      // 🔥 Graceful fallback: return default structure
       return {
         success: true,
         data: {
-          useExisting: subCategory === 'ฐานราก',
-          subCategory: subCategory,  // หมวดงาน
-          fields: subCategory === 'ฐานราก' ? [
+          useExisting: category === 'ฐานราก',
+          category: category,
+          fields: category === 'ฐานราก' ? [
             { name: 'อาคาร', type: 'combobox', required: true, placeholder: 'เลือกหรือพิมพ์อาคาร เช่น A, B, C' },
             { name: 'ฐานรากเบอร์', type: 'combobox', required: true, placeholder: 'เลือกหรือพิมพ์เลขฐานราก เช่น F01, F02' }
           ] : [
             { name: 'อาคาร', type: 'combobox', required: true, placeholder: 'เลือกหรือพิมพ์อาคาร เช่น A, B, C' },
-            { name: `${subCategory}เบอร์`, type: 'combobox', required: true, placeholder: `เลือกหรือพิมพ์เลข${subCategory}` }
+            { name: `${category}เบอร์`, type: 'combobox', required: true, placeholder: `เลือกหรือพิมพ์เลข${category}` }
           ]
         }
       };
     }
   },
 
-  // 🔥 UPDATED: Validate dynamic fields (now with subCategory)
-  validateDynamicFields: async (subCategory, dynamicFields) => {
+  // 🔥 NEW: Validate dynamic fields
+  validateDynamicFields: async (category, dynamicFields) => {
     try {
-      console.log(`API: Validating dynamic fields for sub category ${subCategory}:`, dynamicFields);
+      console.log(`API: Validating dynamic fields for ${category}:`, dynamicFields);
       const result = await apiCall('/validate-dynamic-fields', {
         method: 'POST',
-        body: JSON.stringify({ subCategory, dynamicFields })
+        body: JSON.stringify({ category, dynamicFields })
       });
       return result;
     } catch (error) {
@@ -161,14 +154,14 @@ export const api = {
     body: JSON.stringify({ building, foundation })
   }),
 
-  // 🔥 UPDATED: Master Data with Dynamic Fields (now with subCategory)
-  addMasterDataDynamic: async (subCategory, dynamicFields) => {
+  // 🔥 NEW: Master Data with Dynamic Fields
+  addMasterDataDynamic: async (category, dynamicFields) => {
     try {
-      console.log(`API: Adding master data for sub category ${subCategory}:`, dynamicFields);
+      console.log(`API: Adding master data for ${category}:`, dynamicFields);
       
       const result = await apiCall('/master-data-dynamic', {
         method: 'POST',
-        body: JSON.stringify({ subCategory, dynamicFields })
+        body: JSON.stringify({ category, dynamicFields })
       });
       
       return result;
@@ -193,20 +186,20 @@ export const api = {
     }
   },
   
-  // 🔥 UPDATED: Progress Tracking (now with mainCategory + subCategory)
+  // 🔥 Progress Tracking
   getCompletedTopics: (criteria) => apiCall('/completed-topics', {
     method: 'POST',
     body: JSON.stringify(criteria)
   }),
 
-  // 🔥 UPDATED: Progress with Dynamic Fields + Full Match (now with mainCategory + subCategory)
-  getCompletedTopicsDynamic: async (mainCategory, subCategory, dynamicFields) => {
+  // 🔥 NEW: Progress with Dynamic Fields + Full Match
+  getCompletedTopicsDynamic: async (category, dynamicFields) => {
     try {
-      console.log(`API: Getting completed topics with Full Match for ${mainCategory} > ${subCategory}:`, dynamicFields);
+      console.log(`API: Getting completed topics with Full Match for ${category}:`, dynamicFields);
       
       const result = await apiCall('/completed-topics-dynamic', {
         method: 'POST',
-        body: JSON.stringify({ mainCategory, subCategory, dynamicFields })
+        body: JSON.stringify({ category, dynamicFields })
       });
       
       return result;
@@ -220,8 +213,8 @@ export const api = {
         const foundation = fieldValues[1] || '';
         
         if (building && foundation) {
-          console.log(`API: Fallback to legacy for: ${mainCategory} > ${subCategory} (${building}-${foundation})`);
-          return await api.getCompletedTopics({ building, foundation, mainCategory, subCategory });
+          console.log(`API: Fallback to legacy getCompletedTopics: ${building}-${foundation}-${category}`);
+          return await api.getCompletedTopics({ building, foundation, category });
         }
       } catch (fallbackError) {
         console.error('API: Fallback also failed:', fallbackError);
@@ -231,21 +224,19 @@ export const api = {
     }
   },
 
-  // 🔥 UPDATED: Full Match completed topics (now with mainCategory + subCategory)
+  // 🔥 NEW: Full Match completed topics
   getCompletedTopicsFullMatch: (criteria) => apiCall('/completed-topics-full-match', {
     method: 'POST',
     body: JSON.stringify(criteria)
   }),
 
-  // 🔥 UPDATED: Get field values for datalist (now with subCategory)
-  getFieldValues: async (fieldName, subCategory) => {
+  // 🔥 NEW: Get field values for datalist
+  getFieldValues: async (fieldName, category) => {
     try {
-      console.log(`API: Getting field values for ${fieldName} in sub category ${subCategory}`);
-      const result = await apiCall(`/field-values/${encodeURIComponent(fieldName)}/${encodeURIComponent(subCategory)}`);
-      console.log(`API: Loaded ${result.data?.length || 0} values for ${fieldName}`);
+      const result = await apiCall(`/field-values/${encodeURIComponent(fieldName)}/${encodeURIComponent(category)}`);
       return result.data || [];
     } catch (error) {
-      console.error(`API: Error getting field values for ${fieldName} in ${subCategory}:`, error);
+      console.error(`Error getting field values for ${fieldName}:`, error);
       return [];
     }
   },
@@ -253,21 +244,17 @@ export const api = {
   // Upload photo to Drive + log to Sheets
   uploadPhoto: uploadPhotoFile,
   
-  // 🔥 UPDATED: Generate PDF Report (now with mainCategory + subCategory + dynamic fields)
+  // 🔥 Generate PDF Report (Updated to support Full Match + dynamic fields)
   generateReport: async (data) => {
     try {
-      console.log('API: Generating report with 3-level structure:', {
-        mainCategory: data.mainCategory,
-        subCategory: data.subCategory,
-        dynamicFields: data.dynamicFields ? Object.keys(data.dynamicFields).length : 0
-      });
+      console.log('API: Generating report with Full Match support:', data);
       
       const result = await apiCall('/generate-report', {
         method: 'POST',
         body: JSON.stringify(data)
       });
       
-      console.log('API: Report generated successfully:', result.success);
+      console.log('API: Generate report result:', result);
       return result;
     } catch (error) {
       console.error('API: Error generating report:', error);
@@ -275,10 +262,10 @@ export const api = {
     }
   },
 
-  // 🔥 UPDATED: Generate Report with Dynamic Fields (Full Match) - now with mainCategory + subCategory
-  generateReportDynamic: async (mainCategory, subCategory, dynamicFields) => {
+  // 🔥 NEW: Generate Report with Dynamic Fields (Full Match)
+  generateReportDynamic: async (category, dynamicFields) => {
     try {
-      console.log(`API: Generating Full Match report for ${mainCategory} > ${subCategory}:`, dynamicFields);
+      console.log(`API: Generating Full Match report for ${category}:`, dynamicFields);
       
       // Convert dynamic fields to legacy format for compatibility
       const fieldValues = Object.values(dynamicFields);
@@ -286,8 +273,7 @@ export const api = {
       const foundation = fieldValues[1] || '';
       
       const reportData = {
-        mainCategory: mainCategory,      // หมวดหลัก (โครงสร้าง/สถาปัตย์)
-        subCategory: subCategory,        // หมวดงาน (ฐานราก/เสา/ผนัง ฯลฯ)
+        category: category,
         building: building,
         foundation: foundation,
         dynamicFields: dynamicFields // Include for PDF header + Full Match
@@ -312,15 +298,15 @@ export const api = {
     body: JSON.stringify(data)
   }),
 
-  // 🔥 UPDATED: Utility Functions for Dynamic Fields
-
+  // 🔥 NEW: Utility Functions for Dynamic Fields
+  
   // Convert dynamic fields to building+foundation format
-  convertDynamicFieldsToMasterData: (subCategory, dynamicFields) => {
+  convertDynamicFieldsToMasterData: (category, dynamicFields) => {
     if (!dynamicFields || typeof dynamicFields !== 'object') {
       return { building: '', foundation: '' };
     }
     
-    if (subCategory === 'ฐานราก') {
+    if (category === 'ฐานราก') {
       return {
         building: dynamicFields['อาคาร'] || '',
         foundation: dynamicFields['ฐานรากเบอร์'] || ''
@@ -336,8 +322,8 @@ export const api = {
   },
 
   // Convert building+foundation back to dynamic fields
-  convertMasterDataToDynamicFields: (subCategory, building, foundation) => {
-    if (subCategory === 'ฐานราก') {
+  convertMasterDataToDynamicFields: (category, building, foundation) => {
+    if (category === 'ฐานราก') {
       return {
         'อาคาร': building || '',
         'ฐานรากเบอร์': foundation || ''
@@ -347,14 +333,14 @@ export const api = {
     // สำหรับหมวดอื่น: ใช้ pattern เริ่มต้น
     return {
       'อาคาร': building || '',
-      [`${subCategory}เบอร์`]: foundation || ''
+      [`${category}เบอร์`]: foundation || ''
     };
   },
 
   // Create description for logging/display
-  createCombinationDescription: (subCategory, dynamicFields) => {
+  createCombinationDescription: (category, dynamicFields) => {
     if (!dynamicFields || typeof dynamicFields !== 'object') {
-      return subCategory;
+      return category;
     }
     
     const values = Object.entries(dynamicFields)
@@ -362,7 +348,7 @@ export const api = {
       .map(([key, value]) => `${key}:${value}`)
       .join(', ');
       
-    return values || subCategory;
+    return values || category;
   },
 
   // Check if field values are new (not in master data)
@@ -378,8 +364,8 @@ export const api = {
   },
 
   // Validate required fields completion
-  isFieldsComplete: (subCategory, dynamicFields, categoryFields) => {
-    if (!subCategory || !categoryFields || categoryFields.length === 0) return false;
+  isFieldsComplete: (category, dynamicFields, categoryFields) => {
+    if (!category || !categoryFields || categoryFields.length === 0) return false;
     
     // ตรวจสอบ field ที่ required (อย่างน้อย 2 field แรก)
     const requiredFields = categoryFields.slice(0, 2);
@@ -389,18 +375,18 @@ export const api = {
     });
   },
 
-  // 🔥 UPDATED: Load all field values for a sub category (Complete Datalist System)
-  loadAllFieldValues: async (subCategory, categoryFields) => {
+  // 🔥 NEW: Load all field values for a category (Complete Datalist System)
+  loadAllFieldValues: async (category, categoryFields) => {
     try {
-      console.log(`API: Loading all field values for sub category (หมวดงาน): ${subCategory}`);
+      console.log(`API: Loading all field values for category: ${category}`);
       
       const fieldValues = {};
       
       // โหลด values สำหรับทุก field
       for (const field of categoryFields) {
-        const values = await api.getFieldValues(field.name, subCategory);
+        const values = await api.getFieldValues(field.name, category);
         fieldValues[field.name] = values;
-        console.log(`API: Field "${field.name}" in ${subCategory}: ${values.length} values`);
+        console.log(`API: Field "${field.name}": ${values.length} values`);
       }
       
       return fieldValues;
@@ -410,16 +396,16 @@ export const api = {
     }
   },
 
-  // 🔥 UPDATED: Get enhanced master data with field values
-  getMasterDataWithFieldValues: async (subCategory, categoryFields) => {
+  // 🔥 NEW: Get enhanced master data with field values
+  getMasterDataWithFieldValues: async (category, categoryFields) => {
     try {
-      console.log(`API: Getting enhanced master data for sub category ${subCategory}`);
+      console.log(`API: Getting enhanced master data for ${category}`);
       
       // โหลด master data แบบเดิม
       const masterDataResponse = await api.getMasterData();
       
       // โหลด field values สำหรับ datalist
-      const fieldValues = await api.loadAllFieldValues(subCategory, categoryFields);
+      const fieldValues = await api.loadAllFieldValues(category, categoryFields);
       
       return {
         success: true,
@@ -434,57 +420,6 @@ export const api = {
       // Fallback ไปใช้ master data เดิม
       return await api.getMasterData();
     }
-  },
-
-  // 🔥 NEW: Helper functions for working with new structure
-
-  // Convert old topics structure to new structure
-  convertLegacyTopicsToNewStructure: (legacyTopics, defaultMainCategory = 'โครงสร้าง') => {
-    const newStructure = {};
-    newStructure[defaultMainCategory] = legacyTopics;
-    return newStructure;
-  },
-
-  // Get all topics for a main category (flattened)
-  getAllTopicsForMainCategory: (topics, mainCategory) => {
-    if (!topics[mainCategory]) return {};
-    return topics[mainCategory];
-  },
-
-  // Get topic count for a main category
-  getTopicCountForMainCategory: (topics, mainCategory) => {
-    if (!topics[mainCategory]) return 0;
     
-    let totalCount = 0;
-    Object.values(topics[mainCategory]).forEach(subCategoryTopics => {
-      totalCount += subCategoryTopics.length;
-    });
-    
-    return totalCount;
-  },
-
-  // Get topic count for a sub category
-  getTopicCountForSubCategory: (topics, mainCategory, subCategory) => {
-    if (!topics[mainCategory] || !topics[mainCategory][subCategory]) return 0;
-    return topics[mainCategory][subCategory].length;
-  },
-
-  // Check if main category exists
-  hasMainCategory: (topics, mainCategory) => {
-    return topics && topics[mainCategory] && Object.keys(topics[mainCategory]).length > 0;
-  },
-
-  // Check if sub category exists
-  hasSubCategory: (topics, mainCategory, subCategory) => {
-    return topics && topics[mainCategory] && topics[mainCategory][subCategory] && topics[mainCategory][subCategory].length > 0;
-  },
-
-  // Get breadcrumb for current selection
-  getBreadcrumb: (mainCategory, subCategory, topic) => {
-    const parts = [];
-    if (mainCategory) parts.push(mainCategory);
-    if (subCategory) parts.push(subCategory);
-    if (topic) parts.push(topic);
-    return parts.join(' > ');
-  }
+  }  
 };

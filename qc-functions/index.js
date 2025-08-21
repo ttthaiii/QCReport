@@ -5,10 +5,8 @@ const multer = require("multer");
 const { 
   getQCTopics, logPhoto, logReport, getSheetsClient, getMasterData, addMasterData, 
   getCompletedTopics, 
-  // 🔥 NEW: Enhanced functions with MainCategory support
-  getCompletedTopicsFullMatch, getFieldValues,
-  getMainCategories, getSubCategories, getTopicsForCategory,
-  runCompleteMigration
+  // 🔥 NEW: เพิ่มฟังก์ชัน Full Match + Field Values
+  getCompletedTopicsFullMatch, getFieldValues 
 } = require('./api/sheets');
 const { uploadPhoto } = require('./api/photos');
 const { getDriveClient } = require('./services/google-auth');
@@ -42,55 +40,17 @@ app.get("/health", (req, res) => {
   res.json({ 
     status: "OK", 
     timestamp: new Date().toISOString(),
-    message: "QC Report API is running with 3-Level Structure (MainCategory > SubCategory > Topics)" 
+    message: "QC Report API is running with Dynamic Fields support" 
   });
 });
 
-// 🔥 NEW: System Migration endpoint
-app.post("/migrate-system", async (req, res) => {
-  try {
-    console.log('🚀 Starting system migration...');
-    
-    const result = await runCompleteMigration();
-    
-    res.json({
-      success: result.success,
-      message: result.message,
-      data: result.results,
-      errors: result.errors
-    });
-    
-  } catch (error) {
-    console.error('Error running system migration:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// 🔥 UPDATED: Get QC Topics (now supports 3-level structure)
+// Get QC Topics
 app.get("/qc-topics", async (req, res) => {
   try {
-    console.log('📊 Fetching QC topics with 3-level structure...');
     const topics = await getQCTopics();
-    
-    // Log structure summary
-    const mainCategoryCount = Object.keys(topics).length;
-    let totalSubCategories = 0;
-    let totalTopics = 0;
-    
-    Object.values(topics).forEach(subCats => {
-      totalSubCategories += Object.keys(subCats).length;
-      Object.values(subCats).forEach(topicList => {
-        totalTopics += topicList.length;
-      });
-    });
-    
-    console.log(`✅ Loaded: ${mainCategoryCount} main categories, ${totalSubCategories} sub categories, ${totalTopics} topics`);
     res.json({ success: true, data: topics });
   } catch (error) {
-    console.error('❌ Error fetching QC topics:', error);
+    console.error('Error fetching QC topics:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
@@ -98,76 +58,28 @@ app.get("/qc-topics", async (req, res) => {
   }
 });
 
-// 🔥 NEW: Get Main Categories
-app.get("/main-categories", async (req, res) => {
-  try {
-    const mainCategories = await getMainCategories();
-    res.json({ success: true, data: mainCategories });
-  } catch (error) {
-    console.error('Error fetching main categories:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
+// 🔥 NEW: Dynamic Fields Handlers
 
-// 🔥 NEW: Get Sub Categories by Main Category
-app.get("/sub-categories/:mainCategory", async (req, res) => {
-  try {
-    const { mainCategory } = req.params;
-    const subCategories = await getSubCategories(decodeURIComponent(mainCategory));
-    res.json({ success: true, data: subCategories });
-  } catch (error) {
-    console.error('Error fetching sub categories:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
-// 🔥 NEW: Get Topics by Main Category and Sub Category
-app.get("/topics/:mainCategory/:subCategory", async (req, res) => {
-  try {
-    const { mainCategory, subCategory } = req.params;
-    const topics = await getTopicsForCategory(
-      decodeURIComponent(mainCategory), 
-      decodeURIComponent(subCategory)
-    );
-    res.json({ success: true, data: topics });
-  } catch (error) {
-    console.error('Error fetching topics for category:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
-// 🔥 UPDATED: Dynamic Fields Handlers (now with subCategory)
-
-// Get dynamic fields for a sub category
+// Get dynamic fields for a category
 async function getDynamicFieldsHandler(req, res) {
   try {
-    const { subCategory } = req.params;
+    const { category } = req.params;
     
-    if (!subCategory) {
+    if (!category) {
       return res.status(400).json({
         success: false,
-        error: 'Sub category (หมวดงาน) is required'
+        error: 'Category is required'
       });
     }
     
-    console.log(`API: Getting dynamic fields for sub category: ${decodeURIComponent(subCategory)}`);
+    console.log(`API: Getting dynamic fields for category: ${decodeURIComponent(category)}`);
     
-    const result = await getDynamicFields(decodeURIComponent(subCategory));
+    const result = await getDynamicFields(decodeURIComponent(category));
     
-    console.log(`✅ Dynamic fields loaded for ${decodeURIComponent(subCategory)}: ${result.fields?.length || 0} fields`);
     res.json({ success: true, data: result });
     
   } catch (error) {
-    console.error('❌ Error getting dynamic fields:', error);
+    console.error('Error getting dynamic fields:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
@@ -178,18 +90,18 @@ async function getDynamicFieldsHandler(req, res) {
 // Validate dynamic fields
 async function validateDynamicFieldsHandler(req, res) {
   try {
-    const { subCategory, dynamicFields } = req.body;
+    const { category, dynamicFields } = req.body;
     
-    if (!subCategory || !dynamicFields) {
+    if (!category || !dynamicFields) {
       return res.status(400).json({
         success: false,
-        error: 'Sub category (หมวดงาน) and dynamicFields are required'
+        error: 'Category and dynamicFields are required'
       });
     }
     
-    console.log(`API: Validating dynamic fields for ${subCategory}:`, dynamicFields);
+    console.log(`API: Validating dynamic fields for ${category}:`, dynamicFields);
     
-    const validation = validateDynamicFields(subCategory, dynamicFields);
+    const validation = validateDynamicFields(category, dynamicFields);
     
     if (validation.valid) {
       res.json({ success: true, message: 'Fields are valid' });
@@ -212,19 +124,19 @@ async function validateDynamicFieldsHandler(req, res) {
 // Add master data with dynamic fields
 async function addMasterDataDynamicHandler(req, res) {
   try {
-    const { subCategory, dynamicFields } = req.body;
+    const { category, dynamicFields } = req.body;
     
-    if (!subCategory || !dynamicFields) {
+    if (!category || !dynamicFields) {
       return res.status(400).json({
         success: false,
-        error: 'Sub category (หมวดงาน) and dynamicFields are required'
+        error: 'Category and dynamicFields are required'
       });
     }
     
-    console.log(`API: Adding dynamic master data for ${subCategory}:`, dynamicFields);
+    console.log(`API: Adding dynamic master data for ${category}:`, dynamicFields);
     
     // Convert dynamic fields to building+foundation format
-    const masterData = convertDynamicFieldsToMasterData(subCategory, dynamicFields);
+    const masterData = convertDynamicFieldsToMasterData(category, dynamicFields);
     
     if (!masterData.building || !masterData.foundation) {
       return res.status(400).json({
@@ -254,22 +166,22 @@ async function addMasterDataDynamicHandler(req, res) {
   }
 }
 
-// 🔥 UPDATED: Get completed topics with dynamic fields (now with mainCategory + subCategory)
+// Get completed topics with dynamic fields
 async function getCompletedTopicsDynamicHandler(req, res) {
   try {
-    const { mainCategory, subCategory, dynamicFields } = req.body;
+    const { category, dynamicFields } = req.body;
     
-    if (!mainCategory || !subCategory || !dynamicFields) {
+    if (!category || !dynamicFields) {
       return res.status(400).json({
         success: false,
-        error: 'Main category (หมวดหลัก), sub category (หมวดงาน) and dynamicFields are required'
+        error: 'Category and dynamicFields are required'
       });
     }
     
-    console.log(`API: Getting completed topics for ${mainCategory} > ${subCategory}:`, dynamicFields);
+    console.log(`API: Getting completed topics for ${category}:`, dynamicFields);
     
     // Convert dynamic fields to building+foundation format
-    const masterData = convertDynamicFieldsToMasterData(subCategory, dynamicFields);
+    const masterData = convertDynamicFieldsToMasterData(category, dynamicFields);
     
     if (!masterData.building || !masterData.foundation) {
       return res.status(400).json({
@@ -278,12 +190,11 @@ async function getCompletedTopicsDynamicHandler(req, res) {
       });
     }
     
-    // Use enhanced getCompletedTopics function with mainCategory
+    // Use existing getCompletedTopics function
     const result = await getCompletedTopics({
       building: masterData.building,
       foundation: masterData.foundation,
-      mainCategory: mainCategory,      // 🔥 NEW
-      subCategory: subCategory         // 🔥 เปลี่ยนจาก category
+      category: category
     });
     
     res.json(result);
@@ -297,8 +208,8 @@ async function getCompletedTopicsDynamicHandler(req, res) {
   }
 }
 
-// 🔥 NEW: Register enhanced dynamic fields endpoints
-app.get('/dynamic-fields/:subCategory', getDynamicFieldsHandler);
+// 🔥 NEW: Register dynamic fields endpoints
+app.get('/dynamic-fields/:category', getDynamicFieldsHandler);
 app.post('/validate-dynamic-fields', validateDynamicFieldsHandler);
 app.post('/master-data-dynamic', addMasterDataDynamicHandler);
 app.post('/completed-topics-dynamic', getCompletedTopicsDynamicHandler);
@@ -354,26 +265,21 @@ app.post("/master-data", async (req, res) => {
   }
 });
 
-// 🔥 UPDATED: Get Completed Topics (now with mainCategory + subCategory)
+// Get Completed Topics (for progress tracking)
 app.post("/completed-topics", async (req, res) => {
   try {
-    const { building, foundation, mainCategory, subCategory } = req.body;
+    const { building, foundation, category } = req.body;
     
-    if (!building || !foundation || !mainCategory || !subCategory) {
+    if (!building || !foundation || !category) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน)'
+        error: 'Missing required fields: building, foundation, category'
       });
     }
     
-    console.log(`Getting completed topics for: ${building}-${foundation} in ${mainCategory} > ${subCategory}`);
+    console.log(`Getting completed topics for: ${building}-${foundation}-${category}`);
     
-    const result = await getCompletedTopics({ 
-      building, 
-      foundation, 
-      mainCategory,    // 🔥 NEW
-      subCategory      // 🔥 เปลี่ยนจาก category
-    });
+    const result = await getCompletedTopics({ building, foundation, category });
     
     res.json(result);
     
@@ -386,35 +292,45 @@ app.post("/completed-topics", async (req, res) => {
   }
 });
 
-// 🔥 UPDATED: Generate PDF Report - รองรับ MainCategory + SubCategory + Dynamic Fields
+// 🔥 UPDATED: Generate PDF Report - รองรับ Dynamic Fields
 app.post("/generate-report", async (req, res) => {
   try {
-    console.log('🎯 PDF generation request with 3-level structure received');
+    console.log('🎯 Optimized Puppeteer PDF generation request received');
     
-    const { building, foundation, mainCategory, subCategory, dynamicFields } = req.body;
+    const { building, foundation, category, dynamicFields } = req.body;
     
-    if (!building || !foundation || !mainCategory || !subCategory) {
+    if (!building || !foundation || !category) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน)'
+        error: 'Missing required fields: building, foundation, category'
       });
     }
     
-    console.log(`🚀 Generating PDF for: ${building}-${foundation} in ${mainCategory} > ${subCategory}`);
+    console.log(`🚀 Generating PDF for: ${building}-${foundation}-${category}`);
     if (dynamicFields) {
       console.log('📋 Dynamic fields:', dynamicFields);
     }
     
+    // ดึงรูปภาพจาก Google Sheets ที่ตรงกับเงื่อนไข
+    const photos = await getPhotosForReport(building, foundation, category, dynamicFields);
     
-    // 🔥 สร้าง PDF ด้วย Optimized Puppeteer + Dynamic Fields + MainCategory
+    if (!photos || photos.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No photos found for the specified criteria'
+      });
+    }
+    
+    console.log(`📸 Found ${photos.length} photos for PDF`);
+    
+    // 🔥 สร้าง PDF ด้วย Optimized Puppeteer + Dynamic Fields
     const reportData = {
       building,
       foundation,
-      category: subCategory,        // 🔥 เพิ่มสำหรับ backward compatibility
-      mainCategory,
-      subCategory,
+      category,
+      photos,
       projectName: 'Escent Nakhon si',
-      dynamicFields: dynamicFields || null
+      dynamicFields: dynamicFields || null // 🔥 NEW: ส่ง dynamic fields ไป PDF
     };
     
     const pdfBuffer = await generateOptimizedPDF(reportData);
@@ -425,10 +341,10 @@ app.post("/generate-report", async (req, res) => {
     // 🔥 NEW: ใช้ dynamic fields ในชื่อไฟล์ถ้ามี
     let filenamePrefix = 'รูปประกอบการตรวจสอบ';
     if (dynamicFields && Object.keys(dynamicFields).length > 0) {
-      const description = createCombinationDescription(subCategory, dynamicFields);
-      filenamePrefix = `รูปประกอบการตรวจสอบ-${mainCategory}-${description}`;
+      const description = createCombinationDescription(category, dynamicFields);
+      filenamePrefix = `รูปประกอบการตรวจสอบ-${description}`;
     } else {
-      filenamePrefix = `รูปประกอบการตรวจสอบ-${mainCategory}-${building}-${foundation}`;
+      filenamePrefix = `รูปประกอบการตรวจสอบ-${building}-${foundation}`;
     }
     
     const filename = `${filenamePrefix}-${timestamp}.pdf`;
@@ -442,11 +358,10 @@ app.post("/generate-report", async (req, res) => {
     const reportData2 = {
       building,
       foundation,
-      mainCategory,
-      subCategory,
+      category,
       filename: driveResult.filename,
       driveUrl: driveResult.driveUrl,
-      photoCount: 0 // จะได้จาก PDF generation result
+      photoCount: photos.length
     };
     
     const sheetResult = await logReport(reportData2);
@@ -457,11 +372,9 @@ app.post("/generate-report", async (req, res) => {
       success: true,
       data: {
         ...driveResult,
-        photoCount: 0,
+        photoCount: photos.length,
         sheetTimestamp: sheetResult,
-        generatedWith: 'Optimized-Puppeteer-MainCategory-SubCategory',
-        mainCategory: mainCategory,        // 🔥 NEW
-        subCategory: subCategory,          // 🔥 NEW
+        generatedWith: 'Optimized-Puppeteer-DynamicFields',
         dynamicFields: dynamicFields || null
       }
     });
@@ -475,21 +388,21 @@ app.post("/generate-report", async (req, res) => {
   }
 });
 
-// 🔥 UPDATED: ดึงรูปภาพจาก Google Sheets สำหรับสร้าง Report (รองรับ MainCategory + SubCategory)
-async function getPhotosForReport(building, foundation, mainCategory, subCategory, dynamicFields = null) {
+// ดึงรูปภาพจาก Google Sheets สำหรับสร้าง Report
+// ✅ อัปเดตให้รับ dynamicFields
+async function getPhotosForReport(building, foundation, category, dynamicFields = null) {
   try {
     const sheets = getSheetsClient();
     const SHEETS_ID = '1ez_Dox16jf9lr5TEsLL5BEOfKZDNGkVD31YSBtx3Qa8';
     
-    console.log(`🔍 Photo search for 3-level structure:`, {
-      path: `${mainCategory} > ${subCategory}`,
-      criteria: { building, foundation },
+    console.log(`🔍 Full Match photo search:`, {
+      category,
       dynamicFields
     });
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEETS_ID,
-      range: 'Master_Photos_Log!A:K' // 🔥 เพิ่มถึง column K
+      range: 'Master_Photos_Log!A:J'
     });
     
     const rows = response.data.values || [];
@@ -500,14 +413,10 @@ async function getPhotosForReport(building, foundation, mainCategory, subCategor
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       if (row.length >= 8) {
-        const [id, timestamp, rowBuilding, rowFoundation, rowSubCategory, topic, filename, driveUrl, location, dynamicFieldsJSON, rowMainCategory] = row;
+        const [id, timestamp, rowBuilding, rowFoundation, rowCategory, topic, filename, driveUrl, location, dynamicFieldsJSON] = row;
         
-        // ✅ เช็ค mainCategory และ subCategory
-        const categoryMatch = rowMainCategory 
-          ? (rowMainCategory === mainCategory && rowSubCategory === subCategory) // โครงสร้างใหม่
-          : (rowSubCategory === subCategory); // backward compatibility
-        
-        if (!categoryMatch) continue;
+        // ✅ เช็ค category ก่อน
+        if (rowCategory !== category) continue;
         
         // ✅ ถ้ามี dynamicFields (Full Match mode)
         if (dynamicFields && Object.keys(dynamicFields).length > 0) {
@@ -549,8 +458,7 @@ async function getPhotosForReport(building, foundation, mainCategory, subCategor
             id, timestamp,
             building: rowBuilding,
             foundation: rowFoundation,
-            mainCategory: rowMainCategory || mainCategory,    // 🔥 NEW
-            subCategory: rowSubCategory,                      // 🔥 NEW
+            category: rowCategory,
             topic, filename, driveUrl, location,
             imageBase64,
             dynamicFields: dynamicFieldsJSON ? JSON.parse(dynamicFieldsJSON) : null
@@ -561,8 +469,7 @@ async function getPhotosForReport(building, foundation, mainCategory, subCategor
             id, timestamp,
             building: rowBuilding,
             foundation: rowFoundation,  
-            mainCategory: rowMainCategory || mainCategory,    // 🔥 NEW
-            subCategory: rowSubCategory,                      // 🔥 NEW
+            category: rowCategory,
             topic, filename, driveUrl, location,
             imageBase64: null,
             dynamicFields: dynamicFieldsJSON ? JSON.parse(dynamicFieldsJSON) : null
@@ -659,12 +566,12 @@ function extractFileIdFromUrl(url) {
   return null;
 }
 
-// 🔥 UPDATED: Upload photo with base64 (รองรับ MainCategory + SubCategory)
+// Upload photo with base64
 app.post("/upload-photo-base64", async (req, res) => {
   try {
-    console.log('Base64 upload request received for 3-level structure');
+    console.log('Base64 upload request received');
     
-    const { photo, building, foundation, mainCategory, subCategory, topic, location, dynamicFields } = req.body;
+    const { photo, building, foundation, category, topic, location, dynamicFields } = req.body;
     
     if (!photo) {
       return res.status(400).json({
@@ -673,14 +580,14 @@ app.post("/upload-photo-base64", async (req, res) => {
       });
     }
     
-    if (!building || !foundation || !mainCategory || !subCategory || !topic) {
+    if (!building || !foundation || !category || !topic) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน), topic'
+        error: 'Missing required fields'
       });
     }
     
-    console.log(`Processing upload for: ${mainCategory} > ${subCategory} > ${topic} (${building}-${foundation})`);
+    console.log(`Processing base64 upload for: ${building}-${foundation}-${topic}`);
     if (dynamicFields) {
       console.log('📋 Dynamic fields:', dynamicFields);
     }
@@ -691,7 +598,7 @@ app.post("/upload-photo-base64", async (req, res) => {
     
     // Generate filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${mainCategory}-${building}-${foundation}-${topic}-${timestamp}.jpg`;
+    const filename = `${building}-${foundation}-${topic}-${timestamp}.jpg`;
     
     console.log(`Generated filename: ${filename}`);
     
@@ -701,7 +608,7 @@ app.post("/upload-photo-base64", async (req, res) => {
       filename,
       building,
       foundation,
-      category: subCategory // 🔥 For backward compatibility with uploadPhoto function
+      category
     });
     
     console.log('Drive upload successful:', driveResult.fileId);
@@ -710,8 +617,7 @@ app.post("/upload-photo-base64", async (req, res) => {
     const photoData = {
       building,
       foundation,
-      mainCategory,        // 🔥 NEW
-      subCategory,         // 🔥 เปลี่ยนจาก category
+      category,
       topic,
       filename: driveResult.filename,
       driveUrl: driveResult.driveUrl,
@@ -728,8 +634,6 @@ app.post("/upload-photo-base64", async (req, res) => {
       data: {
         ...driveResult,
         sheetTimestamp: sheetResult,
-        mainCategory: mainCategory,        // 🔥 NEW
-        subCategory: subCategory,          // 🔥 NEW
         dynamicFields: dynamicFields || null
       }
     });
@@ -743,7 +647,7 @@ app.post("/upload-photo-base64", async (req, res) => {
   }
 });
 
-// 🔥 UPDATED: Upload photo with file - with proper error handling (รองรับ MainCategory + SubCategory)
+// Upload photo with file - with proper error handling
 app.post("/upload-photo", (req, res) => {
   upload.single('photo')(req, res, async (err) => {
     if (err) {
@@ -770,20 +674,20 @@ app.post("/upload-photo", (req, res) => {
         size: req.file.size
       });
       
-      const { building, foundation, mainCategory, subCategory, topic, location, dynamicFields } = req.body;
+      const { building, foundation, category, topic, location, dynamicFields } = req.body;
       
-      if (!building || !foundation || !mainCategory || !subCategory || !topic) {
+      if (!building || !foundation || !category || !topic) {
         return res.status(400).json({
           success: false,
-          error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน), topic'
+          error: 'Missing required fields'
         });
       }
       
-      console.log(`Processing upload for: ${mainCategory} > ${subCategory} > ${topic} (${building}-${foundation})`);
+      console.log(`Processing upload for: ${building}-${foundation}-${topic}`);
       
       // Generate filename
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `${mainCategory}-${building}-${foundation}-${topic}-${timestamp}.jpg`;
+      const filename = `${building}-${foundation}-${topic}-${timestamp}.jpg`;
       
       console.log(`Generated filename: ${filename}`);
       
@@ -793,7 +697,7 @@ app.post("/upload-photo", (req, res) => {
         filename,
         building,
         foundation,
-        category: subCategory // 🔥 For backward compatibility
+        category
       });
       
       console.log('Drive upload successful:', driveResult.fileId);
@@ -802,8 +706,7 @@ app.post("/upload-photo", (req, res) => {
       const photoData = {
         building,
         foundation,
-        mainCategory,        // 🔥 NEW
-        subCategory,         // 🔥 เปลี่ยนจาก category
+        category,
         topic,
         filename: driveResult.filename,
         driveUrl: driveResult.driveUrl,
@@ -819,9 +722,7 @@ app.post("/upload-photo", (req, res) => {
         success: true, 
         data: {
           ...driveResult,
-          sheetTimestamp: sheetResult,
-          mainCategory: mainCategory,        // 🔥 NEW
-          subCategory: subCategory           // 🔥 NEW
+          sheetTimestamp: sheetResult
         }
       });
       
@@ -863,27 +764,25 @@ app.post("/log-report", async (req, res) => {
   }
 });
 
-// 🔥 UPDATED: Full Match completed topics (รองรับ MainCategory + SubCategory)
+// เพิ่มหลังจาก existing endpoints
+
+// 🔥 NEW: Full Match completed topics
 app.post("/completed-topics-full-match", async (req, res) => {
   try {
-    const { building, foundation, mainCategory, subCategory, dynamicFields } = req.body;
+    const { building, foundation, category, dynamicFields } = req.body;
     
-    if (!building || !foundation || !mainCategory || !subCategory) {
+    if (!building || !foundation || !category) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: building, foundation, mainCategory (หมวดหลัก), subCategory (หมวดงาน)'
+        error: 'Missing required fields: building, foundation, category'
       });
     }
     
-    console.log(`Getting completed topics with Full Match for: ${mainCategory} > ${subCategory} (${building}-${foundation})`);
+    console.log(`Getting completed topics with Full Match: ${building}-${foundation}-${category}`);
     console.log('Dynamic fields:', dynamicFields);
     
     const result = await getCompletedTopicsFullMatch({ 
-      building, 
-      foundation, 
-      mainCategory,    // 🔥 NEW
-      subCategory,     // 🔥 เปลี่ยนจาก category
-      dynamicFields 
+      building, foundation, category, dynamicFields 
     });
     
     res.json(result);
@@ -897,14 +796,14 @@ app.post("/completed-topics-full-match", async (req, res) => {
   }
 });
 
-// 🔥 UPDATED: Get field values for datalist (รองรับ subCategory)
-app.get("/field-values/:fieldName/:subCategory", async (req, res) => {
+// 🔥 NEW: Get field values for datalist
+app.get("/field-values/:fieldName/:category", async (req, res) => {
   try {
-    const { fieldName, subCategory } = req.params;
+    const { fieldName, category } = req.params;
     
-    console.log(`Getting field values: ${fieldName} for sub category ${subCategory}`);
+    console.log(`Getting field values: ${fieldName} for ${category}`);
     
-    const values = await getFieldValues(decodeURIComponent(fieldName), decodeURIComponent(subCategory));
+    const values = await getFieldValues(decodeURIComponent(fieldName), decodeURIComponent(category));
     
     res.json({ success: true, data: values });
     
