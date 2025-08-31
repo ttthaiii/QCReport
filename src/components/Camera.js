@@ -25,6 +25,10 @@ const Camera = () => {
   const [captureMode, setCaptureMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   
+  const [sourceType, setSourceType] = useState(null); // 'camera' or 'gallery'
+  const [shouldAddWatermark, setShouldAddWatermark] = useState(true);
+  const [showSourceSelection, setShowSourceSelection] = useState(false);
+
   // Multiple Photos System
   const [capturedPhotos, setCapturedPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -42,6 +46,7 @@ const Camera = () => {
 
   // Native Camera Input Ref
   const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   useEffect(() => {
     if (formData.category && categoryFields.length > 0) {
@@ -456,7 +461,7 @@ const Camera = () => {
       
       if (!confirmed) {
         console.log(`User cancelled duplicate photo for topic: ${topic}`);
-        return; // ยกเลิกการถ่าย
+        return;
       }
       
       console.log(`User confirmed duplicate photo for topic: ${topic}`);
@@ -467,37 +472,79 @@ const Camera = () => {
     // Auto-add ข้อมูลใหม่ (ถ้ามี) ก่อนถ่ายรูป
     await autoAddNewData();
     
+    console.log(`🔥 DEBUG 2: About to set states...`);
+    
     setSelectedTopic(topic);
     setCaptureMode(true);
+    setShowSourceSelection(true);
+    setSourceType(null);
     
-    // Trigger native camera input
-    setTimeout(() => {
-      if (cameraInputRef.current) {
-        cameraInputRef.current.click();
-      }
-    }, 100);
+    console.log(`🔥 DEBUG 3: States set complete`);
+    console.log(`🔥 DEBUG 4: showSourceSelection should be true now`);
   };
 
-  // Handle native camera file selection
-  const handleCameraInput = async (event) => {
+  const handleSourceSelection = (source) => {
+    console.log(`Selected source: ${source} for topic: ${selectedTopic}`);
+    
+    setSourceType(source);
+    setShowSourceSelection(false);
+    setCaptureMode(true); // ✅ ย้ายมาไว้ที่เดียว
+    
+    if (source === 'camera') {
+      // 🔥 Camera: ใส่ watermark อัตโนมัติ + เปิดกล้องทันที
+      setShouldAddWatermark(true);
+      
+      setTimeout(() => {
+        if (cameraInputRef.current) {
+          cameraInputRef.current.click();
+        }
+      }, 100);
+    } else if (source === 'gallery') {
+      // 🔥 Gallery: ตั้งค่า default watermark เป็น false
+      setShouldAddWatermark(false);
+      // ไม่เปิด file picker ทันที - ให้ user เลือก watermark ก่อน
+    }
+  };
+
+  const proceedWithFileSelection = () => {
+    // เฉพาะ gallery เท่านั้นที่ต้องใช้ฟังก์ชันนี้
+    if (sourceType === 'gallery') {
+      setTimeout(() => {
+        if (galleryInputRef.current) {
+          galleryInputRef.current.click();
+        }
+      }, 100);
+    }
+  }; 
+  
+  // 🔥 NEW: Cancel Source Selection
+  const cancelSourceSelection = () => {
+    setShowSourceSelection(false);
+    resetCameraState();
+  };
+
+  const handleFileInput = async (event, source) => {
     const file = event.target.files[0];
     if (!file || !selectedTopic) {
       console.log('No file selected or no topic selected');
       return;
     }
 
-    console.log('File selected:', {
+    console.log(`${source} file selected:`, {
       name: file.name,
       size: file.size,
       type: file.type,
-      topic: selectedTopic
+      topic: selectedTopic,
+      willAddWatermark: shouldAddWatermark
     });
 
     setIsProcessing(true);
 
     try {
-      // Process image: resize + crop + watermark
-      const processedBlob = await processImageForQC(file);
+      // Process image based on watermark choice
+      const processedBlob = shouldAddWatermark ? 
+        await processImageForQC(file) : 
+        await processImageWithoutWatermark(file);
       
       const masterDataFields = convertDynamicFieldsToMasterData(formData.category, dynamicFields);
       
@@ -509,43 +556,40 @@ const Camera = () => {
         foundation: masterDataFields.foundation,
         category: formData.category,
         topic: selectedTopic,
-        location: currentLocation,
+        location: shouldAddWatermark ? currentLocation : 
+                  source === 'camera' ? currentLocation : 'แนบจากแกลลอรี',
         timestamp: new Date().toISOString(),
         dimensions: '1600x1200',
-        dynamicFields: { ...dynamicFields }
+        dynamicFields: { ...dynamicFields },
+        sourceType: source,
+        hasWatermark: shouldAddWatermark
       };
 
-      // 🔥 เก็บรูปทุกรูป (ไม่แทนที่) เพื่อให้มี history
       setCapturedPhotos(prev => [...prev, photoData]);
-      
-      // Update completed topics
       setCompletedTopics(prev => new Set([...prev, selectedTopic]));
       
-      console.log(`Photo added for topic: ${selectedTopic}`);
-      
-      // Reset camera state
       resetCameraState();
       
-      // 🔥 แก้ไขข้อความแจ้งเตือน - แสดงจำนวนหัวข้อที่ไม่ซ้ำ
       const currentUniqueTopics = new Set([...capturedPhotos.map(p => p.topic), selectedTopic]).size;
       const currentTotalPhotos = capturedPhotos.length + 1;
       
+      const actionText = source === 'camera' ? 'ถ่ายรูป' : 'แนบรูป';
       alert(
-        `✅ ถ่ายรูป "${selectedTopic}" เรียบร้อย!\n` +
+        `✅ ${actionText} "${selectedTopic}" เรียบร้อย!\n` +
         `📏 ขนาด: 1600×1200\n` +
+        `${shouldAddWatermark ? '🏷️ มี Watermark' : '📷 ไม่มี Watermark'}\n` +
         `📷 หัวข้อที่ถ่ายแล้ว: ${currentUniqueTopics} หัวข้อ\n` +
         `🔢 รูปทั้งหมด: ${currentTotalPhotos} รูป`
       );
 
     } catch (error) {
-      console.error('Error processing image:', error);
+      console.error(`Error processing ${source} image:`, error);
       alert('เกิดข้อผิดพลาดในการประมวลผลรูป: ' + error.message);
       resetCameraState();
     } finally {
       setIsProcessing(false);
     }
-  };
-
+  };  
 
   // Process image for QC (resize + crop + watermark)
   const processImageForQC = async (imageFile) => {
@@ -562,6 +606,16 @@ const Camera = () => {
     console.log('Watermark added');
     
     return watermarkedBlob;
+  };
+
+  const processImageWithoutWatermark = async (imageFile) => {
+    console.log('Processing image without watermark...');
+    
+    // แค่ resize และ crop เท่านั้น ไม่ใส่ watermark
+    const resizedBlob = await resizeAndCropImage(imageFile, 1600, 1200);
+    console.log('Image resized and cropped (no watermark)');
+    
+    return resizedBlob;
   };
 
   // Resize and crop image to target dimensions (4:3 ratio)
@@ -638,10 +692,16 @@ const Camera = () => {
     setSelectedTopic('');
     setCaptureMode(false);
     setIsProcessing(false);
+    setShowSourceSelection(false); // 🔥 NEW
+    setSourceType(null); // 🔥 NEW
+    setShouldAddWatermark(true); // 🔥 NEW: reset เป็น default
     
-    // Reset file input
+    // Reset file inputs
     if (cameraInputRef.current) {
       cameraInputRef.current.value = '';
+    }
+    if (galleryInputRef.current) { // 🔥 NEW
+      galleryInputRef.current.value = '';
     }
   };
 
@@ -949,174 +1009,365 @@ const Camera = () => {
         accept="image/*" 
         capture="camera"
         style={{ display: 'none' }}
-        onChange={handleCameraInput}
+        onChange={(e) => handleFileInput(e, 'camera')}
       />
 
-      {/* Main Content: Topic Selection OR Processing */}
-      {!captureMode ? (
-        // Topic Selection Mode
-        <>
-          {formData.category && isFieldsComplete() && qcTopics[formData.category] ? (
-            <div style={{ 
-              marginBottom: '20px', 
-              padding: '15px', 
-              backgroundColor: '#ffffff', 
-              borderRadius: '8px',
-              border: '1px solid #dee2e6'
-            }}>
-              <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#495057' }}>
-                🔍 เลือกหัวข้อที่ต้องการถ่าย (คลิก = เปิดกล้องมือถือ):
-              </h3>
-              
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-                gap: '10px' 
-              }}>
-                {qcTopics[formData.category].map((topic, index) => {
-                  const isCompleted = completedTopics.has(topic);
-                  const photosForThisTopic = sortedPhotosForDisplay.filter(p => p.topic === topic);
-                  
-                  // 🔥 ลดรูปแบบการแสดงผล - ไม่แสดงสถานะซ้ำ
-                  let backgroundColor = isCompleted ? '#e8f5e8' : '#ffffff'; // เขียว = เสร็จ, ขาว = ยังไม่เสร็จ
-                  let statusIcon = isCompleted ? '✅' : '📷';
-                  let statusColor = isCompleted ? '#28a745' : '#007bff';
-                  
-                  return (
-                    <button
-                      key={topic}
-                      onClick={() => selectTopicAndOpenCamera(topic)}
-                      style={{
-                        padding: '12px 15px',
-                        fontSize: '14px',
-                        textAlign: 'left',
-                        border: '1px solid #dee2e6',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        backgroundColor: backgroundColor,
-                        color: '#495057',
-                        transition: 'all 0.2s ease',
-                        position: 'relative',
-                        minHeight: '50px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = isCompleted ? '#c8e6c9' : '#f8f9fa';
-                        e.target.style.borderColor = '#007bff';
-                        e.target.style.transform = 'translateY(-1px)';
-                        e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = backgroundColor;
-                        e.target.style.borderColor = '#dee2e6';
-                        e.target.style.transform = 'translateY(0)';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontWeight: 'normal' }}>
-                          {index + 1}. {topic}
-                        </span>
-                        {photosForThisTopic.length > 0 && (
-                          <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>
-                            📷 ถ่ายแล้ว {photosForThisTopic.length} รูป
-                            {/* 🔥 ลบข้อความ "(ล่าสุดใช้ในรายงาน)" ออก */}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div style={{ marginLeft: '10px' }}>
-                        <span style={{ fontSize: '16px', color: statusColor }}>
-                          {statusIcon}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
+      {/* 🔥 NEW: Gallery Input (Hidden) */}
+      <input 
+        ref={galleryInputRef}
+        type="file" 
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => handleFileInput(e, 'gallery')}
+      />
+
+      {/* 🔥 NEW: Source Selection Modal */}
+          {showSourceSelection && (
             <div style={{
-              marginBottom: '15px',
-              padding: '10px',
-              backgroundColor: '#fff3cd',
-              borderRadius: '5px',
-              textAlign: 'center',
-              fontSize: '14px',
-              color: '#856404',
-              border: '1px solid #ffeaa7'
-            }}>
-              ⚠️ กรุณาเลือกหมวดงานและกรอกข้อมูลให้ครบถ้วนเพื่อแสดงรายการหัวข้อ
-            </div>
-          )}
-        </>
-      ) : (
-        // Camera Capture Mode
-        <>
-          {isProcessing ? (
-            // Processing Animation
-            <div style={{ 
-              padding: '40px 20px',
-              textAlign: 'center',
-              backgroundColor: '#f8f9fa',
-              borderRadius: '8px',
-              border: '1px solid #dee2e6'
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
             }}>
               <div style={{
-                width: '50px',
-                height: '50px',
-                border: '4px solid #e3f2fd',
-                borderTop: '4px solid #007bff',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto 20px'
-              }} />
-              <h3 style={{ color: '#007bff', marginBottom: '10px' }}>
-                📱 กำลังประมวลผลรูป "{selectedTopic}"
-              </h3>
-              <p style={{ color: '#666', fontSize: '14px' }}>
-                Resize → Crop → Watermark
-              </p>
-              <div style={{ marginTop: '15px', fontSize: '12px', color: '#999' }}>
-                กรุณารอสักครู่...
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '20px',
+                maxWidth: '400px',
+                width: '90%',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.3)'
+              }}>
+                <h3 style={{ 
+                  marginTop: 0, 
+                  marginBottom: '15px', 
+                  textAlign: 'center',
+                  color: '#495057'
+                }}>
+                  📸 เลือกแหล่งรูปสำหรับ "{selectedTopic}"
+                </h3>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <button
+                    onClick={() => handleSourceSelection('camera')}
+                    style={{
+                      width: '100%',
+                      padding: '15px',
+                      marginBottom: '10px',
+                      fontSize: '16px',
+                      backgroundColor: '#007bff',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px'
+                    }}
+                  >
+                    <span style={{ fontSize: '20px' }}>📷</span>
+                    ถ่ายรูปใหม่
+                  </button>
+                  
+                  <button
+                    onClick={() => handleSourceSelection('gallery')}
+                    style={{
+                      width: '100%',
+                      padding: '15px',
+                      fontSize: '16px',
+                      backgroundColor: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px'
+                    }}
+                  >
+                    <span style={{ fontSize: '20px' }}>🖼️</span>
+                    เลือกจากแกลลอรี
+                  </button>
+                </div>
+                
+                <button
+                  onClick={cancelSourceSelection}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '14px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ยกเลิก
+                </button>
               </div>
             </div>
-          ) : (
-            // Waiting for Camera Input
-            <div style={{
-              padding: '40px 20px',
-              textAlign: 'center',
-              backgroundColor: '#fff3cd',
-              borderRadius: '8px',
-              border: '1px solid #ffeaa7'
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '15px' }}>📱</div>
-              <h3 style={{ color: '#856404', marginBottom: '10px' }}>
-                รอการถ่ายรูป "{selectedTopic}"
-              </h3>
-              <p style={{ color: '#856404', fontSize: '14px', marginBottom: '15px' }}>
-                แอปกล้องควรเปิดขึ้นมาอัตโนมัติ
-              </p>
-              <button
-                onClick={cancelCapture}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px'
-                }}
-              >
-                ยกเลิก
-              </button>
-            </div>
           )}
-        </>
-      )}
+
+      {/* Main Content: Topic Selection OR Processing */}
+      {!showSourceSelection ? (
+        !captureMode ? (
+          // Topic Selection Mode (ไม่แสดงเมื่อมี modal)
+          <>
+            {formData.category && isFieldsComplete() && qcTopics[formData.category] ? (
+              <div style={{ 
+                marginBottom: '20px', 
+                padding: '15px', 
+                backgroundColor: '#ffffff', 
+                borderRadius: '8px',
+                border: '1px solid #dee2e6'
+              }}>
+                <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#495057' }}>
+                  🔍 เลือกหัวข้อที่ต้องการถ่าย:
+                </h3>
+                
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+                  gap: '10px' 
+                }}>
+                  {qcTopics[formData.category].map((topic, index) => {
+                    const isCompleted = completedTopics.has(topic);
+                    const photosForThisTopic = sortedPhotosForDisplay.filter(p => p.topic === topic);
+                    
+                    let backgroundColor = isCompleted ? '#e8f5e8' : '#ffffff';
+                    let statusIcon = isCompleted ? '✅' : '📷';
+                    let statusColor = isCompleted ? '#28a745' : '#007bff';
+                    
+                    return (
+                      <button
+                        key={topic}
+                        onClick={() => selectTopicAndOpenCamera(topic)}
+                        style={{
+                          padding: '12px 15px',
+                          fontSize: '14px',
+                          textAlign: 'left',
+                          border: '1px solid #dee2e6',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          backgroundColor: backgroundColor,
+                          color: '#495057',
+                          transition: 'all 0.2s ease',
+                          position: 'relative',
+                          minHeight: '50px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.backgroundColor = isCompleted ? '#c8e6c9' : '#f8f9fa';
+                          e.target.style.borderColor = '#007bff';
+                          e.target.style.transform = 'translateY(-1px)';
+                          e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.backgroundColor = backgroundColor;
+                          e.target.style.borderColor = '#dee2e6';
+                          e.target.style.transform = 'translateY(0)';
+                          e.target.style.boxShadow = 'none';
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontWeight: 'normal' }}>
+                            {index + 1}. {topic}
+                          </span>
+                          {photosForThisTopic.length > 0 && (
+                            <div style={{ fontSize: '12px', marginTop: '4px', opacity: 0.8 }}>
+                              📷 ถ่ายแล้ว {photosForThisTopic.length} รูป
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div style={{ marginLeft: '10px' }}>
+                          <span style={{ fontSize: '16px', color: statusColor }}>
+                            {statusIcon}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                marginBottom: '15px',
+                padding: '10px',
+                backgroundColor: '#fff3cd',
+                borderRadius: '5px',
+                textAlign: 'center',
+                fontSize: '14px',
+                color: '#856404',
+                border: '1px solid #ffeaa7'
+              }}>
+                ⚠️ กรุณาเลือกหมวดงานและกรอกข้อมูลให้ครบถ้วนเพื่อแสดงรายการหัวข้อ
+              </div>
+            )}
+          </>
+        ) : (
+          // Capture Mode (แสดงเฉพาะเมื่อไม่มี modal)
+          <>
+            {isProcessing ? (
+              // Processing Animation
+              <div style={{ 
+                padding: '40px 20px',
+                textAlign: 'center',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '8px',
+                border: '1px solid #dee2e6'
+              }}>
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  border: '4px solid #e3f2fd',
+                  borderTop: '4px solid #007bff',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                  margin: '0 auto 20px'
+                }} />
+                <h3 style={{ color: '#007bff', marginBottom: '10px' }}>
+                  📱 กำลังประมวลผลรูป "{selectedTopic}"
+                </h3>
+                <p style={{ color: '#666', fontSize: '14px' }}>
+                  {sourceType === 'camera' ? 'Resize → Crop → Watermark' : 
+                  shouldAddWatermark ? 'Resize → Crop → Watermark' : 'Resize → Crop'}
+                </p>
+                <div style={{ marginTop: '15px', fontSize: '12px', color: '#999' }}>
+                  กรุณารอสักครู่...
+                </div>
+              </div>
+            ) : sourceType === 'camera' ? (
+              // 🔥 Camera: แสดงข้อความรอเปิดกล้อง (ไม่มีตัวเลือก watermark)
+              <div style={{
+                padding: '40px 20px',
+                textAlign: 'center',
+                backgroundColor: '#e3f2fd',
+                borderRadius: '8px',
+                border: '1px solid #1976d2'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '15px' }}>📱</div>
+                <h3 style={{ color: '#1565c0', marginBottom: '10px' }}>
+                  รอการถ่ายรูป "{selectedTopic}"
+                </h3>
+                <p style={{ color: '#1565c0', fontSize: '14px', marginBottom: '15px' }}>
+                  แอปกล้องควรเปิดขึ้นมาอัตโนมัติ<br/>
+                  <strong>จะใส่ Watermark อัตโนมัติ</strong>
+                </p>
+
+                <button
+                  onClick={cancelCapture}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  ยกเลิก
+                </button>
+              </div>
+            ) : sourceType === 'gallery' ? (
+              // 🔥 Gallery: แสดงตัวเลือก watermark
+              <div style={{
+                padding: '40px 20px',
+                textAlign: 'center',
+                backgroundColor: '#fff3cd',
+                borderRadius: '8px',
+                border: '1px solid #ffeaa7'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '15px' }}>🖼️</div>
+                <h3 style={{ color: '#856404', marginBottom: '10px' }}>
+                  รอการเลือกรูป "{selectedTopic}"
+                </h3>
+
+                {/* Watermark Control สำหรับ Gallery เท่านั้น */}
+                <div style={{
+                  marginBottom: '20px',
+                  padding: '15px',
+                  backgroundColor: 'rgba(255,255,255,0.8)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(0,0,0,0.1)'
+                }}>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: '#495057',
+                    marginBottom: '12px'
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={shouldAddWatermark}
+                      onChange={(e) => setShouldAddWatermark(e.target.checked)}
+                      style={{
+                        marginRight: '8px',
+                        transform: 'scale(1.2)'
+                      }}
+                    />
+                    <span style={{ fontWeight: 'bold' }}>
+                      เพิ่ม Watermark (วันเวลา + ตำแหน่ง)
+                    </span>
+                  </label>
+                  
+                  {/* ปุ่มดำเนินการต่อ */}
+                  <button
+                    onClick={proceedWithFileSelection}
+                    style={{
+                      width: '100%',
+                      padding: '12px 24px',
+                      backgroundColor: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <span style={{ fontSize: '16px' }}>🖼️</span>
+                    เลือกรูปจากแกลลอรี
+                  </button>
+                </div>
+
+                <button
+                  onClick={cancelCapture}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  ยกเลิก
+                </button>
+              </div>
+            ) : null}
+          </>
+        )
+      ) : null}
 
       {/* Captured Photos Management - แสดงตามลำดับที่ถูกต้อง */}
       {sortedPhotosForDisplay.length > 0 && (
@@ -1208,6 +1459,12 @@ const Camera = () => {
                       .map(([key, value]) => `${key}: ${value}`)
                       .join('<br/>');
                     
+                    // 🔥 NEW: แสดงข้อมูล source และ watermark
+                    const sourceInfo = photo.sourceType === 'camera' ? 
+                      '📷 ถ่ายรูปใหม่' : '🖼️ แนบจากแกลลอรี';
+                    const watermarkInfo = photo.hasWatermark ? 
+                      '🏷️ มี Watermark' : '📷 ไม่มี Watermark';
+                    
                     newWindow.document.write(`
                       <html>
                         <head><title>${photo.topic}</title></head>
@@ -1217,6 +1474,7 @@ const Camera = () => {
                           <p style="margin-top:10px; font-size:14px; color:#666;">
                             ${fieldsDisplay}<br/>
                             หมวดงาน: ${photo.category}<br/>
+                            ${sourceInfo} | ${watermarkInfo}<br/>
                             ${new Date(photo.timestamp).toLocaleString('th-TH')}
                           </p>
                         </body>
@@ -1225,17 +1483,32 @@ const Camera = () => {
                   }}
                 />
                 <div style={{
-                  padding: '8px',
+                  padding: '6px',
                   fontSize: '11px',
                   textAlign: 'center',
                   backgroundColor: '#f8f9fa',
                   borderTop: '1px solid #ddd',
-                  minHeight: '40px',
+                  minHeight: '45px',
                   display: 'flex',
+                  flexDirection: 'column',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  gap: '2px'
                 }}>
-                  <strong>{photo.displayOrder || 'N/A'}.</strong> {photo.topic}
+                  <div style={{ fontWeight: 'bold' }}>
+                    <strong>{photo.displayOrder || 'N/A'}.</strong> {photo.topic}
+                  </div>
+                  {/* 🔥 NEW: Source และ Watermark indicators */}
+                  <div style={{ 
+                    fontSize: '10px', 
+                    color: '#666',
+                    display: 'flex',
+                    gap: '4px',
+                    alignItems: 'center'
+                  }}>
+                    <span>{photo.sourceType === 'camera' ? '📷' : '🖼️'}</span>
+                    <span>{photo.hasWatermark ? '🏷️' : '❌'}</span>
+                  </div>
                 </div>
                 <button
                   onClick={() => removePhoto(photo.id)}
