@@ -1029,13 +1029,38 @@ async function loadImagesFromDrive(photos) {
       });
       
     } catch (error) {
-      console.error(`❌ Error loading image for "${photo.topic}":`, error.message);
+      console.error(`❌ Primary download failed for "${photo.topic}":`, error.message);
       
-      photosWithImages.push({
-        ...photo,
-        imageBase64: null,
-        loadError: error.message
-      });
+      // --- เริ่มส่วนที่แก้ไข ---
+      console.log(`🔄 Trying direct download for file ID: ${fileId}`);
+      try {
+        const axios = require('axios'); 
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        
+        const directResponse = await axios.get(downloadUrl, { 
+            responseType: 'arraybuffer' 
+        });
+
+        const buffer = Buffer.from(directResponse.data);
+        const base64 = buffer.toString('base64');
+        
+        console.log(`✅ Direct download successful for "${photo.topic}": ${base64.length} chars`);
+
+        photosWithImages.push({
+          ...photo,
+          imageBase64: base64,
+          loadError: null
+        });
+
+      } catch (downloadError) {
+        console.error(`❌ Direct download also failed for "${photo.topic}":`, downloadError.message);
+        
+        photosWithImages.push({
+          ...photo,
+          imageBase64: null,
+          loadError: downloadError.message
+        });
+      }
     }
   }
   

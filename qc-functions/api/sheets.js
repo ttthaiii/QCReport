@@ -230,8 +230,17 @@ function isFullMatch(searchCriteria, rowData) {
   const { building, foundation, category, dynamicFields } = searchCriteria;
   const { building: rowBuilding, foundation: rowFoundation, category: rowCategory, dynamicFieldsJSON } = rowData;
   
-  // ตรวจสอบ basic fields ก่อน
-  if (building !== rowBuilding || foundation !== rowFoundation || category !== rowCategory) {
+  // --- เริ่มส่วนที่แก้ไข ---
+  const criteriaBuilding = (building || '').trim();
+  const criteriaFoundation = (foundation || '').trim();
+  const criteriaCategory = (category || '').trim();
+
+  const sheetBuilding = (rowBuilding || '').trim();
+  const sheetFoundation = (rowFoundation || '').trim();
+  const sheetCategory = (rowCategory || '').trim();
+
+  // ตรวจสอบ basic fields ที่ผ่านการ trim แล้ว
+  if (criteriaBuilding !== sheetBuilding || criteriaFoundation !== sheetFoundation || criteriaCategory !== sheetCategory) {
     return false;
   }
   
@@ -244,9 +253,8 @@ function isFullMatch(searchCriteria, rowData) {
   try {
     const rowDynamicFields = dynamicFieldsJSON ? JSON.parse(dynamicFieldsJSON) : {};
     
-    // เปรียบเทียบทุก field ใน dynamicFields ที่มีค่า
     for (const [fieldName, fieldValue] of Object.entries(dynamicFields)) {
-      if (fieldValue && fieldValue.trim()) { // เฉพาะ field ที่มีค่า
+      if (fieldValue && fieldValue.trim()) {
         const rowFieldValue = rowDynamicFields[fieldName];
         if (!rowFieldValue || rowFieldValue.trim() !== fieldValue.trim()) {
           return false;
