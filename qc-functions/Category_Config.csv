@@ -1,0 +1,5 @@
+หมวดงาน,field1_name,field2_name,field3_name,field4_name
+งานฐานราก,อาคาร,ฐานรากเบอร์,ชั้น,Gridline
+งานเสา,อาคาร,เสาเบอร์,ชั้น,Gridline
+งานกำแพงลิฟต์และผนังบันได CORE ST-1,อาคาร,ชั้น/Floor,ชั้น,Gridline
+งานพื้น,อาคาร,Zone,ชั้น,Gridline
