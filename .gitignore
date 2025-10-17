@@ -25,3 +25,6 @@ yarn-error.log*
 qc-functions/.env 
 .firebase/hosting.YnVpbGQ.cache
 .firebase/hosting.YnVpbGQ.cache 
+
+.env.development
+.env.production

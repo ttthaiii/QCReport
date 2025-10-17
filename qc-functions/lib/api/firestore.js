@@ -1,0 +1,64 @@
+"use strict";
+// Filename: qc-functions/src/api/firestore.ts
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.logPhotoToFirestore = logPhotoToFirestore;
+const admin = __importStar(require("firebase-admin"));
+const db = admin.firestore();
+/**
+ * บันทึกข้อมูลรูปภาพลงใน collection qcPhotos บน Firestore
+ * ฟังก์ชันนี้ใช้ Interface 'PhotoData' เพื่อความปลอดภัยของชนิดข้อมูล
+ *
+ * @param {PhotoData} photoData ข้อมูลรูปภาพที่ตรงตามโครงสร้างของ PhotoData interface
+ * @returns {Promise<{success: boolean, firestoreId: string}>} ผลลัพธ์พร้อม ID ของ document ที่สร้างใหม่
+ */
+async function logPhotoToFirestore(photoData) {
+    try {
+        console.log("Logging photo metadata to Firestore...");
+        if (!photoData.projectId) {
+            throw new Error("Project ID is required to log a photo.");
+        }
+        const collectionRef = db.collection("qcPhotos");
+        const docRef = await collectionRef.add(Object.assign(Object.assign({}, photoData), { createdAt: admin.firestore.FieldValue.serverTimestamp() }));
+        console.log(`Successfully logged photo to Firestore with ID: ${docRef.id}`);
+        return { success: true, firestoreId: docRef.id };
+    }
+    catch (error) {
+        console.error("Error logging photo to Firestore:", error);
+        // ส่งต่อ error เดิมออกไปให้ฟังก์ชันที่เรียกใช้จัดการต่อ
+        throw error;
+    }
+}
+//# sourceMappingURL=firestore.js.map

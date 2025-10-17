@@ -1,70 +1,98 @@
 // Filename: qc-functions/src/index.ts
 
-// --- STEP 1: INITIALIZE FIREBASE ADMIN SDK AT THE VERY TOP ---
-import * as dotenv from "dotenv";
-dotenv.config();
+// --- STEP 1: INITIALIZE FIREBASE ADMIN SDK ---
 import * as admin from "firebase-admin";
-
-try {
-  if (admin.apps.length === 0) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.GOOGLE_PROJECT_ID,
-        clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
-        privateKey: (process.env.GOOGLE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
-      }),
-      // ✅ NEW: Add storage bucket for Cloud Storage
-      storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET
-    });
-    console.log("Firebase Admin SDK initialized successfully.");
-  }
-} catch (error) {
-  console.error("Firebase Admin SDK initialization failed.", error);
-}
-
-// --- STEP 2: NOW IT'S SAFE TO IMPORT EVERYTHING ELSE ---
 import { onRequest } from "firebase-functions/v2/https";
 import express, { Request, Response } from "express";
 import cors from "cors";
 
-// ✅ NEW: Import our Firestore logger and the NEW Storage uploader
+// Import routes
 import { logPhotoToFirestore, PhotoData } from "./api/firestore";
-import { uploadPhotoToStorage } from "./api/storage"; // Replaced photos.js
+import { uploadPhotoToStorage } from "./api/storage";
 
+// ✅ NEW: Environment detection
+const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
+
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  if (IS_EMULATOR) {
+    // For emulator - ไม่ต้องใช้ credentials
+    admin.initializeApp({
+      projectId: "qcreport-54164"
+    });
+    // Set emulator hosts
+    process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = 'localhost:9199';
+    console.log("🔧 Running in EMULATOR mode");
+  } else {
+    // For production - ใช้ default credentials
+    admin.initializeApp();
+    console.log("🚀 Running in PRODUCTION mode");
+  }
+}
 
 const db = admin.firestore();
-
 const app = express();
-// โค้ดใหม่ (ที่ถูกต้อง)
-app.use(cors({ origin: 'http://localhost:3000' }));
+
+// ✅ FIXED: CORS configuration
+app.use(cors({ 
+  origin: IS_EMULATOR 
+    ? ['http://localhost:3000', 'http://localhost:5000'] // Development
+    : ['https://qcreport-54164.web.app', 'https://qcreport-54164.firebaseapp.com'] // Production
+}));
 app.use(express.json({ limit: "10mb" }));
 
-// --- Firestore-based API Endpoints ---
+// ✅ NEW: Health check endpoint
+app.get("/health", (req: Request, res: Response) => {
+  res.json({ 
+    status: "healthy",
+    environment: IS_EMULATOR ? "emulator" : "production",
+    timestamp: new Date().toISOString()
+  });
+});
 
-app.get("/projects", async (req: Request, res: Response) => {
+// ✅ FIXED: Add return types to all endpoints
+app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
   try {
-    const projectsSnapshot = await db.collection("projects").where("isActive", "==", true).get();
+    console.log(`📋 Fetching projects from ${IS_EMULATOR ? 'EMULATOR' : 'PRODUCTION'}`);
+    
+    const projectsSnapshot = await db.collection("projects")
+      .where("isActive", "==", true)
+      .get();
+    
     if (projectsSnapshot.empty) {
       return res.json({ success: true, data: [] });
     }
-    const projects = projectsSnapshot.docs.map((doc: admin.firestore.QueryDocumentSnapshot) => ({
+    
+    const projects = projectsSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
-    res.json({ success: true, data: projects });
+    
+    return res.json({ success: true, data: projects });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    console.error("Error in /projects:", error);
+    return res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
   }
 });
 
-app.get("/project-config/:projectId", async (req: Request, res: Response) => {
+app.get("/project-config/:projectId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
-    const categoriesRef = db.collection("projectConfig").doc(projectId).collection("categories");
+    
+    const categoriesRef = db.collection("projectConfig")
+      .doc(projectId)
+      .collection("categories");
     const categoriesSnapshot = await categoriesRef.orderBy("orderIndex").get();
 
     if (categoriesSnapshot.empty) {
-      return res.status(404).json({ success: false, error: "Configuration for this project not found." });
+      return res.status(404).json({ 
+        success: false, 
+        error: "Configuration for this project not found." 
+      });
     }
 
     const projectConfig: { [key: string]: string[] } = {};
@@ -74,69 +102,144 @@ app.get("/project-config/:projectId", async (req: Request, res: Response) => {
       const categoryName = categoryData.categoryName;
       const topicsRef = categoryDoc.ref.collection("topics");
       const topicsSnapshot = await topicsRef.orderBy("orderIndex").get();
-      const topics = topicsSnapshot.docs.map((topicDoc: admin.firestore.QueryDocumentSnapshot) => topicDoc.data().topicName);
+      const topics = topicsSnapshot.docs.map((doc) => doc.data().topicName);
       projectConfig[categoryName] = topics;
     }
-    res.json({ success: true, data: projectConfig });
+    
+    return res.json({ success: true, data: projectConfig });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    console.error("Error in /project-config:", error);
+    return res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
   }
 });
 
-// ✅ UPDATED: This endpoint now uses Cloud Storage
-app.post("/upload-photo-base64", async (req: Request, res: Response) => {
+app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { photo, projectId, category, topic, location, dynamicFields } = req.body;
+    
     if (!photo) {
-      return res.status(400).json({ success: false, error: "No photo data provided" });
+      return res.status(400).json({ 
+        success: false, 
+        error: "No photo data provided" 
+      });
     }
+    
     if (!projectId || !category || !topic) {
-      return res.status(400).json({ success: false, error: "Missing required fields: projectId, category, topic" });
+      return res.status(400).json({ 
+        success: false, 
+        error: "Missing required fields: projectId, category, topic" 
+      });
     }
 
     const imageBuffer = Buffer.from(photo, "base64");
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `${category}-${topic}-${timestamp}.jpg`.replace(/\s/g, "_");
 
-    // ✅ NEW: Call the Cloud Storage upload function
+    // Upload to Storage
     const storageResult = await uploadPhotoToStorage({
       imageBuffer,
       filename,
-      projectId: projectId,
-      category: category,
+      projectId,
+      category,
     });
 
+    // Save to Firestore
     const photoData: PhotoData = {
       projectId,
       category,
       topic,
       filename: storageResult.filename,
-      // ✅ UPDATED: Use the public URL from Cloud Storage
       driveUrl: storageResult.publicUrl,
       filePath: storageResult.filePath,
       location: location || "",
       dynamicFields: dynamicFields || {},
       reportType: "QC",
     };
+    
     const firestoreResult = await logPhotoToFirestore(photoData);
 
-    res.json({
+    return res.json({
       success: true,
-      // ✅ UPDATED: Send back the correct data structure
       data: {
-        fileId: firestoreResult.firestoreId, // Use Firestore ID as the main ID
+        fileId: firestoreResult.firestoreId,
         filename: storageResult.filename,
-        driveUrl: storageResult.publicUrl, // Keep this field name for frontend compatibility
+        driveUrl: storageResult.publicUrl,
         firestoreId: firestoreResult.firestoreId,
-        message: "Upload to Cloud Storage successful",
+        message: `Upload to ${IS_EMULATOR ? 'EMULATOR' : 'PRODUCTION'} successful`,
       },
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
+    console.error("Error in /upload-photo-base64:", error);
+    return res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
   }
 });
 
-// --- ❌ REMOVED LEGACY ENDPOINT ---
-// The "/qc-topics" endpoint that used sheets.js has been removed.
+// ✅ NEW: Test data endpoint (emulator only)
+app.post("/seed-test-data", async (req: Request, res: Response): Promise<Response> => {
+  if (!IS_EMULATOR) {
+    return res.status(403).json({ 
+      success: false, 
+      error: "This endpoint is only available in emulator mode" 
+    });
+  }
 
-export const api = onRequest({ region: "asia-southeast1", memory: "2GiB", timeoutSeconds: 540 }, app);
+  try {
+    // Create test project
+    const projectRef = await db.collection("projects").add({
+      projectName: "Test Project",
+      projectCode: "TEST-001",
+      isActive: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Create categories
+    const categories = [
+      { name: "งานโครงสร้าง", topics: ["เสาเข็ม", "ฐานราก", "เสา", "คาน", "พื้น"] },
+      { name: "งานสถาปัตยกรรม", topics: ["ผนัง", "ฝ้าเพดาน", "พื้นปูกระเบื้อง", "ประตู-หน้าต่าง"] },
+      { name: "งานระบบ", topics: ["ระบบไฟฟ้า", "ระบบประปา", "ระบบปรับอากาศ"] }
+    ];
+
+    for (let i = 0; i < categories.length; i++) {
+      const categoryRef = await db.collection("projectConfig")
+        .doc(projectRef.id)
+        .collection("categories")
+        .add({
+          categoryName: categories[i].name,
+          orderIndex: i + 1
+        });
+
+      // Add topics
+      for (let j = 0; j < categories[i].topics.length; j++) {
+        await categoryRef.collection("topics").add({
+          topicName: categories[i].topics[j],
+          orderIndex: j + 1
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: "Test data created successfully",
+      projectId: projectRef.id
+    });
+  } catch (error) {
+    return res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
+  }
+});
+
+// Export function
+export const api = onRequest({ 
+  region: "asia-southeast1", 
+  memory: IS_EMULATOR ? "1GiB" : "2GiB",
+  timeoutSeconds: 540,
+  maxInstances: IS_EMULATOR ? 2 : 10
+}, app);
