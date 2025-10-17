@@ -42,6 +42,9 @@ try {
 
 
 const db = admin.firestore();
+db.settings({
+  databaseId: 'smartreportgen'
+});
 
 // Helper function to read CSV files
 function readCsv(filePath) {

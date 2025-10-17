@@ -1,0 +1,19 @@
+// Filename: qc-functions/tsconfig.json
+
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "outDir": "lib", // <-- คำสั่งสำคัญ: บอกให้สร้างไฟล์ผลลัพธ์ในโฟลเดอร์ lib
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2017",
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  },
+  "compileOnSave": true,
+  "include": [
+    "src" // <-- คำสั่งสำคัญ: บอกให้แปลไฟล์ทั้งหมดที่อยู่ในโฟลเดอร์ src
+  ]
+}
