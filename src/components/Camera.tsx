@@ -1,15 +1,20 @@
 // Filename: src/components/Camera.tsx
 
 import React, { useState, useEffect, useRef } from 'react';
-import { api, ProjectConfig } from '../utils/api.ts'; // ✅ เพิ่ม .ts
-import { addWatermark } from '../utils/watermark.ts'; // ✅ เพิ่ม .ts
-import './Camera.css'; // ✅ เพิ่ม .css
+import { api, UploadPhotoData } from '../utils/api.ts';
+import { addWatermark } from '../utils/watermark.ts';
+import './Camera.css';
+
+// "พิมพ์เขียว" สำหรับข้อมูล Project Config
+export interface ProjectConfig {
+  [category: string]: string[];
+}
 
 // "พิมพ์เขียว" สำหรับ Props ที่ Component นี้ได้รับมาจาก App.tsx
 interface CameraProps {
   qcTopics: ProjectConfig | null;
   projectId: string;
-  projectName: string | undefined; // อาจจะยังไม่มีค่าตอนแรก
+  projectName: string | undefined;
 }
 
 // "พิมพ์เขียว" สำหรับข้อมูลตำแหน่ง
@@ -19,7 +24,7 @@ interface Geolocation {
 }
 
 const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => {
-  // --- กำหนด Type ให้กับ State และ Refs ---
+  // --- States and Refs ---
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -32,14 +37,13 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [topicsForCategory, setTopicsForCategory] = useState<string[]>([]);
 
-  // State สำหรับฟีเจอร์ Daily Report ในอนาคต
+  // States for Feature: Daily Report
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [description, setDescription] = useState<string>('');
   const [dynamicFields, setDynamicFields] = useState<object>({});
 
-  // --- Logic การทำงานของ Component ---
+  // --- Logic ---
 
-  // useEffect สำหรับอัปเดต state เมื่อ qcTopics (prop) เปลี่ยนไป
   useEffect(() => {
     if (qcTopics && Object.keys(qcTopics).length > 0) {
       const firstCategory = Object.keys(qcTopics)[0];
@@ -47,9 +51,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     } else {
       setSelectedCategory('');
     }
-  }, [qcTopics]); // ทำงานเมื่อผู้ใช้เลือกโปรเจกต์ใหม่
+  }, [qcTopics]);
 
-  // useEffect สำหรับอัปเดตหัวข้อเมื่อหมวดงานเปลี่ยนไป
   useEffect(() => {
     if (selectedCategory && qcTopics && qcTopics[selectedCategory]) {
       const topics = qcTopics[selectedCategory];
@@ -63,9 +66,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   const startCamera = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      });
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
@@ -129,28 +130,44 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
         : (location as string) || '';
 
+      const watermarkText = reportType === 'QC'
+        ? { category: selectedCategory, topic: selectedTopic }
+        : { category: 'Daily Report', topic: description.substring(0, 50) };
+
+      // ตอนนี้ TypeScript รู้จัก UploadPhotoData แล้ว และจะไม่มี Error
+      const uploadMetadata: UploadPhotoData = reportType === 'QC'
+        ? {
+            type: 'QC',
+            projectId,
+            category: selectedCategory,
+            topic: selectedTopic,
+            location: locationString,
+            dynamicFields,
+          }
+        : {
+            type: 'Daily',
+            projectId,
+            description: description,
+            location: locationString,
+            dynamicFields,
+          };
+
       const watermarkedBlob = await addWatermark(photo, {
         projectName: projectName || 'N/A',
-        category: selectedCategory,
-        topic: selectedTopic,
+        ...watermarkText,
         location: locationString,
       });
 
       setUploadStatus('กำลังอัปโหลดรูปภาพ...');
-
-      const response = await api.uploadPhoto(watermarkedBlob, {
-        projectId,
-        category: selectedCategory,
-        topic: selectedTopic,
-        location: locationString,
-        dynamicFields,
-      });
+      
+      const response = await api.uploadPhoto(watermarkedBlob, uploadMetadata);
 
       if (response.success) {
         setUploadStatus('อัปโหลดสำเร็จ!');
         setTimeout(() => {
           setPhoto(null);
           setUploadStatus('');
+          setDescription('');
         }, 2000);
       } else {
         throw new Error(response.error || 'Unknown upload error');
@@ -165,25 +182,21 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   const handleRetake = () => {
     setPhoto(null);
-    // ไม่ต้อง startCamera() ที่นี่ เพราะ useEffect จะจัดการให้
   };
 
-  // useEffect สำหรับจัดการการเปิด/ปิดกล้อง
   useEffect(() => {
     if (!photo) {
       startCamera();
     }
-    // Cleanup function: จะทำงานเมื่อ component ถูก unmount
     return () => {
       stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photo]);
 
-
   return (
     <div className="camera-container">
-      {/* ... โค้ดส่วน JSX ที่เหลือเหมือนเดิม ... */}
+      {/* --- ส่วน JSX ที่เหลือเหมือนเดิม --- */}
       <div className="camera-view">
         {photo ? (
           <img src={photo} alt="Captured" className="photo-preview" />
@@ -196,60 +209,49 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       <div className="controls-container">
         {photo ? (
             <>
-              <button onClick={handleRetake} disabled={isUploading} className="control-button retake">
-                ถ่ายใหม่
-              </button>
-              <button onClick={handleUpload} disabled={isUploading} className="control-button upload">
-                {isUploading ? uploadStatus : 'อัปโหลด'}
-              </button>
+              <button onClick={handleRetake} disabled={isUploading} className="control-button retake">ถ่ายใหม่</button>
+              <button onClick={handleUpload} disabled={isUploading} className="control-button upload">{isUploading ? uploadStatus : 'อัปโหลด'}</button>
             </>
         ) : (
             <>
-              <label htmlFor="file-upload" className="control-button upload">
-                แนบไฟล์
-              </label>
+              <label htmlFor="file-upload" className="control-button upload">แนบไฟล์</label>
               <input id="file-upload" type="file" accept="image/*" onChange={handleFileUpload} style={{display: 'none'}}/>
-              <button onClick={takePhoto} className="control-button capture">
-                <span className="capture-icon"></span>
-              </button>
+              <button onClick={takePhoto} className="control-button capture"><span className="capture-icon"></span></button>
             </>
         )}
       </div>
 
-      <div className="form-container">
-          <div className="form-group">
-            <label>หมวดงาน</label>
-            <select
-              value={selectedCategory}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCategory(e.target.value)}
-              disabled={isUploading}
-            >
-              <option value="" disabled>-- เลือกหมวดงาน --</option>
-              {qcTopics && Object.keys(qcTopics).map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="form-group">
-            <label>หัวข้อการตรวจ</label>
-            <select
-              value={selectedTopic}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedTopic(e.target.value)}
-              disabled={isUploading || topicsForCategory.length === 0}
-            >
-              <option value="" disabled>-- เลือกหัวข้อ --</option>
-              {topicsForCategory.map((topic) => (
-                <option key={topic} value={topic}>
-                  {topic}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="report-type-selector">
+        <button className={`type-button ${reportType === 'QC' ? 'active' : ''}`} onClick={() => setReportType('QC')} disabled={isUploading || !!photo}>ตรวจสอบตามหัวข้อ (QC)</button>
+        <button className={`type-button ${reportType === 'Daily' ? 'active' : ''}`} onClick={() => setReportType('Daily')} disabled={isUploading || !!photo}>รายงานประจำวัน (Daily)</button>
       </div>
-       {uploadStatus && <div className="status-message">{uploadStatus}</div>}
+
+      <div className="form-container">
+        {reportType === 'QC' ? (
+          <>
+            <div className="form-group">
+              <label>หมวดงาน</label>
+              <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} disabled={isUploading}>
+                <option value="" disabled>-- เลือกหมวดงาน --</option>
+                {qcTopics && Object.keys(qcTopics).map((category) => (<option key={category} value={category}>{category}</option>))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>หัวข้อการตรวจ</label>
+              <select value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)} disabled={isUploading || topicsForCategory.length === 0}>
+                <option value="" disabled>-- เลือกหัวข้อ --</option>
+                {topicsForCategory.map((topic) => (<option key={topic} value={topic}>{topic}</option>))}
+              </select>
+            </div>
+          </>
+        ) : (
+          <div className="form-group">
+            <label>คำบรรยายภาพ (Description)</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} disabled={isUploading} placeholder="บรรยายสิ่งที่เกิดขึ้นในภาพ..." rows={4}/>
+          </div>
+        )}
+      </div>
+      {uploadStatus && <div className="status-message">{uploadStatus}</div>}
     </div>
   );
 };

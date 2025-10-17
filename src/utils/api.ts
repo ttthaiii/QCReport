@@ -18,12 +18,14 @@ export interface ProjectConfig {
 }
 
 // โครงสร้างข้อมูลสำหรับอัปโหลดรูปภาพ
-interface UploadPhotoData {
+export interface UploadPhotoData {
+  type: 'QC' | 'Daily';
   projectId: string;
-  category: string;
-  topic: string;
   location: string;
   dynamicFields: object;
+  description?: string;
+  category?: string;
+  topic?: string;
 }
 
 // โครงสร้างข้อมูลที่ได้รับกลับมาหลังอัปโหลดสำเร็จ

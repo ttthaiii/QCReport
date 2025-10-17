@@ -1,5 +1,7 @@
 import { initializeApp } from 'firebase/app';
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { getStorage, connectStorageEmulator } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -13,12 +15,25 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Functions
+// Initialize Services
 const functions = getFunctions(app, 'asia-southeast1');
+const db = getFirestore(app); // <-- เพิ่ม Firestore
+const storage = getStorage(app); // <-- เพิ่ม Storage
 
-// Connect to emulator in development
+// Connect to emulators in development
+// (ใช้ process.env.NODE_ENV ก็ได้ หรือ window.location.hostname ก็ได้)
 if (process.env.NODE_ENV === 'development') {
+  console.log("Connecting to local emulators...");
+  
+  // Connect to Functions emulator
   connectFunctionsEmulator(functions, 'localhost', 5001);
+
+  // Connect to Firestore emulator <-- เพิ่มส่วนนี้
+  connectFirestoreEmulator(db, 'localhost', 8080);
+
+  // Connect to Storage emulator <-- เพิ่มส่วนนี้
+  connectStorageEmulator(storage, 'localhost', 9199);
 }
 
-export { functions };
+// Export ทุกบริการที่ต้องการใช้ในแอป
+export { functions, db, storage };

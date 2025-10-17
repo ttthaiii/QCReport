@@ -21,30 +21,32 @@ const QC_TOPICS_PATH = './หัวข้อการตรวจ QC.csv';
 
 // --- ⚠️ END CONFIGURATION ⚠️ ---
 
-
-// NEW: Initialize Firebase Admin SDK using environment variables
-// This is a more secure method and is standard for cloud environments.
-try {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.GOOGLE_PROJECT_ID,
-      clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
-      // The private key needs to be formatted correctly, 
-      // replacing escaped newlines with actual newlines.
-      privateKey: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
-    })
-  });
-} catch (error) {
-  console.error('❌ Firebase Admin SDK initialization failed.');
-  console.error('   Please check if your .env file is correct and in the right location.');
-  process.exit(1); // Exit the script if initialization fails
+if (process.env.FIRESTORE_EMULATOR_HOST) {
+    console.log('🌱 Detected FIRESTORE_EMULATOR_HOST, connecting to local emulator...');
+    // ถ้าใช่ ให้เชื่อมต่อกับ Emulator โดยไม่ต้องใช้กุญแจ
+    // ใช้ Project ID ที่คุณตั้งค่าไว้ใน Emulator
+    admin.initializeApp({
+        projectId: 'qcreport-54164',
+    });
+} else {
+    // ถ้าไม่ใช่ (เป็นการรันกับของจริง) ให้มองหา .env ตามปกติ
+    console.log('🚀 Connecting to production Firebase using .env credentials...');
+    try {
+        admin.initializeApp({
+            credential: admin.credential.cert({
+                projectId: process.env.GOOGLE_PROJECT_ID,
+                clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
+                privateKey: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+            })
+        });
+    } catch (error) {
+        console.error('❌ Firebase Admin SDK initialization failed.');
+        console.error('   Please check if your .env file is correct and in the right location.');
+        process.exit(1); // ออกจากสคริปต์ถ้า .env ผิดพลาด
+    }
 }
 
-
 const db = admin.firestore();
-db.settings({
-  databaseId: 'smartreportgen'
-});
 
 // Helper function to read CSV files
 function readCsv(filePath) {

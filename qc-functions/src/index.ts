@@ -34,6 +34,7 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const app = express();
 
+
 // ✅ FIXED: CORS configuration
 app.use(cors({ 
   origin: IS_EMULATOR 

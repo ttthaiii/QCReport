@@ -1,0 +1,25 @@
+[debug] [2025-10-17T15:26:44.102Z] ----------------------------------------------------------------------
+[debug] [2025-10-17T15:26:44.104Z] Command:       C:\nvm4w\nodejs\node.exe C:\nvm4w\nodejs\node_modules\firebase-tools\lib\bin\firebase.js emulators:start
+[debug] [2025-10-17T15:26:44.104Z] CLI Version:   14.17.0
+[debug] [2025-10-17T15:26:44.104Z] Platform:      win32
+[debug] [2025-10-17T15:26:44.104Z] Node Version:  v20.18.2
+[debug] [2025-10-17T15:26:44.104Z] Time:          Fri Oct 17 2025 22:26:44 GMT+0700 (Indochina Time)
+[debug] [2025-10-17T15:26:44.104Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-10-17T15:26:44.237Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-10-17T15:26:44.238Z] > authorizing via signed-in user (ttthaiii30@gmail.com)
+[debug] [2025-10-17T15:26:44.280Z] openjdk version "25" 2025-09-16 LTS
+OpenJDK Runtime Environment Temurin-25+36 (build 25+36-LTS)
+
+[debug] [2025-10-17T15:26:44.281Z] OpenJDK 64-Bit Server VM Temurin-25+36 (build 25+36-LTS, mixed mode, sharing)
+
+[debug] [2025-10-17T15:26:44.292Z] Parsed Java major version: 25
+[info] i  emulators: Starting emulators: functions, firestore, hosting, storage, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: functions, firestore, hosting, storage, extensions"}}
+[debug] [2025-10-17T15:26:44.294Z] Checked if tokens are valid: false, expires at: 1760708225499
+[debug] [2025-10-17T15:26:44.294Z] Checked if tokens are valid: false, expires at: 1760708225499
+[debug] [2025-10-17T15:26:44.294Z] > refreshing access token with scopes: []
+[debug] [2025-10-17T15:26:44.295Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-10-17T15:26:44.296Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-10-17T15:26:44.470Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-10-17T15:26:44.470Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-10-17T15:26:44.484Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/qcreport-54164 [none]
