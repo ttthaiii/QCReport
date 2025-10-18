@@ -1,120 +1,121 @@
-// Filename: src/utils/api.ts (REPLACE ALL)
+// Filename: src/utils/api.ts
 
-// --- STEP 1: Define the "Blueprints" for our API data ---
-
-// โครงสร้างข้อมูลของ Project ที่ได้รับจาก API /projects
+// Type definitions
 export interface Project {
   id: string;
   projectName: string;
-  projectCode: string;
-  isActive: boolean;
-  createdAt: any;
+  isActive?: boolean;
 }
 
-// ✅ UPDATED: "พิมพ์เขียว" สำหรับ Project Config ที่อัปเกรดเป็น 3 ชั้น
 export interface ProjectConfig {
   [mainCategory: string]: {
     [subCategory: string]: string[];
   };
 }
 
-// ✅ UPDATED: "พิมพ์เขียว" สำหรับข้อมูลอัปโหลดที่เพิ่ม mainCategory และ subCategory
 export interface UploadPhotoData {
-  type: 'QC' | 'Daily';
   projectId: string;
-  location: string;
-  dynamicFields: object;
+  projectName?: string;
+  reportType: 'QC' | 'Daily';
+  mainCategory?: string;
+  subCategory?: string;
+  topic?: string;
   description?: string;
-  mainCategory?: string; // สำหรับหมวดงานหลัก
-  subCategory?: string;  // สำหรับหมวดงานย่อย
-  topic?: string;        // สำหรับหัวข้อ (ยังคงไว้)
+  photoBase64: string;
+  latitude?: number;
+  longitude?: number;
+  timestamp: string;
+  location?: string;
+  dynamicFields?: object;
 }
 
-// โครงสร้างข้อมูลที่ได้รับกลับมาหลังอัปโหลดสำเร็จ
-interface UploadResponse {
+export interface ApiResponse<T = any> {
   success: boolean;
-  data: {
-    fileId: string;
-    filename: string;
-    driveUrl: string;
-    firestoreId: string;
-    message: string;
-  };
-}
-
-// โครงสร้างข้อมูลทั่วไปสำหรับ API response
-interface ApiResponse<T> {
-  success: boolean;
-  data: T;
+  data?: T;
   error?: string;
 }
 
-// --- STEP 2: Create a typed apiCall function ---
-
-const API_BASE = process.env.NODE_ENV === 'development'
-  ? 'http://127.0.0.1:5001/qcreport-54164/asia-southeast1/api'
+// API configuration
+const API_BASE_URL = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:5001/qcreport-54164/asia-southeast1/api'  // ✅ ถูกต้อง
   : 'https://asia-southeast1-qcreport-54164.cloudfunctions.net/api';
 
-async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-  const url = `${API_BASE}${endpoint}`;
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: `API Error: ${response.status} ${response.statusText}` }));
-      throw new Error(errorData.error || `API Error: ${response.status} ${response.statusText}`);
-    }
-    return response.json();
-  } catch (error) {
-    console.error(`API Call failed: ${endpoint}`, error);
-    return {
-        success: false,
-        error: (error as Error).message,
-        data: null as T
-    };
-  }
-}
-
-// Helper function to convert blob to base64
-function blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
-// --- STEP 3: Define the typed api object ---
-
+// API service
 export const api = {
-  getProjects: () => apiCall<Project[]>('/projects'),
-  getProjectConfig: (projectId: string) => apiCall<ProjectConfig>(`/project-config/${projectId}`),
-  uploadPhoto: async (photoBlob: Blob, photoData: UploadPhotoData): Promise<ApiResponse<UploadResponse['data']>> => {
+  // Get all active projects
+  async getProjects(): Promise<ApiResponse<Project[]>> {
     try {
-        const base64 = await blobToBase64(photoBlob);
-        return apiCall<UploadResponse['data']>('/upload-photo-base64', {
-            method: 'POST',
-            body: JSON.stringify({
-                photo: base64,
-                ...photoData,
-            }),
-        });
+      const response = await fetch(`${API_BASE_URL}/projects`);
+      const data = await response.json();
+      return data;
     } catch (error) {
-        console.error('Upload error:', error);
-        return {
-            success: false,
-            error: (error as Error).message,
-            data: null as any
-        };
+      console.error('Error fetching projects:', error);
+      return { 
+        success: false, 
+        error: 'ไม่สามารถโหลดข้อมูลโครงการได้' 
+      };
+    }
+  },
+
+  // Get project configuration (QC topics)
+  async getProjectConfig(projectId: string): Promise<ApiResponse<ProjectConfig>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/project-config/${projectId}`);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching project config:', error);
+      return { 
+        success: false, 
+        error: 'ไม่สามารถโหลดข้อมูลตั้งค่าโครงการได้' 
+      };
+    }
+  },
+
+  // Upload photo with metadata
+  async uploadPhoto(photoData: UploadPhotoData): Promise<ApiResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/upload-photo`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(photoData),
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      return { 
+        success: false, 
+        error: 'ไม่สามารถอัปโหลดรูปภาพได้' 
+      };
+    }
+  },
+
+  // Generate report
+  async generateReport(projectId: string, startDate: string, endDate: string, reportType: 'QC' | 'Daily'): Promise<ApiResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/generate-report`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          startDate,
+          endDate,
+          reportType,
+        }),
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error generating report:', error);
+      return { 
+        success: false, 
+        error: 'ไม่สามารถสร้างรายงานได้' 
+      };
     }
   },
 };
