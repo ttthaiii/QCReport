@@ -1,23 +1,16 @@
-// Filename: src/components/Camera.tsx
+// Filename: src/components/Camera.tsx (REPLACE ALL)
 
-import React, { useState, useEffect, useRef } from 'react';
-import { api, UploadPhotoData } from '../utils/api.ts';
-import { addWatermark } from '../utils/watermark.ts';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { api, UploadPhotoData, ProjectConfig } from '../utils/api';
+import { addWatermark } from '../utils/watermark';
 import './Camera.css';
 
-// "พิมพ์เขียว" สำหรับข้อมูล Project Config
-export interface ProjectConfig {
-  [category: string]: string[];
-}
-
-// "พิมพ์เขียว" สำหรับ Props ที่ Component นี้ได้รับมาจาก App.tsx
 interface CameraProps {
   qcTopics: ProjectConfig | null;
   projectId: string;
   projectName: string | undefined;
 }
 
-// "พิมพ์เขียว" สำหรับข้อมูลตำแหน่ง
 interface Geolocation {
   latitude: number;
   longitude: number;
@@ -33,37 +26,55 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  // ✅ UPDATED: States for 3-level selection
+  const [selectedMainCategory, setSelectedMainCategory] = useState<string>('');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
-  const [topicsForCategory, setTopicsForCategory] = useState<string[]>([]);
 
   // States for Feature: Daily Report
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [description, setDescription] = useState<string>('');
   const [dynamicFields, setDynamicFields] = useState<object>({});
 
-  // --- Logic ---
+  // --- Logic for 3-level dropdowns ---
+  const mainCategories = useMemo(() => qcTopics ? Object.keys(qcTopics) : [], [qcTopics]);
+  
+  const subCategories = useMemo(() => 
+    (qcTopics && selectedMainCategory && qcTopics[selectedMainCategory]) 
+    ? Object.keys(qcTopics[selectedMainCategory]) 
+    : [], 
+  [qcTopics, selectedMainCategory]);
+
+  const topics = useMemo(() =>
+    (qcTopics && selectedMainCategory && selectedSubCategory && qcTopics[selectedMainCategory]?.[selectedSubCategory])
+    ? qcTopics[selectedMainCategory][selectedSubCategory]
+    : [],
+  [qcTopics, selectedMainCategory, selectedSubCategory]);
+
+  // Effect to set default selections when data loads
+  useEffect(() => {
+    if (mainCategories.length > 0 && !selectedMainCategory) {
+      setSelectedMainCategory(mainCategories[0]);
+    }
+  }, [mainCategories, selectedMainCategory]);
 
   useEffect(() => {
-    if (qcTopics && Object.keys(qcTopics).length > 0) {
-      const firstCategory = Object.keys(qcTopics)[0];
-      setSelectedCategory(firstCategory);
-    } else {
-      setSelectedCategory('');
+    if (subCategories.length > 0 && !selectedSubCategory) {
+      setSelectedSubCategory(subCategories[0]);
+    } else if (mainCategories.length > 0 && subCategories.length === 0) {
+      setSelectedSubCategory(''); // Reset if main category changes and has no sub
     }
-  }, [qcTopics]);
+  }, [subCategories, mainCategories]);
 
   useEffect(() => {
-    if (selectedCategory && qcTopics && qcTopics[selectedCategory]) {
-      const topics = qcTopics[selectedCategory];
-      setTopicsForCategory(topics);
-      setSelectedTopic(topics[0] || '');
-    } else {
-      setTopicsForCategory([]);
-      setSelectedTopic('');
+    if (topics.length > 0 && !selectedTopic) {
+      setSelectedTopic(topics[0]);
+    } else if (subCategories.length > 0 && topics.length === 0) {
+        setSelectedTopic('');
     }
-  }, [selectedCategory, qcTopics]);
+  }, [topics, subCategories]);
 
+  // --- Camera and Upload Logic (Largely your original code) ---
   const startCamera = async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -117,8 +128,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   const handleUpload = async () => {
     if (!photo || !projectId) return;
-    if (reportType === 'QC' && (!selectedCategory || !selectedTopic)) {
-      alert('กรุณาเลือกหมวดงานและหัวข้อให้ครบถ้วน');
+    if (reportType === 'QC' && (!selectedMainCategory || !selectedSubCategory || !selectedTopic)) {
+      alert('กรุณาเลือกข้อมูล QC ให้ครบถ้วน');
       return;
     }
 
@@ -131,15 +142,16 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         : (location as string) || '';
 
       const watermarkText = reportType === 'QC'
-        ? { category: selectedCategory, topic: selectedTopic }
+        ? { category: `${selectedMainCategory}/${selectedSubCategory}`, topic: selectedTopic }
         : { category: 'Daily Report', topic: description.substring(0, 50) };
 
-      // ตอนนี้ TypeScript รู้จัก UploadPhotoData แล้ว และจะไม่มี Error
+      // ✅ UPDATED: Metadata now sends 3-level data for QC reports
       const uploadMetadata: UploadPhotoData = reportType === 'QC'
         ? {
             type: 'QC',
             projectId,
-            category: selectedCategory,
+            mainCategory: selectedMainCategory,
+            subCategory: selectedSubCategory,
             topic: selectedTopic,
             location: locationString,
             dynamicFields,
@@ -196,62 +208,66 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   return (
     <div className="camera-container">
-      {/* --- ส่วน JSX ที่เหลือเหมือนเดิม --- */}
-      <div className="camera-view">
-        {photo ? (
-          <img src={photo} alt="Captured" className="photo-preview" />
-        ) : (
-          <video ref={videoRef} autoPlay playsInline className="video-feed"></video>
-        )}
-        <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-      </div>
+        <div className="camera-view">
+            {photo ? (
+            <img src={photo} alt="Captured" className="photo-preview" />
+            ) : (
+            <video ref={videoRef} autoPlay playsInline className="video-feed"></video>
+            )}
+            <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+        </div>
 
-      <div className="controls-container">
-        {photo ? (
+        <div className="controls-container">
+            {photo ? (
+                <>
+                <button onClick={handleRetake} disabled={isUploading} className="control-button retake">ถ่ายใหม่</button>
+                <button onClick={handleUpload} disabled={isUploading} className="control-button upload">{isUploading ? uploadStatus : 'อัปโหลด'}</button>
+                </>
+            ) : (
+                <>
+                <label htmlFor="file-upload" className="control-button upload">แนบไฟล์</label>
+                <input id="file-upload" type="file" accept="image/*" onChange={handleFileUpload} style={{display: 'none'}}/>
+                <button onClick={takePhoto} className="control-button capture"><span className="capture-icon"></span></button>
+                </>
+            )}
+        </div>
+
+        <div className="report-type-selector">
+            <button className={`type-button ${reportType === 'QC' ? 'active' : ''}`} onClick={() => setReportType('QC')} disabled={isUploading || !!photo}>ตรวจสอบตามหัวข้อ (QC)</button>
+            <button className={`type-button ${reportType === 'Daily' ? 'active' : ''}`} onClick={() => setReportType('Daily')} disabled={isUploading || !!photo}>รายงานประจำวัน (Daily)</button>
+        </div>
+
+        <div className="form-container">
+            {reportType === 'QC' ? (
             <>
-              <button onClick={handleRetake} disabled={isUploading} className="control-button retake">ถ่ายใหม่</button>
-              <button onClick={handleUpload} disabled={isUploading} className="control-button upload">{isUploading ? uploadStatus : 'อัปโหลด'}</button>
+                {/* ✅ UPDATED: 3 Dropdowns for QC selection */}
+                <div className="form-group">
+                <label>หมวดงานหลัก</label>
+                <select value={selectedMainCategory} onChange={(e) => setSelectedMainCategory(e.target.value)} disabled={isUploading || mainCategories.length === 0}>
+                    {mainCategories.map((category) => (<option key={category} value={category}>{category}</option>))}
+                </select>
+                </div>
+                <div className="form-group">
+                <label>หมวดงานย่อย</label>
+                <select value={selectedSubCategory} onChange={(e) => setSelectedSubCategory(e.target.value)} disabled={isUploading || subCategories.length === 0}>
+                    {subCategories.map((topic) => (<option key={topic} value={topic}>{topic}</option>))}
+                </select>
+                </div>
+                <div className="form-group">
+                <label>หัวข้อการตรวจ</label>
+                <select value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)} disabled={isUploading || topics.length === 0}>
+                    {topics.map((topic) => (<option key={topic} value={topic}>{topic}</option>))}
+                </select>
+                </div>
             </>
-        ) : (
-            <>
-              <label htmlFor="file-upload" className="control-button upload">แนบไฟล์</label>
-              <input id="file-upload" type="file" accept="image/*" onChange={handleFileUpload} style={{display: 'none'}}/>
-              <button onClick={takePhoto} className="control-button capture"><span className="capture-icon"></span></button>
-            </>
-        )}
-      </div>
-
-      <div className="report-type-selector">
-        <button className={`type-button ${reportType === 'QC' ? 'active' : ''}`} onClick={() => setReportType('QC')} disabled={isUploading || !!photo}>ตรวจสอบตามหัวข้อ (QC)</button>
-        <button className={`type-button ${reportType === 'Daily' ? 'active' : ''}`} onClick={() => setReportType('Daily')} disabled={isUploading || !!photo}>รายงานประจำวัน (Daily)</button>
-      </div>
-
-      <div className="form-container">
-        {reportType === 'QC' ? (
-          <>
+            ) : (
             <div className="form-group">
-              <label>หมวดงาน</label>
-              <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} disabled={isUploading}>
-                <option value="" disabled>-- เลือกหมวดงาน --</option>
-                {qcTopics && Object.keys(qcTopics).map((category) => (<option key={category} value={category}>{category}</option>))}
-              </select>
+                <label>คำบรรยายภาพ (Description)</label>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} disabled={isUploading} placeholder="บรรยายสิ่งที่เกิดขึ้นในภาพ..." rows={4}/>
             </div>
-            <div className="form-group">
-              <label>หัวข้อการตรวจ</label>
-              <select value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)} disabled={isUploading || topicsForCategory.length === 0}>
-                <option value="" disabled>-- เลือกหัวข้อ --</option>
-                {topicsForCategory.map((topic) => (<option key={topic} value={topic}>{topic}</option>))}
-              </select>
-            </div>
-          </>
-        ) : (
-          <div className="form-group">
-            <label>คำบรรยายภาพ (Description)</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} disabled={isUploading} placeholder="บรรยายสิ่งที่เกิดขึ้นในภาพ..." rows={4}/>
-          </div>
-        )}
-      </div>
-      {uploadStatus && <div className="status-message">{uploadStatus}</div>}
+            )}
+        </div>
+        {uploadStatus && <div className="status-message">{uploadStatus}</div>}
     </div>
   );
 };

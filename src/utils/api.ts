@@ -1,4 +1,4 @@
-// Filename: src/utils/api.ts
+// Filename: src/utils/api.ts (REPLACE ALL)
 
 // --- STEP 1: Define the "Blueprints" for our API data ---
 
@@ -8,24 +8,26 @@ export interface Project {
   projectName: string;
   projectCode: string;
   isActive: boolean;
-  createdAt: any; // สามารถกำหนดให้ละเอียดกว่านี้ได้ เช่น { _seconds: number, _nanoseconds: number }
+  createdAt: any;
 }
 
-// โครงสร้างข้อมูลของ Project Config ที่ได้รับจาก API /project-config/:projectId
-// เป็น object ที่มี key เป็น string (ชื่อหมวดงาน) และ value เป็น array ของ string (ชื่อหัวข้อ)
+// ✅ UPDATED: "พิมพ์เขียว" สำหรับ Project Config ที่อัปเกรดเป็น 3 ชั้น
 export interface ProjectConfig {
-  [category: string]: string[];
+  [mainCategory: string]: {
+    [subCategory: string]: string[];
+  };
 }
 
-// โครงสร้างข้อมูลสำหรับอัปโหลดรูปภาพ
+// ✅ UPDATED: "พิมพ์เขียว" สำหรับข้อมูลอัปโหลดที่เพิ่ม mainCategory และ subCategory
 export interface UploadPhotoData {
   type: 'QC' | 'Daily';
   projectId: string;
   location: string;
   dynamicFields: object;
   description?: string;
-  category?: string;
-  topic?: string;
+  mainCategory?: string; // สำหรับหมวดงานหลัก
+  subCategory?: string;  // สำหรับหมวดงานย่อย
+  topic?: string;        // สำหรับหัวข้อ (ยังคงไว้)
 }
 
 // โครงสร้างข้อมูลที่ได้รับกลับมาหลังอัปโหลดสำเร็จ
@@ -47,18 +49,14 @@ interface ApiResponse<T> {
   error?: string;
 }
 
-
 // --- STEP 2: Create a typed apiCall function ---
 
 const API_BASE = process.env.NODE_ENV === 'development'
   ? 'http://127.0.0.1:5001/qcreport-54164/asia-southeast1/api'
   : 'https://asia-southeast1-qcreport-54164.cloudfunctions.net/api';
 
-// ฟังก์ชัน fetch ที่ปรับปรุงด้วย TypeScript Generics (<T>)
-// ทำให้เรารู้ชนิดข้อมูลที่จะได้รับกลับมาล่วงหน้า
 async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   const url = `${API_BASE}${endpoint}`;
-
   try {
     const response = await fetch(url, {
       headers: {
@@ -67,21 +65,17 @@ async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<
       },
       ...options,
     });
-
     if (!response.ok) {
-      // พยายามอ่าน error message จาก backend
       const errorData = await response.json().catch(() => ({ error: `API Error: ${response.status} ${response.statusText}` }));
       throw new Error(errorData.error || `API Error: ${response.status} ${response.statusText}`);
     }
-
     return response.json();
   } catch (error) {
     console.error(`API Call failed: ${endpoint}`, error);
-    // สร้างโครงสร้าง error response ให้สอดคล้องกัน
     return {
         success: false,
         error: (error as Error).message,
-        data: null as T // TypeScript จะเข้าใจว่า data เป็น null ในกรณีที่เกิด error
+        data: null as T
     };
   }
 }
@@ -91,8 +85,6 @@ function blobToBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        // reader.result คือ base64 string ทั้งหมด (รวม data:image/jpeg;base64,)
-        // เราจะตัดแค่ส่วน base64 เพียวๆ ออกมา
         const base64 = (reader.result as string).split(',')[1];
         resolve(base64);
       };
@@ -101,21 +93,14 @@ function blobToBase64(blob: Blob): Promise<string> {
     });
   }
 
-
 // --- STEP 3: Define the typed api object ---
 
 export const api = {
-  // ดึงรายชื่อโครงการทั้งหมด และบอกว่าข้อมูลที่คาดหวังคือ Project[] (Array ของ Project)
   getProjects: () => apiCall<Project[]>('/projects'),
-
-  // ดึง Config ของโครงการ และบอกว่าข้อมูลที่คาดหวังคือ ProjectConfig
   getProjectConfig: (projectId: string) => apiCall<ProjectConfig>(`/project-config/${projectId}`),
-
-  // อัปโหลดรูปภาพ
   uploadPhoto: async (photoBlob: Blob, photoData: UploadPhotoData): Promise<ApiResponse<UploadResponse['data']>> => {
     try {
         const base64 = await blobToBase64(photoBlob);
-        
         return apiCall<UploadResponse['data']>('/upload-photo-base64', {
             method: 'POST',
             body: JSON.stringify({

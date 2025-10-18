@@ -84,32 +84,46 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
   try {
     const { projectId } = req.params;
     
-    const categoriesRef = db.collection("projectConfig")
-      .doc(projectId)
-      .collection("categories");
-    const categoriesSnapshot = await categoriesRef.orderBy("orderIndex").get();
+    // The final 3-level nested object we will send to the frontend
+    const projectConfig: { [mainCategory: string]: { [subCategory: string]: string[] } } = {};
 
-    if (categoriesSnapshot.empty) {
+    // 1. Get all Main Categories for the project
+    const mainCategoriesSnapshot = await db.collection("projectConfig")
+      .doc(projectId)
+      .collection("mainCategories")
+      .get();
+
+    if (mainCategoriesSnapshot.empty) {
       return res.status(404).json({ 
         success: false, 
-        error: "Configuration for this project not found." 
+        error: "Configuration (Main Categories) for this project not found." 
       });
     }
 
-    const projectConfig: { [key: string]: string[] } = {};
+    // 2. Loop through each Main Category to get its Sub Categories
+    for (const mainCategoryDoc of mainCategoriesSnapshot.docs) {
+      const mainCategoryData = mainCategoryDoc.data();
+      const mainCategoryName = mainCategoryData.name;
+      projectConfig[mainCategoryName] = {}; // Initialize sub-category object
 
-    for (const categoryDoc of categoriesSnapshot.docs) {
-      const categoryData = categoryDoc.data();
-      const categoryName = categoryData.categoryName;
-      const topicsRef = categoryDoc.ref.collection("topics");
-      const topicsSnapshot = await topicsRef.orderBy("orderIndex").get();
-      const topics = topicsSnapshot.docs.map((doc) => doc.data().topicName);
-      projectConfig[categoryName] = topics;
+      const subCategoriesSnapshot = await mainCategoryDoc.ref.collection("subCategories").get();
+
+      // 3. Loop through each Sub Category to get its Topics
+      for (const subCategoryDoc of subCategoriesSnapshot.docs) {
+        const subCategoryData = subCategoryDoc.data();
+        const subCategoryName = subCategoryData.name;
+        
+        const topicsSnapshot = await subCategoryDoc.ref.collection("topics").get();
+        const topics = topicsSnapshot.docs.map((doc) => doc.data().name);
+
+        // 4. Populate the final object
+        projectConfig[mainCategoryName][subCategoryName] = topics;
+      }
     }
     
     return res.json({ success: true, data: projectConfig });
   } catch (error) {
-    console.error("Error in /project-config:", error);
+    console.error("Error in /project-config (3-level):", error);
     return res.status(500).json({ 
       success: false, 
       error: (error as Error).message 
