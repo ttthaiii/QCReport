@@ -1,18 +1,16 @@
-// Filename: qc-functions/migration-script.js (REPLACE ALL - FINAL PATH FIX VERSION)
+// Filename: qc-functions/migration-script.js (REPLACE ALL - FINAL VERSION)
 
 require('dotenv').config();
 const admin = require('firebase-admin');
 const fs = require('fs');
 const csv = require('csv-parser');
-const path = require('path'); // ✅ ADDED: Import the 'path' module
+const path = require('path');
 
-// --- ⚠️ CONFIGURATION ⚠️ ---
-// ✅ FIXED: Use path.join to create correct, absolute paths to the CSV files
+// --- CONFIGURATION ---
 const PROJECTS_CSV_PATH = path.join(__dirname, 'Projects.csv');
 const QC_TOPICS_CSV_PATH = path.join(__dirname, 'หัวข้อการตรวจ QC.csv');
-const CATEGORY_CONFIG_PATH = path.join(__dirname, 'Category_Config.csv');
-// --- ⚠️ END CONFIGURATION ⚠️ ---
 
+// --- INITIALIZE FIREBASE ---
 if (process.env.FIRESTORE_EMULATOR_HOST) {
     console.log('🌱 Detected FIRESTORE_EMULATOR_HOST, connecting to local emulator...');
     admin.initializeApp({ projectId: 'qcreport-54164' });
@@ -21,40 +19,31 @@ if (process.env.FIRESTORE_EMULATOR_HOST) {
 }
 const db = admin.firestore();
 
+// --- HELPER FUNCTION ---
 function readCsv(filePath) {
   return new Promise((resolve, reject) => {
     const results = [];
     fs.createReadStream(filePath)
-      .on('error', reject) // Handle file not found error early
-      .pipe(csv({
-          mapHeaders: ({ header }) => header.trim(),
-          bom: true
-      }))
+      .on('error', reject)
+      .pipe(csv({ mapHeaders: ({ header }) => header.trim(), bom: true }))
       .on('data', (data) => results.push(data))
       .on('end', () => resolve(results))
       .on('error', reject);
   });
 }
 
+// --- MAIN SCRIPT ---
 async function migrateData() {
-  console.log('🚀 Starting FINAL ROBUST migration script...');
+  console.log('🚀 Starting 3-LEVEL migration script...');
 
   try {
     const projects = await readCsv(PROJECTS_CSV_PATH);
     const qcTopics = await readCsv(QC_TOPICS_CSV_PATH);
-    const categoryConfigs = await readCsv(CATEGORY_CONFIG_PATH);
-
-    console.log(`Found ${projects.length} projects, ${qcTopics.length} topics, and ${categoryConfigs.length} category configs.`);
+    console.log(`Found ${projects.length} projects and ${qcTopics.length} topic entries.`);
 
     for (const project of projects) {
-      const projectId = project['id'];
-      const projectName = project['name'];
-      const projectCode = project['code'];
-      
-      if (!projectId || !projectName) {
-        console.warn('⚠️ Skipping a row in Projects.csv due to missing id or name.');
-        continue;
-      }
+      const { id: projectId, name: projectName, code: projectCode } = project;
+      if (!projectId || !projectName) continue;
 
       console.log(`\n--- Processing Project: "${projectName}" (ID: ${projectId}) ---`);
       
@@ -64,39 +53,38 @@ async function migrateData() {
       });
       console.log(`✅ Project document created/updated.`);
 
-      // Your existing logic for creating projectConfig
-      const configsForProject = categoryConfigs.filter(c => c.projectId === projectId);
-      const categoriesRef = db.collection('projectConfig').doc(projectId).collection('categories');
+      const projectConfigData = {};
+      const topicsForProject = qcTopics.filter(t => t.projectId === projectId);
+
+      for (const topicRow of topicsForProject) {
+          const { MainCategory, SubCategory, Topic } = topicRow;
+          if (!MainCategory || !SubCategory || !Topic) continue;
+
+          if (!projectConfigData[MainCategory]) projectConfigData[MainCategory] = {};
+          if (!projectConfigData[MainCategory][SubCategory]) projectConfigData[MainCategory][SubCategory] = [];
+          projectConfigData[MainCategory][SubCategory].push(Topic);
+      }
       
-      let categoryOrderIndex = 1;
-      for (const config of configsForProject) {
-        const categoryName = config['หมวดงาน'];
-        if (!categoryName) continue;
+      // Write the 3-level structure to Firestore
+      for (const mainCategoryName in projectConfigData) {
+        const mainCategoryRef = await db.collection("projectConfig").doc(projectId)
+          .collection("mainCategories").add({ name: mainCategoryName });
+        console.log(`  -> Main Category: ${mainCategoryName}`);
 
-        console.log(`  -> Processing category: "${categoryName}"`);
-        const categoryDocRef = await categoriesRef.add({
-            categoryName: categoryName.trim(),
-            orderIndex: categoryOrderIndex++,
-            // dynamicFields logic can be added here if needed
-        });
+        const subCategories = projectConfigData[mainCategoryName];
+        for (const subCategoryName in subCategories) {
+          const subCategoryRef = await mainCategoryRef.collection("subCategories").add({ name: subCategoryName });
+          console.log(`    -> Sub Category: ${subCategoryName}`);
 
-        const topicsForCategory = qcTopics.filter(t => t['MainCategory'] === categoryName.trim() && t['projectId'] === projectId);
-        const topicsRef = categoryDocRef.collection('topics');
-        
-        let topicOrderIndex = 1;
-        for (const topic of topicsForCategory) {
-            const topicName = topic['Topic'];
-            if (topicName) {
-               await topicsRef.add({
-                 topicName: topicName.trim(),
-                 orderIndex: topicOrderIndex++
-               });
-            }
+          const topics = subCategories[subCategoryName];
+          for (const topicName of topics) {
+            await subCategoryRef.collection("topics").add({ name: topicName });
+          }
+          console.log(`      -> Added ${topics.length} topics.`);
         }
-        console.log(`    -> Added ${topicsForCategory.length} topics.`);
       }
     }
-    console.log('\n\n🎉 Migration completed successfully!');
+    console.log('\n\n🎉 3-LEVEL MULTI-PROJECT Migration completed successfully!');
 
   } catch (error) {
     console.error('❌ An error occurred during migration:', error);

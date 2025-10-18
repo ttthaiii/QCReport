@@ -80,54 +80,69 @@ app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
   }
 });
 
-app.get("/project-config/:projectId", async (req: Request, res: Response): Promise<Response> => {
+app.get("/project-config/:projectId", async (req, res) => {
   try {
-    const { projectId } = req.params;
-    
-    // The final 3-level nested object we will send to the frontend
-    const projectConfig: { [mainCategory: string]: { [subCategory: string]: string[] } } = {};
+    const projectId = req.params.projectId;
+    if (!projectId) {
+      return res.status(400).send("Project ID is required");
+    }
 
-    // 1. Get all Main Categories for the project
-    const mainCategoriesSnapshot = await db.collection("projectConfig")
-      .doc(projectId)
-      .collection("mainCategories")
-      .get();
+    // 1. แก้ไขชื่อ Collection ให้ถูกต้องเป็น "projects"
+    const projectDocRef = db.collection('projects').doc(projectId);
+    const projectDoc = await projectDocRef.get();
+
+    if (!projectDoc.exists) {
+      return res.status(404).send(`Project with ID ${projectId} not found.`);
+    }
+
+    // 2. เขียนฟังก์ชันเพื่ออ่านข้อมูลแบบ Sub-collections ที่ซ้อนกัน
+    const mainCategoriesSnapshot = await projectDocRef.collection('mainCategories').get();
 
     if (mainCategoriesSnapshot.empty) {
-      return res.status(404).json({ 
-        success: false, 
-        error: "Configuration (Main Categories) for this project not found." 
+      return res.json({
+        projectName: projectDoc.data()?.name || '',
+        categories: []
       });
     }
 
-    // 2. Loop through each Main Category to get its Sub Categories
-    for (const mainCategoryDoc of mainCategoriesSnapshot.docs) {
-      const mainCategoryData = mainCategoryDoc.data();
-      const mainCategoryName = mainCategoryData.name;
-      projectConfig[mainCategoryName] = {}; // Initialize sub-category object
+    // 3. ใช้ Promise.all เพื่อดึงข้อมูล Sub-collections ทั้งหมดแบบขนาน (มีประสิทธิภาพ)
+    const categoriesData = await Promise.all(
+      mainCategoriesSnapshot.docs.map(async (mainCatDoc) => {
+        const subCategoriesSnapshot = await mainCatDoc.ref.collection('subCategories').get();
 
-      const subCategoriesSnapshot = await mainCategoryDoc.ref.collection("subCategories").get();
+        const subCategoriesData = await Promise.all(
+          subCategoriesSnapshot.docs.map(async (subCatDoc) => {
+            const topicsSnapshot = await subCatDoc.ref.collection('topics').get();
+            const topics = topicsSnapshot.docs.map(topicDoc => ({
+              id: topicDoc.id,
+              ...topicDoc.data()
+            }));
 
-      // 3. Loop through each Sub Category to get its Topics
-      for (const subCategoryDoc of subCategoriesSnapshot.docs) {
-        const subCategoryData = subCategoryDoc.data();
-        const subCategoryName = subCategoryData.name;
-        
-        const topicsSnapshot = await subCategoryDoc.ref.collection("topics").get();
-        const topics = topicsSnapshot.docs.map((doc) => doc.data().name);
+            return {
+              id: subCatDoc.id,
+              ...subCatDoc.data(),
+              topics: topics
+            };
+          })
+        );
 
-        // 4. Populate the final object
-        projectConfig[mainCategoryName][subCategoryName] = topics;
-      }
-    }
-    
-    return res.json({ success: true, data: projectConfig });
-  } catch (error) {
-    console.error("Error in /project-config (3-level):", error);
-    return res.status(500).json({ 
-      success: false, 
-      error: (error as Error).message 
+        return {
+          id: mainCatDoc.id,
+          ...mainCatDoc.data(),
+          subCategories: subCategoriesData
+        };
+      })
+    );
+
+    // 4. ส่งข้อมูลกลับไปให้ Frontend ในโครงสร้างที่ถูกต้อง
+    return res.status(200).json({
+      projectName: projectDoc.data()?.name || '',
+      categories: categoriesData
     });
+
+  } catch (error) {
+    console.error("Error fetching project config:", error);
+    return res.status(500).send("Internal Server Error");
   }
 });
 
