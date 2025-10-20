@@ -50,7 +50,6 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, topics, dyn
     const db = admin.firestore();
     const photosRef = db.collection("qcPhotos");
     const photos = [];
-    // Loop through each topic to get the latest photo
     for (const topic of topics) {
         let query = photosRef
             .where("projectId", "==", projectId)
@@ -61,7 +60,10 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, topics, dyn
             .limit(1);
         // Add dynamic fields to query
         for (const [key, value] of Object.entries(dynamicFields)) {
-            if (value && value.trim()) {
+            // ✅ --- THIS IS THE FIX ---
+            // We now check that BOTH the 'key' AND the 'value' are not empty.
+            // This directly prevents the "invalid field path" error.
+            if (key && key.trim() && value && value.trim()) {
                 query = query.where(`dynamicFields.${key}`, "==", value);
             }
         }
@@ -77,7 +79,7 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, topics, dyn
             });
         }
         else {
-            // ถ้าไม่มีรูป ใส่ placeholder
+            // If no photo, add a placeholder
             photos.push({
                 topic: topic,
                 driveUrl: "",

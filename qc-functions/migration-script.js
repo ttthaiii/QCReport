@@ -23,7 +23,8 @@ const db = admin.firestore();
 function readCsv(filePath) {
   return new Promise((resolve, reject) => {
     const results = [];
-    fs.createReadStream(filePath)
+    // ✅ FIX: Explicitly set the encoding to 'utf8' to handle Thai characters correctly
+    fs.createReadStream(filePath, { encoding: 'utf8' })
       .on('error', (err) => reject(`Error reading CSV file: ${filePath}. Details: ${err.message}`))
       .pipe(csv({ mapHeaders: ({ header }) => header.trim(), bom: true }))
       .on('data', (data) => results.push(data))
@@ -43,12 +44,10 @@ async function migrateData() {
 
     const fieldConfigMap = new Map();
     for (const config of dynamicFieldConfigs) {
-        // ✅ FIX: ค้นหา Header ที่ถูกต้อง แม้จะมี BOM Character ซ่อนอยู่
         const headers = Object.keys(config);
         const subCategoryHeader = headers.find(h => h.includes('หมวดงาน'));
         const projectIdHeader = headers.find(h => h.includes('projectId'));
 
-        // ดึงข้อมูลโดยใช้ Header ที่ค้นเจอ
         const subCategoryFromCsv = config[subCategoryHeader];
         const projectIdFromCsv = config[projectIdHeader];
 

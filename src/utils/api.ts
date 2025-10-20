@@ -11,7 +11,7 @@ export interface ProjectConfig {
   [mainCategory: string]: {
     [subCategory: string]: {
       topics: string[];
-      dynamicFields: string[]; // <-- เพิ่ม Field นี้เข้ามา
+      dynamicFields: string[];
     };
   };
 }

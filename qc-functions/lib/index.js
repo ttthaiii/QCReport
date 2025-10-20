@@ -108,9 +108,8 @@ app.get("/projects", async (req, res) => {
 app.get("/project-config/:projectId", async (req, res) => {
     try {
         const { projectId } = req.params;
-        // The final 3-level nested object we will send to the frontend
+        // ✅ 1. FIX: Update the type to expect an object containing topics and dynamicFields
         const projectConfig = {};
-        // 1. Get all Main Categories for the project
         const mainCategoriesSnapshot = await db.collection("projectConfig")
             .doc(projectId)
             .collection("mainCategories")
@@ -118,29 +117,30 @@ app.get("/project-config/:projectId", async (req, res) => {
         if (mainCategoriesSnapshot.empty) {
             return res.status(404).json({
                 success: false,
-                error: "Configuration (Main Categories) for this project not found."
+                error: "Configuration for this project not found."
             });
         }
-        // 2. Loop through each Main Category to get its Sub Categories
         for (const mainCategoryDoc of mainCategoriesSnapshot.docs) {
             const mainCategoryData = mainCategoryDoc.data();
             const mainCategoryName = mainCategoryData.name;
-            projectConfig[mainCategoryName] = {}; // Initialize sub-category object
+            projectConfig[mainCategoryName] = {};
             const subCategoriesSnapshot = await mainCategoryDoc.ref.collection("subCategories").get();
-            // 3. Loop through each Sub Category to get its Topics
             for (const subCategoryDoc of subCategoriesSnapshot.docs) {
                 const subCategoryData = subCategoryDoc.data();
                 const subCategoryName = subCategoryData.name;
                 const topicsSnapshot = await subCategoryDoc.ref.collection("topics").get();
                 const topics = topicsSnapshot.docs.map((doc) => doc.data().name);
-                // 4. Populate the final object
-                projectConfig[mainCategoryName][subCategoryName] = topics;
+                // ✅ 2. FIX: Populate the object with BOTH topics and dynamicFields
+                projectConfig[mainCategoryName][subCategoryName] = {
+                    topics: topics,
+                    dynamicFields: subCategoryData.dynamicFields || [] // <-- THE MISSING PIECE!
+                };
             }
         }
         return res.json({ success: true, data: projectConfig });
     }
     catch (error) {
-        console.error("Error in /project-config (3-level):", error);
+        console.error("Error in /project-config:", error);
         return res.status(500).json({
             success: false,
             error: error.message

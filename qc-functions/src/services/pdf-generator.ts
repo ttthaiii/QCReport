@@ -33,7 +33,6 @@ export async function getLatestPhotos(
   
   const photos: PhotoData[] = [];
   
-  // Loop through each topic to get the latest photo
   for (const topic of topics) {
     let query = photosRef
       .where("projectId", "==", projectId)
@@ -45,7 +44,11 @@ export async function getLatestPhotos(
     
     // Add dynamic fields to query
     for (const [key, value] of Object.entries(dynamicFields)) {
-      if (value && value.trim()) {
+      
+      // ✅ --- THIS IS THE FIX ---
+      // We now check that BOTH the 'key' AND the 'value' are not empty.
+      // This directly prevents the "invalid field path" error.
+      if (key && key.trim() && value && value.trim()) {
         query = query.where(`dynamicFields.${key}`, "==", value);
       }
     }
@@ -63,7 +66,7 @@ export async function getLatestPhotos(
         location: data.location || ""
       });
     } else {
-      // ถ้าไม่มีรูป ใส่ placeholder
+      // If no photo, add a placeholder
       photos.push({
         topic: topic,
         driveUrl: "",

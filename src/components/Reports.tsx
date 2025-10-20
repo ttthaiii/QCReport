@@ -1,4 +1,4 @@
-// Filename: src/components/Reports.tsx (REPLACE ALL)
+// Filename: src/components/Reports.tsx (FINAL CORRECTED VERSION)
 
 import React, { useState, useEffect } from 'react';
 import { api, ProjectConfig } from '../utils/api';
@@ -34,6 +34,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     if (formData.mainCategory && qcTopics[formData.mainCategory]) {
       const subCategories = Object.keys(qcTopics[formData.mainCategory]);
       if (subCategories.length > 0) {
+        // Also clear old dynamic field values when main category changes
+        setDynamicFields({});
         setFormData(prev => ({ ...prev, subCategory: subCategories[0] }));
       }
     }
@@ -84,16 +86,19 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     ? Object.keys(qcTopics[formData.mainCategory]) 
     : [];
 
-  // ✅ แก้ไข: ดึง Array ของ topics จากโครงสร้างข้อมูลใหม่
   const topics = formData.mainCategory && formData.subCategory && qcTopics[formData.mainCategory]?.[formData.subCategory]
     ? qcTopics[formData.mainCategory][formData.subCategory].topics
+    : [];
+    
+  // ✅ HERE IS THE FIX (Part 1): Get the dynamicFields array
+  const requiredDynamicFields = formData.mainCategory && formData.subCategory && qcTopics[formData.mainCategory]?.[formData.subCategory]
+    ? qcTopics[formData.mainCategory][formData.subCategory].dynamicFields
     : [];
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>📋 สร้างรายงาน QC</h1>
       
-      {/* Report Generation Form */}
       <div style={{ 
         marginBottom: '20px', 
         padding: '20px', 
@@ -116,7 +121,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
             </label>
             <select 
               value={formData.mainCategory}
-              onChange={(e) => setFormData(prev => ({ ...prev, mainCategory: e.target.value }))}
+              onChange={(e) => setFormData(prev => ({ subCategory: '', mainCategory: e.target.value }))}
               style={{ 
                 width: '100%', 
                 padding: '8px 12px',
@@ -140,7 +145,10 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
             </label>
             <select 
               value={formData.subCategory}
-              onChange={(e) => setFormData(prev => ({ ...prev, subCategory: e.target.value }))}
+              onChange={(e) => {
+                setDynamicFields({}); // Clear values on change
+                setFormData(prev => ({ ...prev, subCategory: e.target.value }));
+              }}
               style={{ 
                 width: '100%', 
                 padding: '8px 12px',
@@ -159,68 +167,38 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
           </div>
         </div>
 
-        {/* Dynamic Fields */}
-        <div style={{ marginBottom: '20px' }}>
-          <h4 style={{ marginTop: 0, marginBottom: '10px', color: '#495057' }}>
-            ข้อมูลเพิ่มเติม (ไม่บังคับ):
-          </h4>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-            gap: '10px'
-          }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                อาคาร:
-              </label>
-              <input
-                type="text"
-                value={dynamicFields['อาคาร'] || ''}
-                onChange={(e) => handleDynamicFieldChange('อาคาร', e.target.value)}
-                placeholder="เช่น A, B, C"
-                style={{ 
-                  width: '100%', 
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px'
-                }}
-              />
+        {/* ✅ HERE IS THE FIX (Part 2): Dynamically render the fields */}
+        {requiredDynamicFields.length > 0 && (
+          <div style={{ marginBottom: '20px' }}>
+            <h4 style={{ marginTop: 0, marginBottom: '10px', color: '#495057' }}>
+              ข้อมูลเพิ่มเติม (ไม่บังคับ):
+            </h4>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+              gap: '10px'
+            }}>
+              {requiredDynamicFields.map((fieldName) => (
+                <div key={fieldName}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
+                    {fieldName}:
+                  </label>
+                  <input
+                    type="text"
+                    value={dynamicFields[fieldName] || ''}
+                    onChange={(e) => handleDynamicFieldChange(fieldName, e.target.value)}
+                    placeholder={`ระบุ${fieldName}...`}
+                    style={{ 
+                      width: '100%', 
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      border: '1px solid #ced4da',
+                      borderRadius: '4px'
+                    }}
+                  />
+                </div>
+              ))}
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                ชั้น:
-              </label>
-              <input
-                type="text"
-                value={dynamicFields['ชั้น'] || ''}
-                onChange={(e) => handleDynamicFieldChange('ชั้น', e.target.value)}
-                placeholder="เช่น 1, 2, 3"
-                style={{ 
-                  width: '100%', 
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px'
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Validation Warning */}
-        {!isFieldsComplete() && (
-          <div style={{
-            marginBottom: '15px',
-            padding: '10px',
-            backgroundColor: '#fff3cd',
-            borderRadius: '4px',
-            textAlign: 'center',
-            fontSize: '14px',
-            color: '#856404',
-            border: '1px solid #ffeaa7'
-          }}>
-            ⚠️ กรุณาเลือกหมวดงานให้ครบถ้วน
           </div>
         )}
 
@@ -246,22 +224,19 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         </div>
       </div>
 
-      {/* Topics Preview */}
+      {/* Topics Preview and Generated Report Info... (rest of the file is the same) */}
       {formData.mainCategory && formData.subCategory && topics.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6' }}>
-          <h4 style={{ color: '#495057', marginBottom: '15px', marginTop: 0 }}>📝 หัวข้อในรายงาน ({topics.length} หัวข้อ):</h4>
-          <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '4px', border: '1px solid #dee2e6', maxHeight: '300px', overflowY: 'auto' }}>
-            {/* ✅ แก้ไข: กำหนด Type ให้ topic และ index เพื่อแก้ Error */}
+            <h4 style={{ color: '#495057', marginBottom: '15px', marginTop: 0 }}>📝 หัวข้อในรายงาน ({topics.length} หัวข้อ):</h4>
+            <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '4px', border: '1px solid #dee2e6', maxHeight: '300px', overflowY: 'auto' }}>
             {topics.map((topic: string, index: number) => (
-              <div key={index} style={{ padding: '8px 0', borderBottom: index < topics.length - 1 ? '1px solid #e9ecef' : 'none', fontSize: '14px' }}>
+                <div key={index} style={{ padding: '8px 0', borderBottom: index < topics.length - 1 ? '1px solid #e9ecef' : 'none', fontSize: '14px' }}>
                 <span style={{ color: '#495057' }}>{index + 1}. {topic}</span>
-              </div>
+                </div>
             ))}
-          </div>
+            </div>
         </div>
       )}
-
-      {/* Generated Report Info */}
       {generatedReport && (
         <div style={{ 
           marginTop: '20px',
@@ -271,14 +246,12 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
           border: '1px solid #c3e6cb'
         }}>
           <h3 style={{ marginTop: 0, color: '#155724' }}>✅ รายงานถูกสร้างเรียบร้อยแล้ว</h3>
-          
           <div style={{ marginBottom: '15px' }}>
             <p><strong>ไฟล์:</strong> {generatedReport.filename}</p>
             <p><strong>หมวดงาน:</strong> {formData.mainCategory} &gt; {formData.subCategory}</p>
             <p><strong>จำนวนหัวข้อ:</strong> {generatedReport.totalTopics}</p>
             <p><strong>รูปภาพที่พบ:</strong> {generatedReport.photosFound}/{generatedReport.totalTopics}</p>
           </div>
-          
           <div style={{ marginTop: '15px' }}>
             <a 
               href={generatedReport.publicUrl}
