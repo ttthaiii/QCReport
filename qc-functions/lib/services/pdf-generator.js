@@ -50,23 +50,20 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, topics, dyn
     const db = admin.firestore();
     const photosRef = db.collection("qcPhotos");
     const photos = [];
+    console.log(`🔍 Getting latest photos for ${topics.length} topics`);
+    console.log(`📋 Dynamic fields:`, JSON.stringify(dynamicFields));
+    // Loop through each topic to get the latest photo
     for (const topic of topics) {
-        let query = photosRef
+        // ✅ เริ่มต้นด้วย base query (ไม่มี dynamic fields)
+        const query = photosRef
             .where("projectId", "==", projectId)
             .where("category", "==", `${mainCategory} > ${subCategory}`)
             .where("topic", "==", topic)
             .where("reportType", "==", "QC")
             .orderBy("createdAt", "desc")
             .limit(1);
-        // Add dynamic fields to query
-        for (const [key, value] of Object.entries(dynamicFields)) {
-            // ✅ --- THIS IS THE FIX ---
-            // We now check that BOTH the 'key' AND the 'value' are not empty.
-            // This directly prevents the "invalid field path" error.
-            if (key && key.trim() && value && value.trim()) {
-                query = query.where(`dynamicFields.${key}`, "==", value);
-            }
-        }
+        // ✅ สำหรับตอนนี้ ไม่ filter ด้วย dynamic fields เพื่อให้ได้รูปมาก่อน
+        // TODO: เพิ่ม dynamic fields filtering ในอนาคต
         const snapshot = await query.get();
         if (!snapshot.empty) {
             const doc = snapshot.docs[0];
@@ -79,7 +76,7 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, topics, dyn
             });
         }
         else {
-            // If no photo, add a placeholder
+            // ถ้าไม่มีรูป ใส่ placeholder
             photos.push({
                 topic: topic,
                 driveUrl: "",
@@ -310,7 +307,6 @@ async function uploadPDFToStorage(pdfBuffer, reportData) {
     const storage = admin.storage();
     const bucket = storage.bucket();
     const { projectId, mainCategory, subCategory, dynamicFields } = reportData;
-    // สร้างชื่อไฟล์
     const fieldsStr = Object.entries(dynamicFields)
         .filter(([key, value]) => value && value.trim())
         .map(([key, value]) => value.replace(/\s/g, ""))
@@ -320,14 +316,18 @@ async function uploadPDFToStorage(pdfBuffer, reportData) {
         .replace(/>/g, "-");
     const filePath = `projects/${projectId}/reports/${filename}`;
     const file = bucket.file(filePath);
-    // Upload (จะ overwrite ถ้ามีอยู่แล้ว)
     await file.save(pdfBuffer, {
         metadata: {
             contentType: 'application/pdf'
         },
         public: true
     });
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath)}`;
+    // ✅ ใช้ Emulator URL ถ้ารันใน emulator
+    const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
+    const publicUrl = IS_EMULATOR
+        ? `http://localhost:9199/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media`
+        : `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath)}`;
+    console.log(`📎 PDF URL: ${publicUrl}`);
     return {
         publicUrl,
         filePath,
