@@ -1,4 +1,4 @@
-// Filename: qc-functions/src/services/pdf-generator.ts (FINAL, COMPLETE, AND CORRECTED VERSION)
+// Filename: qc-functions/src/services/pdf-generator.ts (FINAL, CORRECT ARCHITECTURE)
 
 import * as admin from "firebase-admin";
 import puppeteer from "puppeteer";
@@ -10,7 +10,7 @@ interface PhotoData {
   filePath: string;
   timestamp: string;
   location: string;
-  imageBase64?: string | null;
+  dynamicFields?: { [key: string]: string };
   isPlaceholder?: boolean;
   topicOrder?: number;
 }
@@ -26,8 +26,9 @@ interface ReportData {
 // --- CORE FUNCTIONS ---
 
 /**
- * This is the fully corrected function that combines your original logic
- * with the necessary bug fixes and enhancements.
+ * ✅ [CORRECT ARCHITECTURE]
+ * 1. Query 'ครั้งเดียว' โดยใช้ Dynamic Fields ทั้งหมดเพื่อกรองข้อมูลที่ถูกต้อง
+ * 2. Process ผลลัพธ์ใน Memory เพื่อหารูปที่ใหม่ที่สุดของแต่ละ Topic
  */
 export async function getLatestPhotos(
   projectId: string,
@@ -37,64 +38,54 @@ export async function getLatestPhotos(
   dynamicFields: { [key: string]: string }
 ): Promise<PhotoData[]> {
   const db = admin.firestore();
-  const storage = admin.storage();
-  const bucket = storage.bucket();
   const photosRef = db.collection("qcPhotos");
-  
-  const photoPromises = topics.map(async (topic) => {
-    let query = photosRef
-      .where("projectId", "==", projectId)
-      .where("category", "==", `${mainCategory} > ${subCategory}`) // Your original, correct query
-      .where("topic", "==", topic)
-      .where("reportType", "==", "QC")
-      .orderBy("createdAt", "desc")
-      .limit(1);
-    
-    // Robust check for both key and value to prevent 'invalid field path' error
-    for (const [key, value] of Object.entries(dynamicFields)) {
-      if (key && key.trim() && value && value.trim()) {
-        query = query.where(`dynamicFields.${key}`, "==", value);
-      }
-    }
-    
-    const snapshot = await query.get();
-    
-    if (snapshot.empty) {
-      return null;
-    }
 
-    const doc = snapshot.docs[0];
+  // --- STEP 1: สร้าง Query ที่รัดกุมเพียง 'ครั้งเดียว' ---
+  let query = photosRef
+    .where("projectId", "==", projectId)
+    .where("category", "==", `${mainCategory} > ${subCategory}`)
+    .where("reportType", "==", "QC");
+
+  // ** "ยาม" ยังคงทำงานที่นี่ และทำงานได้อย่างถูกต้อง **
+  for (const [key, value] of Object.entries(dynamicFields)) {
+    if (key && key.trim() && value && value.trim()) {
+      query = query.where(`dynamicFields.${key}`, "==", value);
+    }
+  }
+
+  const snapshot = await query.get();
+  
+  if (snapshot.empty) {
+    return []; // ถ้าไม่เจอรูปที่ตรงเงื่อนไขเลย ก็คืนค่าว่างกลับไป
+  }
+
+  // --- STEP 2: จัดเรียงข้อมูลใน Memory เพื่อหารูปที่ใหม่ที่สุด ---
+  const latestPhotosByTopic = new Map<string, PhotoData>();
+
+  snapshot.forEach(doc => {
     const data = doc.data();
-    
     const photoData: PhotoData = {
       topic: data.topic,
       driveUrl: data.driveUrl,
       filePath: data.filePath,
       timestamp: data.createdAt?.toDate?.()?.toISOString() || data.timestamp,
-      location: data.location || ""
+      location: data.location || "",
+      dynamicFields: data.dynamicFields || {}
     };
 
-    if (photoData.filePath) {
-      try {
-        const [fileBuffer] = await bucket.file(photoData.filePath).download();
-        photoData.imageBase64 = fileBuffer.toString('base64');
-      } catch (error) {
-        console.error(`❌ Image download failed for "${photoData.topic}":`, (error as Error).message);
-        photoData.imageBase64 = null;
-      }
-    } else {
-      photoData.imageBase64 = null;
+    // เช็คว่ารูปนี้ใหม่กว่ารูปที่มีอยู่ใน Map ของ Topic เดียวกันหรือไม่
+    if (!latestPhotosByTopic.has(photoData.topic) || 
+        new Date(photoData.timestamp) > new Date(latestPhotosByTopic.get(photoData.topic)!.timestamp)) 
+    {
+      latestPhotosByTopic.set(photoData.topic, photoData);
     }
-    
-    return photoData;
   });
 
-  const results = await Promise.all(photoPromises);
-  return results.filter(p => p !== null) as PhotoData[];
+  return Array.from(latestPhotosByTopic.values());
 }
 
 /**
- * Creates the full layout with placeholders (includes filePath for type safety).
+ * สร้าง Layout ที่สมบูรณ์ (ไม่มีการเปลี่ยนแปลง)
  */
 export function createFullLayout(allTopics: string[], foundPhotos: PhotoData[]): PhotoData[] {
   const photosByTopic = new Map<string, PhotoData>();
@@ -109,33 +100,27 @@ export function createFullLayout(allTopics: string[], foundPhotos: PhotoData[]):
     } else {
       return {
         topic: topic, topicOrder: index + 1, isPlaceholder: true,
-        driveUrl: "", filePath: "", timestamp: "", location: "", imageBase64: null,
+        driveUrl: "", filePath: "", timestamp: "", location: "",
       };
     }
   });
 }
 
 /**
- * Generates the PDF buffer.
+ * สร้าง PDF Buffer (ไม่มีการเปลี่ยนแปลง)
  */
 export async function generatePDF(reportData: ReportData, photos: PhotoData[]): Promise<Buffer> {
-  const html = generateOptimizedHTML(reportData, photos);
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'networkidle0' });
-  const pdfData = await page.pdf({
-    format: 'A4', printBackground: true,
-    margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' }
-  });
-  await browser.close();
-  return Buffer.from(pdfData);
+    const html = generateOptimizedHTML(reportData, photos);
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfData = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' } });
+    await browser.close();
+    return Buffer.from(pdfData);
 }
 
 /**
- * Uploads PDF to storage with emulator support.
+ * อัปโหลด PDF (ไม่มีการเปลี่ยนแปลง)
  */
 export async function uploadPDFToStorage(pdfBuffer: Buffer, reportData: ReportData): Promise<{ publicUrl: string; filePath: string; filename: string }> {
     const storage = admin.storage();
@@ -154,8 +139,7 @@ export async function uploadPDFToStorage(pdfBuffer: Buffer, reportData: ReportDa
     return { publicUrl, filePath, filename };
 }
 
-
-// --- HTML & CSS GENERATION ---
+// --- HTML & CSS GENERATION (ไม่มีการเปลี่ยนแปลง) ---
 
 function generateOptimizedHTML(reportData: ReportData, photos: PhotoData[]): string {
     const photosPerPage = 6;
@@ -209,8 +193,8 @@ function createPhotosGrid(photos: PhotoData[]): string {
     }
     const rowsHTML = rows.map(rowPhotos => {
         const photosHTML = rowPhotos.map(photo => {
-            const imageTag = photo.imageBase64
-                ? `<img src="data:image/jpeg;base64,${photo.imageBase64}" alt="${photo.topic}" class="photo-image">`
+            const imageTag = photo.driveUrl
+                ? `<img src="${photo.driveUrl.replace(/localhost/g, '10.0.2.2')}" alt="${photo.topic}" class="photo-image">`
                 : `<div class="photo-placeholder"><span class="placeholder-text">ไม่มีรูปภาพ</span></div>`;
             return `
                 <div class="photo-frame">

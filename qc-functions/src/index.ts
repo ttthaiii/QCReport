@@ -103,7 +103,8 @@ app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Re
             if (!category || !topic) {
                 return res.status(400).json({ success: false, error: "Missing QC fields." });
             }
-            filenamePrefix = `${category}-${topic}`;
+            const sanitizedCategoryForPrefix = category.replace(/\s*>\s*/g, "_");
+            filenamePrefix = `${sanitizedCategoryForPrefix}-${topic}`;
             photoData = { 
                 projectId, reportType, category, topic, 
                 location: location || "", dynamicFields: dynamicFields || {},
@@ -126,7 +127,9 @@ app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Re
         const filename = `${filenamePrefix}-${timestamp}.jpg`.replace(/\s/g, "_");
 
         // Use category for storage path for both QC and Daily
-        const storageCategoryPath = reportType === 'QC' ? category : 'daily-reports';
+        const storageCategoryPath = reportType === 'QC'
+            ? category.replace(/\s*>\s*/g, "_")
+            : 'daily-reports';
         const storageResult = await uploadImageToStorage({ imageBuffer, filename, projectId, category: storageCategoryPath });
         
         photoData.filename = storageResult.filename;
