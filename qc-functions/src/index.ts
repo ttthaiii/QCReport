@@ -5,6 +5,7 @@ import * as admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
 import express, { Request, Response } from "express";
 import cors from "cors";
+import { generatePDF, getLatestPhotos, uploadPDFToStorage } from "./services/pdf-generator";
 
 // Import routes
 import { logPhotoToFirestore, PhotoData } from "./api/firestore";
@@ -16,17 +17,17 @@ const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
 // Initialize Firebase Admin
 if (!admin.apps.length) {
   if (IS_EMULATOR) {
-    // For emulator - ไม่ต้องใช้ credentials
     admin.initializeApp({
-      projectId: "qcreport-54164"
+      projectId: "qcreport-54164",
+      storageBucket: "qcreport-54164.appspot.com"  // ✅ เพิ่มบรรทัดนี้
     });
-    // Set emulator hosts
     process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
     process.env.FIREBASE_STORAGE_EMULATOR_HOST = 'localhost:9199';
     console.log("🔧 Running in EMULATOR mode");
   } else {
-    // For production - ใช้ default credentials
-    admin.initializeApp();
+    admin.initializeApp({
+      storageBucket: "qcreport-54164.appspot.com"  // ✅ เพิ่มบรรทัดนี้
+    });
     console.log("🚀 Running in PRODUCTION mode");
   }
 }
@@ -80,69 +81,54 @@ app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
   }
 });
 
-app.get("/project-config/:projectId", async (req, res) => {
+app.get("/project-config/:projectId", async (req: Request, res: Response): Promise<Response> => {
   try {
-    const projectId = req.params.projectId;
-    if (!projectId) {
-      return res.status(400).send("Project ID is required");
-    }
+    const { projectId } = req.params;
+    
+    // The final 3-level nested object we will send to the frontend
+    const projectConfig: { [mainCategory: string]: { [subCategory: string]: string[] } } = {};
 
-    // 1. แก้ไขชื่อ Collection ให้ถูกต้องเป็น "projects"
-    const projectDocRef = db.collection('projects').doc(projectId);
-    const projectDoc = await projectDocRef.get();
-
-    if (!projectDoc.exists) {
-      return res.status(404).send(`Project with ID ${projectId} not found.`);
-    }
-
-    // 2. เขียนฟังก์ชันเพื่ออ่านข้อมูลแบบ Sub-collections ที่ซ้อนกัน
-    const mainCategoriesSnapshot = await projectDocRef.collection('mainCategories').get();
+    // 1. Get all Main Categories for the project
+    const mainCategoriesSnapshot = await db.collection("projectConfig")
+      .doc(projectId)
+      .collection("mainCategories")
+      .get();
 
     if (mainCategoriesSnapshot.empty) {
-      return res.json({
-        projectName: projectDoc.data()?.name || '',
-        categories: []
+      return res.status(404).json({ 
+        success: false, 
+        error: "Configuration (Main Categories) for this project not found." 
       });
     }
 
-    // 3. ใช้ Promise.all เพื่อดึงข้อมูล Sub-collections ทั้งหมดแบบขนาน (มีประสิทธิภาพ)
-    const categoriesData = await Promise.all(
-      mainCategoriesSnapshot.docs.map(async (mainCatDoc) => {
-        const subCategoriesSnapshot = await mainCatDoc.ref.collection('subCategories').get();
+    // 2. Loop through each Main Category to get its Sub Categories
+    for (const mainCategoryDoc of mainCategoriesSnapshot.docs) {
+      const mainCategoryData = mainCategoryDoc.data();
+      const mainCategoryName = mainCategoryData.name;
+      projectConfig[mainCategoryName] = {}; // Initialize sub-category object
 
-        const subCategoriesData = await Promise.all(
-          subCategoriesSnapshot.docs.map(async (subCatDoc) => {
-            const topicsSnapshot = await subCatDoc.ref.collection('topics').get();
-            const topics = topicsSnapshot.docs.map(topicDoc => ({
-              id: topicDoc.id,
-              ...topicDoc.data()
-            }));
+      const subCategoriesSnapshot = await mainCategoryDoc.ref.collection("subCategories").get();
 
-            return {
-              id: subCatDoc.id,
-              ...subCatDoc.data(),
-              topics: topics
-            };
-          })
-        );
+      // 3. Loop through each Sub Category to get its Topics
+      for (const subCategoryDoc of subCategoriesSnapshot.docs) {
+        const subCategoryData = subCategoryDoc.data();
+        const subCategoryName = subCategoryData.name;
+        
+        const topicsSnapshot = await subCategoryDoc.ref.collection("topics").get();
+        const topics = topicsSnapshot.docs.map((doc) => doc.data().name);
 
-        return {
-          id: mainCatDoc.id,
-          ...mainCatDoc.data(),
-          subCategories: subCategoriesData
-        };
-      })
-    );
-
-    // 4. ส่งข้อมูลกลับไปให้ Frontend ในโครงสร้างที่ถูกต้อง
-    return res.status(200).json({
-      projectName: projectDoc.data()?.name || '',
-      categories: categoriesData
-    });
-
+        // 4. Populate the final object
+        projectConfig[mainCategoryName][subCategoryName] = topics;
+      }
+    }
+    
+    return res.json({ success: true, data: projectConfig });
   } catch (error) {
-    console.error("Error fetching project config:", error);
-    return res.status(500).send("Internal Server Error");
+    console.error("Error in /project-config (3-level):", error);
+    return res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
   }
 });
 
@@ -266,7 +252,103 @@ app.post("/seed-test-data", async (req: Request, res: Response): Promise<Respons
   }
 });
 
-// Export function
+app.post("/generate-report", async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { projectId, projectName, mainCategory, subCategory, dynamicFields } = req.body;
+    
+    if (!projectId || !mainCategory || !subCategory) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: projectId, mainCategory, subCategory"
+      });
+    }
+    
+    console.log(`📊 Generating report for ${projectName}`);
+    console.log(`Main: ${mainCategory}, Sub: ${subCategory}`);
+    
+    // 1. ดึงรายการหัวข้อทั้งหมดในหมวดย่อยนี้
+    const projectConfigRef = db.collection("projectConfig")
+      .doc(projectId)
+      .collection("mainCategories");
+    
+    const mainCategoriesSnapshot = await projectConfigRef.get();
+    
+    let topics: string[] = [];
+    
+    for (const mainCategoryDoc of mainCategoriesSnapshot.docs) {
+      const mainCategoryData = mainCategoryDoc.data();
+      if (mainCategoryData.name === mainCategory) {
+        const subCategoriesSnapshot = await mainCategoryDoc.ref.collection("subCategories").get();
+        
+        for (const subCategoryDoc of subCategoriesSnapshot.docs) {
+          const subCategoryData = subCategoryDoc.data();
+          if (subCategoryData.name === subCategory) {
+            const topicsSnapshot = await subCategoryDoc.ref.collection("topics").get();
+            topics = topicsSnapshot.docs.map(doc => doc.data().name);
+            break;
+          }
+        }
+        break;
+      }
+    }
+    
+    if (topics.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "No topics found for this category"
+      });
+    }
+    
+    console.log(`✅ Found ${topics.length} topics`);
+    
+    // 2. ดึงรูปล่าสุดของแต่ละหัวข้อ
+    const photos = await getLatestPhotos(
+      projectId,
+      mainCategory,
+      subCategory,
+      topics,
+      dynamicFields || {}
+    );
+    
+    console.log(`📸 Loaded ${photos.length} photos`);
+    
+    // 3. สร้าง PDF
+    const reportData = {
+      projectId,
+      projectName: projectName || projectId,
+      mainCategory,
+      subCategory,
+      dynamicFields: dynamicFields || {}
+    };
+    
+    const pdfBuffer = await generatePDF(reportData, photos);
+    console.log(`✅ PDF generated: ${pdfBuffer.length} bytes`);
+    
+    // 4. Upload ไป Storage
+    const uploadResult = await uploadPDFToStorage(pdfBuffer, reportData);
+    console.log(`🚀 PDF uploaded: ${uploadResult.filename}`);
+    
+    return res.json({
+      success: true,
+      data: {
+        filename: uploadResult.filename,
+        publicUrl: uploadResult.publicUrl,
+        filePath: uploadResult.filePath,
+        totalTopics: topics.length,
+        photosFound: photos.filter(p => p.driveUrl).length
+      }
+    });
+    
+  } catch (error) {
+    console.error("❌ Error generating report:", error);
+    return res.status(500).json({
+      success: false,
+      error: (error as Error).message
+    });
+  }
+});
+
+// Export function (อันนี้ควรอยู่บรรทัดสุดท้ายอยู่แล้ว)
 export const api = onRequest({ 
   region: "asia-southeast1", 
   memory: IS_EMULATOR ? "1GiB" : "2GiB",

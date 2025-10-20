@@ -36,28 +36,21 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.logPhotoToFirestore = logPhotoToFirestore;
 const admin = __importStar(require("firebase-admin"));
-const db = admin.firestore();
-/**
- * บันทึกข้อมูลรูปภาพลงใน collection qcPhotos บน Firestore
- * ฟังก์ชันนี้ใช้ Interface 'PhotoData' เพื่อความปลอดภัยของชนิดข้อมูล
- *
- * @param {PhotoData} photoData ข้อมูลรูปภาพที่ตรงตามโครงสร้างของ PhotoData interface
- * @returns {Promise<{success: boolean, firestoreId: string}>} ผลลัพธ์พร้อม ID ของ document ที่สร้างใหม่
- */
+const firestore_1 = require("firebase-admin/firestore"); // ✅ เพิ่มบรรทัดนี้
 async function logPhotoToFirestore(photoData) {
     try {
         console.log("Logging photo metadata to Firestore...");
         if (!photoData.projectId) {
             throw new Error("Project ID is required to log a photo.");
         }
+        const db = admin.firestore();
         const collectionRef = db.collection("qcPhotos");
-        const docRef = await collectionRef.add(Object.assign(Object.assign({}, photoData), { createdAt: admin.firestore.FieldValue.serverTimestamp() }));
+        const docRef = await collectionRef.add(Object.assign(Object.assign({}, photoData), { createdAt: firestore_1.FieldValue.serverTimestamp() }));
         console.log(`Successfully logged photo to Firestore with ID: ${docRef.id}`);
         return { success: true, firestoreId: docRef.id };
     }
     catch (error) {
         console.error("Error logging photo to Firestore:", error);
-        // ส่งต่อ error เดิมออกไปให้ฟังก์ชันที่เรียกใช้จัดการต่อ
         throw error;
     }
 }

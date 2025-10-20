@@ -75,46 +75,71 @@ export const api = {
   // Upload photo with metadata
   async uploadPhoto(photoData: UploadPhotoData): Promise<ApiResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/upload-photo`, {
+      // แยก photoBase64 ออกจาก photoData
+      const { photoBase64, mainCategory, subCategory, ...restData } = photoData;
+      
+      // ✅ รวม mainCategory + subCategory เป็น category เดียว
+      const category = mainCategory && subCategory 
+        ? `${mainCategory} > ${subCategory}`  // รวมเป็น string เดียว
+        : mainCategory || '';
+      
+      const response = await fetch(`${API_BASE_URL}/upload-photo-base64`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(photoData),
+        body: JSON.stringify({
+          photo: photoBase64,  // ✅ ส่งเป็น 'photo'
+          category: category,   // ✅ ส่งเป็น 'category'
+          ...restData           // topic, projectId, location, dynamicFields
+        }),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
       return data;
     } catch (error) {
       console.error('Error uploading photo:', error);
       return { 
         success: false, 
-        error: 'ไม่สามารถอัปโหลดรูปภาพได้' 
+        error: error instanceof Error ? error.message : 'ไม่สามารถอัปโหลดรูปภาพได้' 
       };
     }
   },
 
   // Generate report
-  async generateReport(projectId: string, startDate: string, endDate: string, reportType: 'QC' | 'Daily'): Promise<ApiResponse> {
+  async generateReport(reportData: {
+    projectId: string;
+    projectName: string;
+    mainCategory: string;
+    subCategory: string;
+    dynamicFields?: { [key: string]: string };
+  }): Promise<ApiResponse> {
     try {
       const response = await fetch(`${API_BASE_URL}/generate-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          projectId,
-          startDate,
-          endDate,
-          reportType,
-        }),
+        body: JSON.stringify(reportData),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
       return data;
     } catch (error) {
       console.error('Error generating report:', error);
       return { 
         success: false, 
-        error: 'ไม่สามารถสร้างรายงานได้' 
+        error: error instanceof Error ? error.message : 'ไม่สามารถสร้างรายงานได้' 
       };
     }
   },

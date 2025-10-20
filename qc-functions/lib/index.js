@@ -38,45 +38,59 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.api = void 0;
-// --- STEP 1: INITIALIZE FIREBASE ADMIN SDK AT THE VERY TOP ---
+// --- STEP 1: INITIALIZE FIREBASE ADMIN SDK ---
 const admin = __importStar(require("firebase-admin"));
-// Initialize Firebase Admin immediately
-if (!admin.apps.length) {
-    // Use application default credentials in emulator
-    admin.initializeApp({
-        projectId: "qcreport-54164",
-        storageBucket: "qcreport-54164.firebasestorage.app"
-    });
-    console.log("Firebase Admin SDK initialized successfully.");
-}
-// --- STEP 2: NOW IT'S SAFE TO IMPORT EVERYTHING ELSE ---
 const https_1 = require("firebase-functions/v2/https");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-// Lazy load heavy dependencies
-let firestoreModule;
-let storageModule;
-async function loadDependencies() {
-    if (!firestoreModule) {
-        firestoreModule = await Promise.resolve().then(() => __importStar(require("./api/firestore")));
+const pdf_generator_1 = require("./services/pdf-generator");
+// Import routes
+const firestore_1 = require("./api/firestore");
+const storage_1 = require("./api/storage");
+// ✅ NEW: Environment detection
+const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+    if (IS_EMULATOR) {
+        admin.initializeApp({
+            projectId: "qcreport-54164",
+            storageBucket: "qcreport-54164.appspot.com" // ✅ เพิ่มบรรทัดนี้
+        });
+        process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+        process.env.FIREBASE_STORAGE_EMULATOR_HOST = 'localhost:9199';
+        console.log("🔧 Running in EMULATOR mode");
     }
-    if (!storageModule) {
-        storageModule = await Promise.resolve().then(() => __importStar(require("./api/storage")));
+    else {
+        admin.initializeApp({
+            storageBucket: "qcreport-54164.appspot.com" // ✅ เพิ่มบรรทัดนี้
+        });
+        console.log("🚀 Running in PRODUCTION mode");
     }
 }
 const db = admin.firestore();
 const app = (0, express_1.default)();
-// Configure middleware
-app.use((0, cors_1.default)({ origin: true })); // Allow all origins in development
+// ✅ FIXED: CORS configuration
+app.use((0, cors_1.default)({
+    origin: IS_EMULATOR
+        ? ['http://localhost:3000', 'http://localhost:5000'] // Development
+        : ['https://qcreport-54164.web.app', 'https://qcreport-54164.firebaseapp.com'] // Production
+}));
 app.use(express_1.default.json({ limit: "10mb" }));
-// Health check endpoint
+// ✅ NEW: Health check endpoint
 app.get("/health", (req, res) => {
-    res.json({ status: "healthy", timestamp: new Date().toISOString() });
+    res.json({
+        status: "healthy",
+        environment: IS_EMULATOR ? "emulator" : "production",
+        timestamp: new Date().toISOString()
+    });
 });
-// --- Firestore-based API Endpoints ---
+// ✅ FIXED: Add return types to all endpoints
 app.get("/projects", async (req, res) => {
     try {
-        const projectsSnapshot = await db.collection("projects").where("isActive", "==", true).get();
+        console.log(`📋 Fetching projects from ${IS_EMULATOR ? 'EMULATOR' : 'PRODUCTION'}`);
+        const projectsSnapshot = await db.collection("projects")
+            .where("isActive", "==", true)
+            .get();
         if (projectsSnapshot.empty) {
             return res.json({ success: true, data: [] });
         }
@@ -85,90 +99,240 @@ app.get("/projects", async (req, res) => {
     }
     catch (error) {
         console.error("Error in /projects:", error);
-        return res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 app.get("/project-config/:projectId", async (req, res) => {
     try {
         const { projectId } = req.params;
-        const categoriesRef = db.collection("projectConfig").doc(projectId).collection("categories");
-        const categoriesSnapshot = await categoriesRef.orderBy("orderIndex").get();
-        if (categoriesSnapshot.empty) {
-            return res.status(404).json({ success: false, error: "Configuration for this project not found." });
-        }
+        // The final 3-level nested object we will send to the frontend
         const projectConfig = {};
-        for (const categoryDoc of categoriesSnapshot.docs) {
-            const categoryData = categoryDoc.data();
-            const categoryName = categoryData.categoryName;
-            const topicsRef = categoryDoc.ref.collection("topics");
-            const topicsSnapshot = await topicsRef.orderBy("orderIndex").get();
-            const topics = topicsSnapshot.docs.map((topicDoc) => topicDoc.data().topicName);
-            projectConfig[categoryName] = topics;
+        // 1. Get all Main Categories for the project
+        const mainCategoriesSnapshot = await db.collection("projectConfig")
+            .doc(projectId)
+            .collection("mainCategories")
+            .get();
+        if (mainCategoriesSnapshot.empty) {
+            return res.status(404).json({
+                success: false,
+                error: "Configuration (Main Categories) for this project not found."
+            });
+        }
+        // 2. Loop through each Main Category to get its Sub Categories
+        for (const mainCategoryDoc of mainCategoriesSnapshot.docs) {
+            const mainCategoryData = mainCategoryDoc.data();
+            const mainCategoryName = mainCategoryData.name;
+            projectConfig[mainCategoryName] = {}; // Initialize sub-category object
+            const subCategoriesSnapshot = await mainCategoryDoc.ref.collection("subCategories").get();
+            // 3. Loop through each Sub Category to get its Topics
+            for (const subCategoryDoc of subCategoriesSnapshot.docs) {
+                const subCategoryData = subCategoryDoc.data();
+                const subCategoryName = subCategoryData.name;
+                const topicsSnapshot = await subCategoryDoc.ref.collection("topics").get();
+                const topics = topicsSnapshot.docs.map((doc) => doc.data().name);
+                // 4. Populate the final object
+                projectConfig[mainCategoryName][subCategoryName] = topics;
+            }
         }
         return res.json({ success: true, data: projectConfig });
     }
     catch (error) {
-        console.error("Error in /project-config:", error);
-        return res.status(500).json({ success: false, error: error.message });
+        console.error("Error in /project-config (3-level):", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
-// ✅ UPDATED: This endpoint now uses Cloud Storage
 app.post("/upload-photo-base64", async (req, res) => {
     try {
-        // Load dependencies on first use
-        await loadDependencies();
         const { photo, projectId, category, topic, location, dynamicFields } = req.body;
         if (!photo) {
-            return res.status(400).json({ success: false, error: "No photo data provided" });
+            return res.status(400).json({
+                success: false,
+                error: "No photo data provided"
+            });
         }
         if (!projectId || !category || !topic) {
-            return res.status(400).json({ success: false, error: "Missing required fields: projectId, category, topic" });
+            return res.status(400).json({
+                success: false,
+                error: "Missing required fields: projectId, category, topic"
+            });
         }
         const imageBuffer = Buffer.from(photo, "base64");
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         const filename = `${category}-${topic}-${timestamp}.jpg`.replace(/\s/g, "_");
-        // ✅ NEW: Call the Cloud Storage upload function
-        const storageResult = await storageModule.uploadPhotoToStorage({
+        // Upload to Storage
+        const storageResult = await (0, storage_1.uploadPhotoToStorage)({
             imageBuffer,
             filename,
-            projectId: projectId,
-            category: category,
+            projectId,
+            category,
         });
+        // Save to Firestore
         const photoData = {
             projectId,
             category,
             topic,
             filename: storageResult.filename,
-            // ✅ UPDATED: Use the public URL from Cloud Storage
             driveUrl: storageResult.publicUrl,
             filePath: storageResult.filePath,
             location: location || "",
             dynamicFields: dynamicFields || {},
             reportType: "QC",
         };
-        const firestoreResult = await firestoreModule.logPhotoToFirestore(photoData);
+        const firestoreResult = await (0, firestore_1.logPhotoToFirestore)(photoData);
         return res.json({
             success: true,
-            // ✅ UPDATED: Send back the correct data structure
             data: {
-                fileId: firestoreResult.firestoreId, // Use Firestore ID as the main ID
+                fileId: firestoreResult.firestoreId,
                 filename: storageResult.filename,
-                driveUrl: storageResult.publicUrl, // Keep this field name for frontend compatibility
+                driveUrl: storageResult.publicUrl,
                 firestoreId: firestoreResult.firestoreId,
-                message: "Upload to Cloud Storage successful",
+                message: `Upload to ${IS_EMULATOR ? 'EMULATOR' : 'PRODUCTION'} successful`,
             },
         });
     }
     catch (error) {
         console.error("Error in /upload-photo-base64:", error);
-        return res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
-// Export with increased timeout
+// ✅ NEW: Test data endpoint (emulator only)
+app.post("/seed-test-data", async (req, res) => {
+    if (!IS_EMULATOR) {
+        return res.status(403).json({
+            success: false,
+            error: "This endpoint is only available in emulator mode"
+        });
+    }
+    try {
+        // Create test project
+        const projectRef = await db.collection("projects").add({
+            projectName: "Test Project",
+            projectCode: "TEST-001",
+            isActive: true,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        // Create categories
+        const categories = [
+            { name: "งานโครงสร้าง", topics: ["เสาเข็ม", "ฐานราก", "เสา", "คาน", "พื้น"] },
+            { name: "งานสถาปัตยกรรม", topics: ["ผนัง", "ฝ้าเพดาน", "พื้นปูกระเบื้อง", "ประตู-หน้าต่าง"] },
+            { name: "งานระบบ", topics: ["ระบบไฟฟ้า", "ระบบประปา", "ระบบปรับอากาศ"] }
+        ];
+        for (let i = 0; i < categories.length; i++) {
+            const categoryRef = await db.collection("projectConfig")
+                .doc(projectRef.id)
+                .collection("categories")
+                .add({
+                categoryName: categories[i].name,
+                orderIndex: i + 1
+            });
+            // Add topics
+            for (let j = 0; j < categories[i].topics.length; j++) {
+                await categoryRef.collection("topics").add({
+                    topicName: categories[i].topics[j],
+                    orderIndex: j + 1
+                });
+            }
+        }
+        return res.json({
+            success: true,
+            message: "Test data created successfully",
+            projectId: projectRef.id
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+app.post("/generate-report", async (req, res) => {
+    try {
+        const { projectId, projectName, mainCategory, subCategory, dynamicFields } = req.body;
+        if (!projectId || !mainCategory || !subCategory) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required fields: projectId, mainCategory, subCategory"
+            });
+        }
+        console.log(`📊 Generating report for ${projectName}`);
+        // 1. ดึงรายการหัวข้อทั้งหมดในหมวดย่อยนี้
+        const projectConfigRef = db.collection("projectConfig")
+            .doc(projectId)
+            .collection("mainCategories");
+        const mainCategoriesSnapshot = await projectConfigRef.get();
+        let topics = [];
+        for (const mainCategoryDoc of mainCategoriesSnapshot.docs) {
+            const mainCategoryData = mainCategoryDoc.data();
+            if (mainCategoryData.name === mainCategory) {
+                const subCategoriesSnapshot = await mainCategoryDoc.ref.collection("subCategories").get();
+                for (const subCategoryDoc of subCategoriesSnapshot.docs) {
+                    const subCategoryData = subCategoryDoc.data();
+                    if (subCategoryData.name === subCategory) {
+                        const topicsSnapshot = await subCategoryDoc.ref.collection("topics").get();
+                        topics = topicsSnapshot.docs.map(doc => doc.data().name);
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        if (topics.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: "No topics found for this category"
+            });
+        }
+        console.log(`✅ Found ${topics.length} topics`);
+        // 2. ดึงรูปล่าสุดของแต่ละหัวข้อ
+        const photos = await (0, pdf_generator_1.getLatestPhotos)(projectId, mainCategory, subCategory, topics, dynamicFields || {});
+        console.log(`📸 Loaded ${photos.length} photos`);
+        // 3. สร้าง PDF
+        const reportData = {
+            projectId,
+            projectName: projectName || projectId,
+            mainCategory,
+            subCategory,
+            dynamicFields: dynamicFields || {}
+        };
+        const pdfBuffer = await (0, pdf_generator_1.generatePDF)(reportData, photos);
+        console.log(`✅ PDF generated: ${pdfBuffer.length} bytes`);
+        // 4. Upload ไป Storage
+        const uploadResult = await (0, pdf_generator_1.uploadPDFToStorage)(pdfBuffer, reportData);
+        console.log(`🚀 PDF uploaded: ${uploadResult.filename}`);
+        return res.json({
+            success: true,
+            data: {
+                filename: uploadResult.filename,
+                publicUrl: uploadResult.publicUrl,
+                filePath: uploadResult.filePath,
+                totalTopics: topics.length,
+                photosFound: photos.filter(p => p.driveUrl).length
+            }
+        });
+    }
+    catch (error) {
+        console.error("Error generating report:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+// Export function
 exports.api = (0, https_1.onRequest)({
     region: "asia-southeast1",
-    memory: "2GiB",
+    memory: IS_EMULATOR ? "1GiB" : "2GiB",
     timeoutSeconds: 540,
-    maxInstances: 10
+    maxInstances: IS_EMULATOR ? 2 : 10
 }, app);
 //# sourceMappingURL=index.js.map
