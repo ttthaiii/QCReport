@@ -1,5 +1,9 @@
 ﻿หมวดงาน,field1_name,field2_name,field3_name,field4_name,projectId
-งานฐานราก,อาคาร,ฐานรากเบอร์,ชั้น,Gridline,,project-001
+ฐานราก,อาคาร,ฐานรากเบอร์,ชั้น,Gridline,,project-001
 งานเสา,อาคาร,เสาเบอร์,ชั้น,Gridline,,project-001
-งานกำแพงลิฟต์และผนังบันได CORE ST-1,อาคาร,ชั้น/Floor,ชั้น,Gridline,,project-002
+กำแพงลิฟต์และผนังบันได CORE ST-1,อาคาร,ชั้น/Floor,ชั้น,Gridline,,project-001
+งานพื้น,อาคาร,Zone,ชั้น,Gridline,,project-001
+ฐานราก,อาคาร,ฐานรากเบอร์,ชั้น,Gridline,,project-002
+งานเสา,อาคาร,เสาเบอร์,ชั้น,Gridline,,project-002
+กำแพงลิฟต์และผนังบันได CORE ST-1,อาคาร,ชั้น/Floor,ชั้น,Gridline,,project-002
 งานพื้น,อาคาร,Zone,ชั้น,Gridline,,project-002

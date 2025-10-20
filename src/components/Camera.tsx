@@ -17,7 +17,6 @@ interface Geolocation {
 }
 
 const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => {
-  // --- States and Refs ---
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -25,18 +24,13 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [location, setLocation] = useState<Geolocation | string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // States for 3-level selection
   const [selectedMainCategory, setSelectedMainCategory] = useState<string>('');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>('');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
-
-  // States for Feature: Daily Report
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [description, setDescription] = useState<string>('');
-  const [dynamicFields] = useState<object>({});
+  const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
 
-  // --- Logic for 3-level dropdowns ---
   const mainCategories = useMemo(() => qcTopics ? Object.keys(qcTopics) : [], [qcTopics]);
   
   const subCategories = useMemo(() => 
@@ -44,35 +38,48 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     ? Object.keys(qcTopics[selectedMainCategory]) 
     : [], 
   [qcTopics, selectedMainCategory]);
-
-  const topics = useMemo(() =>
-    (qcTopics && selectedMainCategory && selectedSubCategory && qcTopics[selectedMainCategory]?.[selectedSubCategory])
-    ? qcTopics[selectedMainCategory][selectedSubCategory]
-    : [],
-  [qcTopics, selectedMainCategory, selectedSubCategory]);
-
-  // Effect to set default selections when data loads
-  useEffect(() => {
-    if (mainCategories.length > 0 && !selectedMainCategory) {
-      setSelectedMainCategory(mainCategories[0]);
+  
+  // ✅ 1. แก้ไข: Logic การดึงข้อมูล topics และ dynamicFields ตามโครงสร้างใหม่
+  const currentSubCategoryConfig = useMemo(() => {
+    if (qcTopics && selectedMainCategory && selectedSubCategory) {
+      return qcTopics[selectedMainCategory]?.[selectedSubCategory];
     }
+    return { topics: [], dynamicFields: [] };
+  }, [qcTopics, selectedMainCategory, selectedSubCategory]);
+
+  const topics = currentSubCategoryConfig?.topics || [];
+  const requiredDynamicFields = currentSubCategoryConfig?.dynamicFields || [];
+
+  // --- Effects to set default selections and clear dynamic fields ---
+  useEffect(() => {
+    if (mainCategories.length > 0 && !selectedMainCategory) setSelectedMainCategory(mainCategories[0]);
   }, [mainCategories, selectedMainCategory]);
 
   useEffect(() => {
-    if (subCategories.length > 0 && !selectedSubCategory) {
-      setSelectedSubCategory(subCategories[0]);
-    } else if (mainCategories.length > 0 && subCategories.length === 0) {
+    if (subCategories.length > 0) {
+      if (!selectedSubCategory || !subCategories.includes(selectedSubCategory)) {
+        setSelectedSubCategory(subCategories[0]);
+      }
+    } else if (mainCategories.length > 0) {
       setSelectedSubCategory('');
     }
+    // ✅ เมื่อหมวดงานย่อยเปลี่ยน ให้ล้างค่า dynamic fields เดิมทิ้ง
+    setDynamicFields({});
   }, [subCategories, mainCategories, selectedSubCategory]);
 
   useEffect(() => {
-    if (topics.length > 0 && !selectedTopic) {
-      setSelectedTopic(topics[0]);
-    } else if (subCategories.length > 0 && topics.length === 0) {
+    if (topics.length > 0) {
+      if (!selectedTopic || !topics.includes(selectedTopic)) {
+        setSelectedTopic(topics[0]);
+      }
+    } else if (subCategories.length > 0) {
       setSelectedTopic('');
     }
   }, [topics, subCategories, selectedTopic]);
+
+  const handleDynamicFieldChange = (fieldName: string, value: string) => {
+    setDynamicFields(prev => ({ ...prev, [fieldName]: value }));
+  };
 
   // --- Camera and Upload Logic ---
   const startCamera = async () => {
@@ -187,7 +194,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
               description: description,
             }
         ),
-        dynamicFields,
+        // ✅ 3. ตรวจสอบ: ข้อมูล dynamicFields จะถูกส่งไปพร้อมกับรูปภาพโดยอัตโนมัติ
+        dynamicFields, 
       };
 
       const response = await api.uploadPhoto(uploadData);
@@ -306,6 +314,20 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                       ))}
                   </select>
                 </div>
+
+                {requiredDynamicFields.map((fieldName) => (
+                  <div className="form-group" key={fieldName}>
+                    <label>{fieldName}</label>
+                    <input
+                      type="text"
+                      value={dynamicFields[fieldName] || ''}
+                      onChange={(e) => handleDynamicFieldChange(fieldName, e.target.value)}
+                      placeholder={`ระบุ${fieldName}...`}
+                      disabled={isUploading}
+                    />
+                  </div>
+                ))}  
+                             
                 <div className="form-group">
                   <label>หัวข้อการตรวจ</label>
                   <select 

@@ -149,41 +149,68 @@ app.get("/project-config/:projectId", async (req, res) => {
 });
 app.post("/upload-photo-base64", async (req, res) => {
     try {
-        const { photo, projectId, category, topic, location, dynamicFields } = req.body;
+        // ดึง reportType และ description จาก request body
+        const { photo, projectId, reportType, category, topic, description, // <--- รับค่าใหม่
+        location, dynamicFields } = req.body;
         if (!photo) {
-            return res.status(400).json({
-                success: false,
-                error: "No photo data provided"
-            });
+            return res.status(400).json({ success: false, error: "No photo data provided" });
         }
-        if (!projectId || !category || !topic) {
-            return res.status(400).json({
-                success: false,
-                error: "Missing required fields: projectId, category, topic"
-            });
+        if (!projectId || !reportType) {
+            return res.status(400).json({ success: false, error: "Missing required fields: projectId, reportType" });
+        }
+        // --- **KEY LOGIC**: ตรวจสอบ field ที่จำเป็นตาม reportType ---
+        let filenamePrefix;
+        let photoData;
+        if (reportType === 'QC') {
+            if (!category || !topic) {
+                return res.status(400).json({ success: false, error: "Missing QC fields: category, topic" });
+            }
+            filenamePrefix = `${category}-${topic}`;
+            photoData = {
+                projectId,
+                reportType,
+                category,
+                topic,
+                location: location || "",
+                dynamicFields: dynamicFields || {},
+                // fields ที่จะถูกเติมหลัง upload
+                filename: '',
+                driveUrl: '',
+                filePath: ''
+            };
+        }
+        else if (reportType === 'Daily') {
+            filenamePrefix = `Daily-${(description === null || description === void 0 ? void 0 : description.substring(0, 20)) || 'report'}`;
+            photoData = {
+                projectId,
+                reportType,
+                description: description || "",
+                location: location || "",
+                dynamicFields: dynamicFields || {},
+                // fields ที่จะถูกเติมหลัง upload
+                filename: '',
+                driveUrl: '',
+                filePath: ''
+            };
+        }
+        else {
+            return res.status(400).json({ success: false, error: "Invalid reportType specified" });
         }
         const imageBuffer = Buffer.from(photo, "base64");
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const filename = `${category}-${topic}-${timestamp}.jpg`.replace(/\s/g, "_");
+        const filename = `${filenamePrefix}-${timestamp}.jpg`.replace(/\s/g, "_");
         // Upload to Storage
         const storageResult = await (0, storage_1.uploadPhotoToStorage)({
             imageBuffer,
             filename,
             projectId,
-            category,
+            // **REFACTOR**: ส่ง category หรือ "daily-reports" เป็น path
+            category: reportType === 'QC' ? category : 'daily-reports',
         });
         // Save to Firestore
-        const photoData = {
-            projectId,
-            category,
-            topic,
-            filename: storageResult.filename,
-            driveUrl: storageResult.publicUrl,
-            filePath: storageResult.filePath,
-            location: location || "",
-            dynamicFields: dynamicFields || {},
-            reportType: "QC",
-        };
+        photoData.filename = storageResult.filename;
+        photoData.driveUrl = storageResult.publicUrl;
+        photoData.filePath = storageResult.filePath;
         const firestoreResult = await (0, firestore_1.logPhotoToFirestore)(photoData);
         return res.json({
             success: true,
@@ -192,16 +219,13 @@ app.post("/upload-photo-base64", async (req, res) => {
                 filename: storageResult.filename,
                 driveUrl: storageResult.publicUrl,
                 firestoreId: firestoreResult.firestoreId,
-                message: `Upload to ${IS_EMULATOR ? 'EMULATOR' : 'PRODUCTION'} successful`,
+                message: `Upload (${reportType}) to ${IS_EMULATOR ? 'EMULATOR' : 'PRODUCTION'} successful`,
             },
         });
     }
     catch (error) {
         console.error("Error in /upload-photo-base64:", error);
-        return res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        return res.status(500).json({ success: false, error: error.message });
     }
 });
 // ✅ NEW: Test data endpoint (emulator only)
@@ -265,6 +289,7 @@ app.post("/generate-report", async (req, res) => {
             });
         }
         console.log(`📊 Generating report for ${projectName}`);
+        console.log(`Main: ${mainCategory}, Sub: ${subCategory}`);
         // 1. ดึงรายการหัวข้อทั้งหมดในหมวดย่อยนี้
         const projectConfigRef = db.collection("projectConfig")
             .doc(projectId)
@@ -321,14 +346,51 @@ app.post("/generate-report", async (req, res) => {
         });
     }
     catch (error) {
-        console.error("Error generating report:", error);
+        console.error("❌ Error generating report:", error);
         return res.status(500).json({
             success: false,
             error: error.message
         });
     }
 });
-// Export function
+app.get("/photos/:projectId", async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        if (!projectId) {
+            return res.status(400).json({ success: false, error: "Project ID is required" });
+        }
+        console.log(`📸 Fetching all photos for project: ${projectId}`);
+        const qcPhotosPromise = db.collection("qcPhotos")
+            .where("projectId", "==", projectId)
+            .get();
+        const dailyPhotosPromise = db.collection("dailyPhotos")
+            .where("projectId", "==", projectId)
+            .get();
+        const [qcSnapshot, dailySnapshot] = await Promise.all([
+            qcPhotosPromise,
+            dailyPhotosPromise,
+        ]);
+        const photos = [];
+        qcSnapshot.forEach(doc => {
+            const data = doc.data();
+            photos.push(Object.assign(Object.assign({ id: doc.id }, data), { createdAt: data.createdAt.toDate().toISOString() }));
+        });
+        dailySnapshot.forEach(doc => {
+            const data = doc.data();
+            photos.push(Object.assign(Object.assign({ id: doc.id }, data), { createdAt: data.createdAt.toDate().toISOString() }));
+        });
+        console.log(`Found ${photos.length} total photos.`);
+        return res.json({ success: true, data: photos });
+    }
+    catch (error) {
+        console.error("Error in /photos/:projectId:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+// Export function (อันนี้ควรอยู่บรรทัดสุดท้ายอยู่แล้ว)
 exports.api = (0, https_1.onRequest)({
     region: "asia-southeast1",
     memory: IS_EMULATOR ? "1GiB" : "2GiB",

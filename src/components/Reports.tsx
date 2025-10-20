@@ -23,35 +23,24 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   useEffect(() => {
     if (projectConfig) {
       setQcTopics(projectConfig);
-      // Set default main category
       const mainCategories = Object.keys(projectConfig);
       if (mainCategories.length > 0) {
-        setFormData(prev => ({
-          ...prev,
-          mainCategory: mainCategories[0]
-        }));
+        setFormData(prev => ({ ...prev, mainCategory: mainCategories[0] }));
       }
     }
   }, [projectConfig]);
 
-  // Set default sub category when main category changes
   useEffect(() => {
     if (formData.mainCategory && qcTopics[formData.mainCategory]) {
       const subCategories = Object.keys(qcTopics[formData.mainCategory]);
       if (subCategories.length > 0) {
-        setFormData(prev => ({
-          ...prev,
-          subCategory: subCategories[0]
-        }));
+        setFormData(prev => ({ ...prev, subCategory: subCategories[0] }));
       }
     }
   }, [formData.mainCategory, qcTopics]);
 
   const handleDynamicFieldChange = (fieldName: string, value: string) => {
-    setDynamicFields(prev => ({
-      ...prev,
-      [fieldName]: value
-    }));
+    setDynamicFields(prev => ({ ...prev, [fieldName]: value }));
   };
 
   const isFieldsComplete = () => {
@@ -63,18 +52,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       alert('กรุณาเลือกหมวดงานให้ครบถ้วน');
       return;
     }
-
     setIsGenerating(true);
-    
     try {
-      console.log('🎯 Generating report:', {
-        projectId,
-        projectName,
-        mainCategory: formData.mainCategory,
-        subCategory: formData.subCategory,
-        dynamicFields
-      });
-      
       const reportData = {
         projectId,
         projectName,
@@ -85,13 +64,12 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       
       const response = await api.generateReport(reportData);
       
-      if (response.success) {
+      if (response.success && response.data) {
         setGeneratedReport(response.data);
         alert(`✅ สร้างรายงานสำเร็จ!\nไฟล์: ${response.data.filename}`);
       } else {
         throw new Error(response.error || 'Failed to generate report');
       }
-      
     } catch (error) {
       console.error('Error generating report:', error);
       alert('เกิดข้อผิดพลาดในการสร้างรายงาน: ' + (error as Error).message);
@@ -101,11 +79,14 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   };
 
   const mainCategories = Object.keys(qcTopics);
+  
   const subCategories = formData.mainCategory && qcTopics[formData.mainCategory] 
     ? Object.keys(qcTopics[formData.mainCategory]) 
     : [];
+
+  // ✅ แก้ไข: ดึง Array ของ topics จากโครงสร้างข้อมูลใหม่
   const topics = formData.mainCategory && formData.subCategory && qcTopics[formData.mainCategory]?.[formData.subCategory]
-    ? qcTopics[formData.mainCategory][formData.subCategory]
+    ? qcTopics[formData.mainCategory][formData.subCategory].topics
     : [];
 
   return (
@@ -267,34 +248,13 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
       {/* Topics Preview */}
       {formData.mainCategory && formData.subCategory && topics.length > 0 && (
-        <div style={{ 
-          marginBottom: '20px',
-          padding: '20px',
-          backgroundColor: '#f8f9fa',
-          borderRadius: '8px',
-          border: '1px solid #dee2e6'
-        }}>
-          <h4 style={{ color: '#495057', marginBottom: '15px', marginTop: 0 }}>
-            📝 หัวข้อในรายงาน ({topics.length} หัวข้อ):
-          </h4>
-          
-          <div style={{ 
-            backgroundColor: 'white',
-            padding: '15px',
-            borderRadius: '4px',
-            border: '1px solid #dee2e6',
-            maxHeight: '300px',
-            overflowY: 'auto'
-          }}>
-            {topics.map((topic, index) => (
-              <div key={index} style={{ 
-                padding: '8px 0',
-                borderBottom: index < topics.length - 1 ? '1px solid #e9ecef' : 'none',
-                fontSize: '14px'
-              }}>
-                <span style={{ color: '#495057' }}>
-                  {index + 1}. {topic}
-                </span>
+        <div style={{ marginBottom: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+          <h4 style={{ color: '#495057', marginBottom: '15px', marginTop: 0 }}>📝 หัวข้อในรายงาน ({topics.length} หัวข้อ):</h4>
+          <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '4px', border: '1px solid #dee2e6', maxHeight: '300px', overflowY: 'auto' }}>
+            {/* ✅ แก้ไข: กำหนด Type ให้ topic และ index เพื่อแก้ Error */}
+            {topics.map((topic: string, index: number) => (
+              <div key={index} style={{ padding: '8px 0', borderBottom: index < topics.length - 1 ? '1px solid #e9ecef' : 'none', fontSize: '14px' }}>
+                <span style={{ color: '#495057' }}>{index + 1}. {topic}</span>
               </div>
             ))}
           </div>

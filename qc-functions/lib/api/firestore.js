@@ -36,17 +36,19 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.logPhotoToFirestore = logPhotoToFirestore;
 const admin = __importStar(require("firebase-admin"));
-const firestore_1 = require("firebase-admin/firestore"); // ✅ เพิ่มบรรทัดนี้
+const firestore_1 = require("firebase-admin/firestore");
 async function logPhotoToFirestore(photoData) {
     try {
-        console.log("Logging photo metadata to Firestore...");
+        console.log(`Logging ${photoData.reportType} photo metadata to Firestore...`);
         if (!photoData.projectId) {
             throw new Error("Project ID is required to log a photo.");
         }
         const db = admin.firestore();
-        const collectionRef = db.collection("qcPhotos");
+        // **KEY CHANGE**: เปลี่ยนชื่อ Collection ตาม reportType เพื่อการ Query ที่มีประสิทธิภาพ
+        const collectionName = photoData.reportType === 'QC' ? 'qcPhotos' : 'dailyPhotos';
+        const collectionRef = db.collection(collectionName);
         const docRef = await collectionRef.add(Object.assign(Object.assign({}, photoData), { createdAt: firestore_1.FieldValue.serverTimestamp() }));
-        console.log(`Successfully logged photo to Firestore with ID: ${docRef.id}`);
+        console.log(`Successfully logged photo to ${collectionName} with ID: ${docRef.id}`);
         return { success: true, firestoreId: docRef.id };
     }
     catch (error) {
