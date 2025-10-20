@@ -1,13 +1,18 @@
-// Filename: qc-functions/src/services/pdf-generator.ts
+// Filename: qc-functions/src/services/pdf-generator.ts (FINAL, COMPLETE, AND CORRECTED VERSION)
 
 import * as admin from "firebase-admin";
 import puppeteer from "puppeteer";
 
+// --- INTERFACES ---
 interface PhotoData {
   topic: string;
   driveUrl: string;
+  filePath: string;
   timestamp: string;
   location: string;
+  imageBase64?: string | null;
+  isPlaceholder?: boolean;
+  topicOrder?: number;
 }
 
 interface ReportData {
@@ -18,8 +23,11 @@ interface ReportData {
   dynamicFields: { [key: string]: string };
 }
 
+// --- CORE FUNCTIONS ---
+
 /**
- * ดึงรูปภาพล่าสุดของแต่ละหัวข้อ
+ * This is the fully corrected function that combines your original logic
+ * with the necessary bug fixes and enhancements.
  */
 export async function getLatestPhotos(
   projectId: string,
@@ -29,324 +37,234 @@ export async function getLatestPhotos(
   dynamicFields: { [key: string]: string }
 ): Promise<PhotoData[]> {
   const db = admin.firestore();
+  const storage = admin.storage();
+  const bucket = storage.bucket();
   const photosRef = db.collection("qcPhotos");
   
-  const photos: PhotoData[] = [];
-  
-  console.log(`🔍 Getting latest photos for ${topics.length} topics`);
-  console.log(`📋 Dynamic fields:`, JSON.stringify(dynamicFields));
-  
-  // Loop through each topic to get the latest photo
-  for (const topic of topics) {
-    // ✅ เริ่มต้นด้วย base query (ไม่มี dynamic fields)
-    const query = photosRef
+  const photoPromises = topics.map(async (topic) => {
+    let query = photosRef
       .where("projectId", "==", projectId)
-      .where("category", "==", `${mainCategory} > ${subCategory}`)
+      .where("category", "==", `${mainCategory} > ${subCategory}`) // Your original, correct query
       .where("topic", "==", topic)
       .where("reportType", "==", "QC")
       .orderBy("createdAt", "desc")
       .limit(1);
     
-    // ✅ สำหรับตอนนี้ ไม่ filter ด้วย dynamic fields เพื่อให้ได้รูปมาก่อน
-    // TODO: เพิ่ม dynamic fields filtering ในอนาคต
+    // Robust check for both key and value to prevent 'invalid field path' error
+    for (const [key, value] of Object.entries(dynamicFields)) {
+      if (key && key.trim() && value && value.trim()) {
+        query = query.where(`dynamicFields.${key}`, "==", value);
+      }
+    }
     
     const snapshot = await query.get();
     
-    if (!snapshot.empty) {
-      const doc = snapshot.docs[0];
-      const data = doc.data();
-      
-      photos.push({
-        topic: data.topic,
-        driveUrl: data.driveUrl,
-        timestamp: data.createdAt?.toDate?.()?.toISOString() || data.timestamp,
-        location: data.location || ""
-      });
-    } else {
-      // ถ้าไม่มีรูป ใส่ placeholder
-      photos.push({
-        topic: topic,
-        driveUrl: "",
-        timestamp: "",
-        location: ""
-      });
+    if (snapshot.empty) {
+      return null;
     }
-  }
-  
-  return photos;
-}
 
-/**
- * สร้าง HTML สำหรับ PDF
- */
-function generateHTML(reportData: ReportData, photos: PhotoData[]): string {
-  const { projectName, subCategory, dynamicFields } = reportData;
-  
-  // สร้าง Dynamic Fields Display
-  const fieldsDisplay = Object.entries(dynamicFields)
-    .filter(([key, value]) => value && value.trim())
-    .map(([key, value]) => `<div><strong>${key}:</strong> ${value}</div>`)
-    .join("");
-  
-  const currentDate = new Date().toLocaleDateString("th-TH", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
+    const doc = snapshot.docs[0];
+    const data = doc.data();
+    
+    const photoData: PhotoData = {
+      topic: data.topic,
+      driveUrl: data.driveUrl,
+      filePath: data.filePath,
+      timestamp: data.createdAt?.toDate?.()?.toISOString() || data.timestamp,
+      location: data.location || ""
+    };
+
+    if (photoData.filePath) {
+      try {
+        const [fileBuffer] = await bucket.file(photoData.filePath).download();
+        photoData.imageBase64 = fileBuffer.toString('base64');
+      } catch (error) {
+        console.error(`❌ Image download failed for "${photoData.topic}":`, (error as Error).message);
+        photoData.imageBase64 = null;
+      }
+    } else {
+      photoData.imageBase64 = null;
+    }
+    
+    return photoData;
   });
-  
-  // แบ่งรูปเป็นหน้าๆ (6 รูปต่อหน้า)
-  const photosPerPage = 6;
-  const totalPages = Math.ceil(photos.length / photosPerPage);
-  
-  let pagesHTML = "";
-  
-  for (let page = 0; page < totalPages; page++) {
-    const startIdx = page * photosPerPage;
-    const endIdx = Math.min(startIdx + photosPerPage, photos.length);
-    const pagePhotos = photos.slice(startIdx, endIdx);
-    
-    const photosHTML = pagePhotos.map((photo, idx) => {
-      const photoNumber = startIdx + idx + 1;
-      const imageHTML = photo.driveUrl 
-        ? `<img src="${photo.driveUrl}" alt="${photo.topic}" />`
-        : `<div class="placeholder">ไม่มีรูปภาพ</div>`;
-      
-      return `
-        <div class="photo-item">
-          <div class="photo-container">
-            ${imageHTML}
-          </div>
-          <div class="photo-caption">
-            <strong>${photoNumber}.</strong> ${photo.topic}
-          </div>
-        </div>
-      `;
-    }).join("");
-    
-    pagesHTML += `
-      <div class="page">
-        <div class="header">
-          <div class="logo">
-            <span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span>
-          </div>
-          <div class="header-content">
-            <h1>รูปถ่ายประกอบการตรวจสอบ</h1>
-            <div class="header-info">
-              <div><strong>โครงการ:</strong> ${projectName}</div>
-              <div><strong>วันที่:</strong> ${currentDate}</div>
-              ${fieldsDisplay}
-              <div><strong>หมวดงาน:</strong> ${subCategory}</div>
-              <div><strong>แผ่นที่:</strong> ${page + 1}/${totalPages}</div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="photos-grid">
-          ${photosHTML}
-        </div>
-      </div>
-      ${page < totalPages - 1 ? '<div class="page-break"></div>' : ''}
-    `;
-  }
-  
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-        
-        body {
-          font-family: 'Sarabun', 'Arial', sans-serif;
-          background: white;
-        }
-        
-        .page {
-          width: 210mm;
-          min-height: 297mm;
-          padding: 15mm;
-          margin: 0 auto;
-          background: white;
-          position: relative;
-        }
-        
-        .page-break {
-          page-break-after: always;
-        }
-        
-        .header {
-          border: 2px solid #333;
-          padding: 15px;
-          margin-bottom: 20px;
-        }
-        
-        .logo {
-          text-align: center;
-          margin-bottom: 10px;
-          font-weight: bold;
-          font-size: 24px;
-        }
-        
-        .logo-central {
-          color: #000;
-        }
-        
-        .logo-pattana {
-          color: #d4a574;
-        }
-        
-        .header-content h1 {
-          text-align: center;
-          font-size: 20px;
-          margin-bottom: 15px;
-          padding-bottom: 10px;
-          border-bottom: 1px solid #ddd;
-        }
-        
-        .header-info {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          font-size: 14px;
-        }
-        
-        .header-info div {
-          padding: 4px 0;
-        }
-        
-        .photos-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 15px;
-        }
-        
-        .photo-item {
-          break-inside: avoid;
-        }
-        
-        .photo-container {
-          width: 100%;
-          height: 180px;
-          border: 1px solid #ddd;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #f5f5f5;
-          overflow: hidden;
-        }
-        
-        .photo-container img {
-          max-width: 100%;
-          max-height: 100%;
-          object-fit: contain;
-        }
-        
-        .placeholder {
-          color: #999;
-          font-size: 14px;
-        }
-        
-        .photo-caption {
-          margin-top: 8px;
-          font-size: 13px;
-          line-height: 1.4;
-          color: #333;
-        }
-        
-        @media print {
-          .page {
-            margin: 0;
-            border: none;
-            box-shadow: none;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      ${pagesHTML}
-    </body>
-    </html>
-  `;
+
+  const results = await Promise.all(photoPromises);
+  return results.filter(p => p !== null) as PhotoData[];
 }
 
 /**
- * สร้าง PDF จาก HTML
+ * Creates the full layout with placeholders (includes filePath for type safety).
+ */
+export function createFullLayout(allTopics: string[], foundPhotos: PhotoData[]): PhotoData[] {
+  const photosByTopic = new Map<string, PhotoData>();
+  foundPhotos.forEach(photo => {
+    photosByTopic.set(photo.topic, photo);
+  });
+
+  return allTopics.map((topic, index) => {
+    const foundPhoto = photosByTopic.get(topic);
+    if (foundPhoto) {
+      return { ...foundPhoto, topicOrder: index + 1 };
+    } else {
+      return {
+        topic: topic, topicOrder: index + 1, isPlaceholder: true,
+        driveUrl: "", filePath: "", timestamp: "", location: "", imageBase64: null,
+      };
+    }
+  });
+}
+
+/**
+ * Generates the PDF buffer.
  */
 export async function generatePDF(reportData: ReportData, photos: PhotoData[]): Promise<Buffer> {
-  const html = generateHTML(reportData, photos);
-  
+  const html = generateOptimizedHTML(reportData, photos);
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
-  
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
-  
   const pdfData = await page.pdf({
-    format: 'A4',
-    printBackground: true,
-    margin: {
-      top: '0mm',
-      right: '0mm',
-      bottom: '0mm',
-      left: '0mm'
-    }
+    format: 'A4', printBackground: true,
+    margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' }
   });
-  
   await browser.close();
-  
-  // ✅ แปลง Uint8Array เป็น Buffer
   return Buffer.from(pdfData);
 }
 
 /**
- * Upload PDF ไป Storage พร้อม Overwrite logic
+ * Uploads PDF to storage with emulator support.
  */
-export async function uploadPDFToStorage(
-  pdfBuffer: Buffer,
-  reportData: ReportData
-): Promise<{ publicUrl: string; filePath: string; filename: string }> {
-  const storage = admin.storage();
-  const bucket = storage.bucket();
-  
-  const { projectId, mainCategory, subCategory, dynamicFields } = reportData;
-  
-  const fieldsStr = Object.entries(dynamicFields)
-    .filter(([key, value]) => value && value.trim())
-    .map(([key, value]) => value.replace(/\s/g, ""))
-    .join("_");
-  
-  const filename = `${projectId}_${mainCategory}_${subCategory}_${fieldsStr}.pdf`
-    .replace(/\s/g, "_")
-    .replace(/>/g, "-");
-  
-  const filePath = `projects/${projectId}/reports/${filename}`;
-  const file = bucket.file(filePath);
-  
-  await file.save(pdfBuffer, {
-    metadata: {
-      contentType: 'application/pdf'
-    },
-    public: true
-  });
-  
-  // ✅ ใช้ Emulator URL ถ้ารันใน emulator
-  const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
-  const publicUrl = IS_EMULATOR
-    ? `http://localhost:9199/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media`
-    : `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath)}`;
-  
-  console.log(`📎 PDF URL: ${publicUrl}`);
-  
-  return {
-    publicUrl,
-    filePath,
-    filename
-  };
+export async function uploadPDFToStorage(pdfBuffer: Buffer, reportData: ReportData): Promise<{ publicUrl: string; filePath: string; filename: string }> {
+    const storage = admin.storage();
+    const bucket = storage.bucket();
+    const { projectId, mainCategory, subCategory, dynamicFields } = reportData;
+    const fieldsStr = Object.entries(dynamicFields).filter(([, value]) => value && value.trim()).map(([, value]) => value.replace(/\s/g, "")).join("_");
+    const filename = `${projectId}_${mainCategory}_${subCategory}${fieldsStr ? '_' + fieldsStr : ''}.pdf`.replace(/\s/g, "_").replace(/>/g, "-");
+    const filePath = `projects/${projectId}/reports/${filename}`;
+    const file = bucket.file(filePath);
+    await file.save(pdfBuffer, { metadata: { contentType: 'application/pdf' }, public: true });
+    const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
+    const publicUrl = IS_EMULATOR
+        ? `http://localhost:9199/${bucket.name}/${encodeURIComponent(filePath)}`
+        : `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath)}`;
+    console.log(`📎 PDF URL: ${publicUrl}`);
+    return { publicUrl, filePath, filename };
+}
+
+
+// --- HTML & CSS GENERATION ---
+
+function generateOptimizedHTML(reportData: ReportData, photos: PhotoData[]): string {
+    const photosPerPage = 6;
+    const pages = [];
+    for (let i = 0; i < photos.length; i += photosPerPage) {
+        pages.push(photos.slice(i, i + photosPerPage));
+    }
+    const pageHTML = pages.map((pagePhotos, pageIndex) => `
+        <div class="page">
+            ${createDynamicHeader(reportData, pageIndex + 1, pages.length)}
+            ${createPhotosGrid(pagePhotos)}
+        </div>
+    `).join('<div class="page-break"></div>');
+    return `
+        <!DOCTYPE html>
+        <html lang="th"><head><meta charset="UTF-8"><title>QC Report</title>${getOptimizedCSS()}</head>
+        <body>${pageHTML}</body></html>
+    `;
+}
+
+function createDynamicHeader(reportData: ReportData, pageNumber: number, totalPages: number): string {
+    const { subCategory, dynamicFields, projectName } = reportData;
+    const currentDate = new Date().toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const fieldsToDisplay = Object.entries(dynamicFields).filter(([, value]) => value && value.trim());
+    const fieldCount = fieldsToDisplay.length;
+    let fieldsHTML = '';
+    if (fieldCount <= 2) {
+        const leftFields = [ { label: 'โครงการ', value: projectName }, fieldsToDisplay[0] ? { label: fieldsToDisplay[0][0], value: fieldsToDisplay[0][1] } : null, { label: 'หมวดงาน', value: subCategory } ];
+        const rightFields = [ { label: 'วันที่', value: currentDate }, fieldsToDisplay[1] ? { label: fieldsToDisplay[1][0], value: fieldsToDisplay[1][1] } : null, { label: 'แผ่นที่', value: `${pageNumber}/${totalPages}` } ];
+        fieldsHTML = `
+            <div class="info-column info-left">${leftFields.filter(f => f).map(f => `<div class="info-item"><span class="label">${f!.label}:</span> <span class="value">${f!.value}</span></div>`).join('')}</div>
+            <div class="info-column info-right">${rightFields.filter(f => f).map(f => `<div class="info-item"><span class="label">${f!.label}:</span> <span class="value">${f!.value}</span></div>`).join('')}</div>
+        `;
+    } else {
+        const gridClass = fieldCount === 3 ? 'info-grid-3' : 'info-grid-4';
+        const allFields = [ { label: 'โครงการ', value: projectName }, { label: 'วันที่', value: currentDate }, ...fieldsToDisplay.map(([key, value]) => ({ label: key, value })), { label: 'หมวดงาน', value: subCategory }, { label: 'แผ่นที่', value: `${pageNumber}/${totalPages}` } ];
+        fieldsHTML = `<div class="${gridClass}">${allFields.map(f => `<div class="info-item"><span class="label">${f.label}:</span> <span class="value">${f.value}</span></div>`).join('')}</div>`;
+    }
+    return `
+        <header class="header">
+            <div class="logo-section"><div class="logo-central-pattana"><span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span></div></div>
+            <div class="header-box"><div class="title-section"><h1>รูปถ่ายประกอบการตรวจสอบ</h1></div><div class="info-section">${fieldsHTML}</div></div>
+        </header>
+    `;
+}
+
+function createPhotosGrid(photos: PhotoData[]): string {
+    const rows = [];
+    for (let i = 0; i < photos.length; i += 2) {
+        rows.push(photos.slice(i, i + 2));
+    }
+    const rowsHTML = rows.map(rowPhotos => {
+        const photosHTML = rowPhotos.map(photo => {
+            const imageTag = photo.imageBase64
+                ? `<img src="data:image/jpeg;base64,${photo.imageBase64}" alt="${photo.topic}" class="photo-image">`
+                : `<div class="photo-placeholder"><span class="placeholder-text">ไม่มีรูปภาพ</span></div>`;
+            return `
+                <div class="photo-frame">
+                    <div class="photo-container">${imageTag}</div>
+                    <div class="photo-caption"><span class="photo-number">${photo.topicOrder}.</span> <span class="photo-title">${photo.topic}</span></div>
+                </div>
+            `;
+        }).join('');
+        return `<div class="photo-row">${photosHTML}</div>`;
+    }).join('');
+    return `<main class="photos-grid">${rowsHTML}</main>`;
+}
+
+function getOptimizedCSS(): string {
+  return `
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
+      @page { size: A4; margin: 12mm; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Sarabun', sans-serif; font-size: 10px; line-height: 1.4; color: #333; background: white; -webkit-print-color-adjust: exact; }
+      .page { width: 100%; height: 100%; display: flex; flex-direction: column; }
+      .page-break { page-break-after: always; }
+      .header { margin-bottom: 10px; flex-shrink: 0; }
+      .logo-section { text-align: right; margin-bottom: 8px; font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; }
+      .logo-central { color: #000; }
+      .logo-pattana { color: #C5A572; }
+      .header-box { border: 2px solid #000; }
+      .title-section { padding: 8px; text-align: center; border-bottom: 1px solid #000; }
+      .title-section h1 { font-size: 16px; font-weight: bold; font-family: 'Sarabun', sans-serif; }
+      .info-section { display: flex; width: 100%; padding: 8px; min-height: 60px; }
+      .info-column { width: 50%; padding: 0 8px; }
+      .info-right { border-left: 1px solid #ddd; }
+      .info-grid-3, .info-grid-4 { display: grid; width:100%; gap: 4px; padding: 0 8px; }
+      .info-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+      .info-grid-4 { grid-template-columns: 1fr 1fr; }
+      .info-item { display: flex; align-items: flex-start; }
+      .label { font-weight: bold; min-width: 50px; flex-shrink: 0; }
+      .value { margin-left: 4px; word-break: break-word; }
+      .photos-grid { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+      .photo-row { display: flex; justify-content: flex-start; }
+      .photo-frame {
+        width: 50%;
+        max-width: 50%;
+        padding: 0 4px;
+        display: flex; 
+        flex-direction: column;
+        height: 250px;
+      }
+      .photo-container { flex: 1; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; background: #f9f9f9; overflow: hidden; margin-bottom: 4px; }
+      .photo-image { max-width: 100%; max-height: 100%; object-fit: contain; }
+      .photo-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f0f0f0; }
+      .placeholder-text { color: #999; font-style: italic; }
+      .photo-caption { text-align: center; font-size: 9px; padding: 4px 2px; min-height: 35px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .photo-number { font-weight: bold; margin-right: 4px; }
+    </style>
+  `;
 }
