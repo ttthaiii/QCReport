@@ -232,21 +232,6 @@ app.post("/upload-photo-base64", async (req, res) => {
         photoData.filename = storageResult.filename;
         photoData.driveUrl = storageResult.publicUrl;
         photoData.filePath = storageResult.filePath;
-        // 🔥 เก็บ base64 แบบบีบอัดสำหรับ emulator (เก็บแค่ 200KB แรก)
-        if (IS_EMULATOR) {
-            const base64Size = photo.length;
-            console.log(`📏 Original base64 size: ${Math.round(base64Size / 1024)} KB`);
-            // ถ้ารูปใหญ่เกิน 200KB ให้เก็บแค่ส่วนหนึ่ง (สำหรับ test)
-            // หรือใช้วิธีดาวน์โหลดจาก Storage URL แทน
-            if (base64Size > 200000) {
-                console.log('⚠️ Base64 too large, will download from Storage URL instead');
-                // ไม่เก็บ base64 ใน Firestore
-            }
-            else {
-                photoData.imageBase64 = photo;
-                console.log(`✅ Stored base64 in Firestore (${Math.round(base64Size / 1024)} KB)`);
-            }
-        }
         // Log to Firestore
         const firestoreResult = await (0, firestore_1.logPhotoToFirestore)(photoData);
         return res.json({

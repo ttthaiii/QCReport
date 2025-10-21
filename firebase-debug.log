@@ -1,105 +1,103 @@
-[debug] [2025-10-21T09:24:38.893Z] ----------------------------------------------------------------------
-[debug] [2025-10-21T09:24:38.895Z] Command:       C:\nvm4w\nodejs\node.exe C:\nvm4w\nodejs\node_modules\firebase-tools\lib\bin\firebase.js emulators:start
-[debug] [2025-10-21T09:24:38.895Z] CLI Version:   14.17.0
-[debug] [2025-10-21T09:24:38.895Z] Platform:      win32
-[debug] [2025-10-21T09:24:38.896Z] Node Version:  v20.18.2
-[debug] [2025-10-21T09:24:38.896Z] Time:          Tue Oct 21 2025 16:24:38 GMT+0700 (Indochina Time)
-[debug] [2025-10-21T09:24:38.896Z] ----------------------------------------------------------------------
+[debug] [2025-10-21T09:53:12.895Z] ----------------------------------------------------------------------
+[debug] [2025-10-21T09:53:12.897Z] Command:       C:\nvm4w\nodejs\node.exe C:\nvm4w\nodejs\node_modules\firebase-tools\lib\bin\firebase.js emulators:start
+[debug] [2025-10-21T09:53:12.897Z] CLI Version:   14.17.0
+[debug] [2025-10-21T09:53:12.898Z] Platform:      win32
+[debug] [2025-10-21T09:53:12.898Z] Node Version:  v20.18.2
+[debug] [2025-10-21T09:53:12.898Z] Time:          Tue Oct 21 2025 16:53:12 GMT+0700 (Indochina Time)
+[debug] [2025-10-21T09:53:12.898Z] ----------------------------------------------------------------------
 [debug] 
-[debug] [2025-10-21T09:24:39.046Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
-[debug] [2025-10-21T09:24:39.046Z] > authorizing via signed-in user (ttthaiii30@gmail.com)
-[debug] [2025-10-21T09:24:39.086Z] openjdk version "25" 2025-09-16 LTS
-OpenJDK Runtime Environment Temurin-25+36 (build 25+36-LTS)
+[debug] [2025-10-21T09:53:13.036Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-10-21T09:53:13.037Z] > authorizing via signed-in user (ttthaiii30@gmail.com)
+[debug] [2025-10-21T09:53:13.078Z] openjdk version "25" 2025-09-16 LTS
+
+[debug] [2025-10-21T09:53:13.078Z] OpenJDK Runtime Environment Temurin-25+36 (build 25+36-LTS)
 OpenJDK 64-Bit Server VM Temurin-25+36 (build 25+36-LTS, mixed mode, sharing)
 
-[debug] [2025-10-21T09:24:39.101Z] Parsed Java major version: 25
+[debug] [2025-10-21T09:53:13.090Z] Parsed Java major version: 25
 [info] i  emulators: Starting emulators: functions, firestore, hosting, storage, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: functions, firestore, hosting, storage, extensions"}}
-[debug] [2025-10-21T09:24:39.103Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:39.103Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:39.104Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/qcreport-54164 [none]
-[debug] [2025-10-21T09:24:40.629Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/qcreport-54164 200
-[debug] [2025-10-21T09:24:40.630Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/qcreport-54164 {"projectNumber":"461069143501","projectId":"qcreport-54164","lifecycleState":"ACTIVE","name":"QCReport","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-08-05T08:00:07.751600Z"}
-[debug] [2025-10-21T09:24:40.638Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
-[debug] [2025-10-21T09:24:40.638Z] [firestore] Firestore Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
-[debug] [2025-10-21T09:24:40.638Z] [firestore.websocket] websocket server for firestore only supports listening on one address (127.0.0.1). Not listening on ::1
-[debug] [2025-10-21T09:24:40.638Z] [hosting] Hosting Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
-[debug] [2025-10-21T09:24:40.638Z] [storage] Storage Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
-[debug] [2025-10-21T09:24:40.638Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5000}],"storage":[{"address":"127.0.0.1","family":"IPv4","port":9199}]},"metadata":{"message":"assigned listening specs for emulators"}}
-[debug] [2025-10-21T09:24:40.640Z] Emulator locator file path: C:\Users\tts2004\AppData\Local\Temp\hub-qcreport-54164.json
-[debug] [2025-10-21T09:24:40.640Z] [hub] writing locator at C:\Users\tts2004\AppData\Local\Temp\hub-qcreport-54164.json
-[debug] [2025-10-21T09:24:40.644Z] [Extensions] Started Extensions emulator, this is a noop.
-[debug] [2025-10-21T09:24:40.646Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
-[debug] [2025-10-21T09:24:40.647Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
-[debug] [2025-10-21T09:24:40.647Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
-[debug] [2025-10-21T09:24:40.647Z] late-assigned ports for functions and eventarc emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5000}],"storage":[{"address":"127.0.0.1","family":"IPv4","port":9199}],"functions":[{"address":"127.0.0.1","family":"IPv4","port":5001}],"eventarc":[{"address":"127.0.0.1","family":"IPv4","port":9299}],"tasks":[{"address":"127.0.0.1","family":"IPv4","port":9499}]},"metadata":{"message":"late-assigned ports for functions and eventarc emulators"}}
+[debug] [2025-10-21T09:53:13.092Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:13.092Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:13.093Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/qcreport-54164 [none]
+[debug] [2025-10-21T09:53:14.639Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/qcreport-54164 200
+[debug] [2025-10-21T09:53:14.639Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/qcreport-54164 {"projectNumber":"461069143501","projectId":"qcreport-54164","lifecycleState":"ACTIVE","name":"QCReport","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-08-05T08:00:07.751600Z"}
+[debug] [2025-10-21T09:53:14.648Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-21T09:53:14.648Z] [firestore] Firestore Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-21T09:53:14.648Z] [firestore.websocket] websocket server for firestore only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-21T09:53:14.649Z] [hosting] Hosting Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-21T09:53:14.649Z] [storage] Storage Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-21T09:53:14.649Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5000}],"storage":[{"address":"127.0.0.1","family":"IPv4","port":9199}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-10-21T09:53:14.651Z] Emulator locator file path: C:\Users\tts2004\AppData\Local\Temp\hub-qcreport-54164.json
+[debug] [2025-10-21T09:53:14.651Z] [hub] writing locator at C:\Users\tts2004\AppData\Local\Temp\hub-qcreport-54164.json
+[debug] [2025-10-21T09:53:14.654Z] [Extensions] Started Extensions emulator, this is a noop.
+[debug] [2025-10-21T09:53:14.657Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-21T09:53:14.658Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-21T09:53:14.658Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-21T09:53:14.658Z] late-assigned ports for functions and eventarc emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8080}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hosting":[{"address":"127.0.0.1","family":"IPv4","port":5000}],"storage":[{"address":"127.0.0.1","family":"IPv4","port":9199}],"functions":[{"address":"127.0.0.1","family":"IPv4","port":5001}],"eventarc":[{"address":"127.0.0.1","family":"IPv4","port":9299}],"tasks":[{"address":"127.0.0.1","family":"IPv4","port":9499}]},"metadata":{"message":"late-assigned ports for functions and eventarc emulators"}}
 [warn] !  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, auth, database, pubsub, dataconnect {"metadata":{"emulator":{"name":"functions"},"message":"The following emulators are not running, calls to these services from the Functions emulator will affect production: \u001b[1mapphosting, auth, database, pubsub, dataconnect\u001b[22m"}}
-[debug] [2025-10-21T09:24:40.657Z] defaultcredentials: writing to file C:\Users\tts2004\AppData\Roaming\firebase\ttthaiii30_gmail_com_application_default_credentials.json
-[debug] [2025-10-21T09:24:40.658Z] Setting GAC to C:\Users\tts2004\AppData\Roaming\firebase\ttthaiii30_gmail_com_application_default_credentials.json {"metadata":{"emulator":{"name":"functions"},"message":"Setting GAC to C:\\Users\\tts2004\\AppData\\Roaming\\firebase\\ttthaiii30_gmail_com_application_default_credentials.json"}}
-[debug] [2025-10-21T09:24:40.659Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:40.659Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:40.659Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig [none]
-[debug] [2025-10-21T09:24:42.468Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig 200
-[debug] [2025-10-21T09:24:42.469Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig {"projectId":"qcreport-54164","storageBucket":"qcreport-54164.firebasestorage.app"}
-[debug] [2025-10-21T09:24:42.482Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: auto_download"}}
-[debug] [2025-10-21T09:24:42.482Z] Ignoring unsupported arg: single_project_mode_error {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: single_project_mode_error"}}
-[debug] [2025-10-21T09:24:42.482Z] Starting Firestore Emulator with command {"binary":"java","args":["-Dgoogle.cloud_firestore.debug_log_level=FINE","-Duser.language=en","-jar","C:\\Users\\tts2004\\.cache\\firebase\\emulators\\cloud-firestore-emulator-v1.19.8.jar","--host","127.0.0.1","--port",8080,"--websocket_port",9150,"--project_id","qcreport-54164","--rules","D:\\qc-report-new\\firestore.rules","--single_project_mode",true,"--functions_emulator","127.0.0.1:5001"],"optionalArgs":["port","webchannel_port","host","rules","websocket_port","functions_emulator","seed_from_export","project_id","single_project_mode"],"joinArgs":false,"shell":false,"port":8080} {"metadata":{"emulator":{"name":"firestore"},"message":"Starting Firestore Emulator with command {\"binary\":\"java\",\"args\":[\"-Dgoogle.cloud_firestore.debug_log_level=FINE\",\"-Duser.language=en\",\"-jar\",\"C:\\\\Users\\\\tts2004\\\\.cache\\\\firebase\\\\emulators\\\\cloud-firestore-emulator-v1.19.8.jar\",\"--host\",\"127.0.0.1\",\"--port\",8080,\"--websocket_port\",9150,\"--project_id\",\"qcreport-54164\",\"--rules\",\"D:\\\\qc-report-new\\\\firestore.rules\",\"--single_project_mode\",true,\"--functions_emulator\",\"127.0.0.1:5001\"],\"optionalArgs\":[\"port\",\"webchannel_port\",\"host\",\"rules\",\"websocket_port\",\"functions_emulator\",\"seed_from_export\",\"project_id\",\"single_project_mode\"],\"joinArgs\":false,\"shell\":false,\"port\":8080}"}}
+[debug] [2025-10-21T09:53:14.808Z] defaultcredentials: writing to file C:\Users\tts2004\AppData\Roaming\firebase\ttthaiii30_gmail_com_application_default_credentials.json
+[debug] [2025-10-21T09:53:14.809Z] Setting GAC to C:\Users\tts2004\AppData\Roaming\firebase\ttthaiii30_gmail_com_application_default_credentials.json {"metadata":{"emulator":{"name":"functions"},"message":"Setting GAC to C:\\Users\\tts2004\\AppData\\Roaming\\firebase\\ttthaiii30_gmail_com_application_default_credentials.json"}}
+[debug] [2025-10-21T09:53:14.810Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:14.810Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:14.810Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig [none]
+[debug] [2025-10-21T09:53:15.731Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig 200
+[debug] [2025-10-21T09:53:15.731Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig {"projectId":"qcreport-54164","storageBucket":"qcreport-54164.firebasestorage.app"}
+[debug] [2025-10-21T09:53:15.745Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2025-10-21T09:53:15.745Z] Ignoring unsupported arg: single_project_mode_error {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: single_project_mode_error"}}
+[debug] [2025-10-21T09:53:15.746Z] Starting Firestore Emulator with command {"binary":"java","args":["-Dgoogle.cloud_firestore.debug_log_level=FINE","-Duser.language=en","-jar","C:\\Users\\tts2004\\.cache\\firebase\\emulators\\cloud-firestore-emulator-v1.19.8.jar","--host","127.0.0.1","--port",8080,"--websocket_port",9150,"--project_id","qcreport-54164","--rules","D:\\qc-report-new\\firestore.rules","--single_project_mode",true,"--functions_emulator","127.0.0.1:5001"],"optionalArgs":["port","webchannel_port","host","rules","websocket_port","functions_emulator","seed_from_export","project_id","single_project_mode"],"joinArgs":false,"shell":false,"port":8080} {"metadata":{"emulator":{"name":"firestore"},"message":"Starting Firestore Emulator with command {\"binary\":\"java\",\"args\":[\"-Dgoogle.cloud_firestore.debug_log_level=FINE\",\"-Duser.language=en\",\"-jar\",\"C:\\\\Users\\\\tts2004\\\\.cache\\\\firebase\\\\emulators\\\\cloud-firestore-emulator-v1.19.8.jar\",\"--host\",\"127.0.0.1\",\"--port\",8080,\"--websocket_port\",9150,\"--project_id\",\"qcreport-54164\",\"--rules\",\"D:\\\\qc-report-new\\\\firestore.rules\",\"--single_project_mode\",true,\"--functions_emulator\",\"127.0.0.1:5001\"],\"optionalArgs\":[\"port\",\"webchannel_port\",\"host\",\"rules\",\"websocket_port\",\"functions_emulator\",\"seed_from_export\",\"project_id\",\"single_project_mode\"],\"joinArgs\":false,\"shell\":false,\"port\":8080}"}}
 [info] i  firestore: Firestore Emulator logging to firestore-debug.log {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator logging to \u001b[1mfirestore-debug.log\u001b[22m"}}
-[debug] [2025-10-21T09:24:42.672Z] WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+[debug] [2025-10-21T09:53:15.953Z] WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
 WARNING: sun.misc.Unsafe::objectFieldOffset has been called by io.netty.util.internal.PlatformDependent0$4 (file:/C:/Users/tts2004/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar)
 WARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$4
 WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
  {"metadata":{"emulator":{"name":"firestore"},"message":"WARNING: A terminally deprecated method in sun.misc.Unsafe has been called\nWARNING: sun.misc.Unsafe::objectFieldOffset has been called by io.netty.util.internal.PlatformDependent0$4 (file:/C:/Users/tts2004/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar)\nWARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$4\nWARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release\r\n"}}
-[debug] [2025-10-21T09:24:43.193Z] Oct 21, 2025 4:24:43 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
+[debug] [2025-10-21T09:53:16.477Z] Oct 21, 2025 4:53:16 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
 INFO: Started WebSocket server on ws://127.0.0.1:9150
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:24:43 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start\r\nINFO: Started WebSocket server on ws://127.0.0.1:9150\r\n"}}
-[debug] [2025-10-21T09:24:43.239Z] API endpoint: http://127.0.0.1:8080
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:53:16 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start\r\nINFO: Started WebSocket server on ws://127.0.0.1:9150\r\n"}}
+[debug] [2025-10-21T09:53:16.519Z] API endpoint: http:// {"metadata":{"emulator":{"name":"firestore"},"message":"API endpoint: http://"}}
+[debug] [2025-10-21T09:53:16.520Z] 127.0.0.1:8080
 If you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:
 
    export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 
 If you are running a Firestore in Datastore Mode project, run:
 
-   export DATASTORE_EMULATOR_HOST= {"metadata":{"emulator":{"name":"firestore"},"message":"API endpoint: http://127.0.0.1:8080\nIf you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:\r\n\n   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080\n\nIf you are running a Firestore in Datastore Mode project, run:\r\n\n   export DATASTORE_EMULATOR_HOST="}}
-[debug] [2025-10-21T09:24:43.240Z] 127.0.0.1:8080
+   export DATASTORE_EMULATOR_HOST=127.0.0.1:8080
 
 Note: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.
 Dev App Server is now running.
 
- {"metadata":{"emulator":{"name":"firestore"},"message":"127.0.0.1:8080\n\nNote: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.\r\nDev App Server is now running.\n\r\n"}}
+ {"metadata":{"emulator":{"name":"firestore"},"message":"127.0.0.1:8080\nIf you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:\r\n\n   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080\n\nIf you are running a Firestore in Datastore Mode project, run:\r\n\n   export DATASTORE_EMULATOR_HOST=127.0.0.1:8080\n\nNote: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.\r\nDev App Server is now running.\n\r\n"}}
 [info] +  firestore: Firestore Emulator UI websocket is running on 9150. {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator UI websocket is running on 9150."}}
-[debug] [2025-10-21T09:24:43.304Z] Ignoring unsupported arg: port {"metadata":{"emulator":{"name":"storage"},"message":"Ignoring unsupported arg: port"}}
+[debug] [2025-10-21T09:53:16.574Z] Ignoring unsupported arg: port {"metadata":{"emulator":{"name":"storage"},"message":"Ignoring unsupported arg: port"}}
 [warn] !  Unexpected rules runtime error: WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
 WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil$MemoryAccessor (file:/C:/Users/tts2004/.cache/firebase/emulators/cloud-storage-rules-runtime-v1.1.3.jar)
 WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil$MemoryAccessor
 WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
  {"metadata":{"emulator":{"name":"storage"},"message":"Unexpected rules runtime error: WARNING: A terminally deprecated method in sun.misc.Unsafe has been called\nWARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil$MemoryAccessor (file:/C:/Users/tts2004/.cache/firebase/emulators/cloud-storage-rules-runtime-v1.1.3.jar)\nWARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil$MemoryAccessor\nWARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release\r\n"}}
-[debug] [2025-10-21T09:24:43.739Z] Oct 21, 2025 4:24:43 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel
-INFO: Connected to new websocket client
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:24:43 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel\r\nINFO: Connected to new websocket client\r\n"}}
-[debug] [2025-10-21T09:24:43.815Z] Temp file directory for storage emulator: C:\Users\tts2004\AppData\Local\Temp/firebase/storage/blobs {"metadata":{"emulator":{"name":"storage"},"message":"Temp file directory for storage emulator: C:\\Users\\tts2004\\AppData\\Local\\Temp/firebase/storage/blobs"}}
-[debug] [2025-10-21T09:24:43.819Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:43.819Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:43.819Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/qcreport-54164/sites 
-[debug] [2025-10-21T09:24:44.831Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/qcreport-54164/sites 200
-[debug] [2025-10-21T09:24:44.831Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/qcreport-54164/sites {"sites":[{"name":"projects/qcreport-54164/sites/qcreport-54164","defaultUrl":"https://qcreport-54164.web.app","appId":"1:461069143501:web:50c3883c4be6fdd459c884","type":"DEFAULT_SITE"}]}
-[debug] [2025-10-21T09:24:44.831Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:44.831Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:44.831Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/webApps/1:461069143501:web:50c3883c4be6fdd459c884/config [none]
-[debug] [2025-10-21T09:24:45.500Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/webApps/1:461069143501:web:50c3883c4be6fdd459c884/config 200
-[debug] [2025-10-21T09:24:45.500Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/webApps/1:461069143501:web:50c3883c4be6fdd459c884/config {"projectId":"qcreport-54164","appId":"1:461069143501:web:50c3883c4be6fdd459c884","storageBucket":"qcreport-54164.firebasestorage.app","apiKey":"AIzaSyBCKOeOYETnreaPypLQej73abkfeZ65X6U","authDomain":"qcreport-54164.firebaseapp.com","messagingSenderId":"461069143501","measurementId":"G-6BQN4213Y1","projectNumber":"461069143501","version":"2"}
-[debug] [2025-10-21T09:24:45.509Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:45.509Z] Checked if tokens are valid: true, expires at: 1761042013056
-[debug] [2025-10-21T09:24:45.509Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164 [none]
-[debug] [2025-10-21T09:24:45.898Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164 200
-[debug] [2025-10-21T09:24:45.898Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164 {"projectId":"qcreport-54164","projectNumber":"461069143501","displayName":"QCReport","name":"projects/qcreport-54164","resources":{"hostingSite":"qcreport-54164"},"state":"ACTIVE","etag":"1_462fc5f5-76df-469b-a4e1-4dd64095f531"}
+[debug] [2025-10-21T09:53:17.022Z] Temp file directory for storage emulator: C:\Users\tts2004\AppData\Local\Temp/firebase/storage/blobs {"metadata":{"emulator":{"name":"storage"},"message":"Temp file directory for storage emulator: C:\\Users\\tts2004\\AppData\\Local\\Temp/firebase/storage/blobs"}}
+[debug] [2025-10-21T09:53:17.025Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:17.025Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:17.025Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/qcreport-54164/sites 
+[debug] [2025-10-21T09:53:18.011Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/qcreport-54164/sites 200
+[debug] [2025-10-21T09:53:18.011Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/qcreport-54164/sites {"sites":[{"name":"projects/qcreport-54164/sites/qcreport-54164","defaultUrl":"https://qcreport-54164.web.app","appId":"1:461069143501:web:50c3883c4be6fdd459c884","type":"DEFAULT_SITE"}]}
+[debug] [2025-10-21T09:53:18.011Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:18.011Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:18.012Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/webApps/1:461069143501:web:50c3883c4be6fdd459c884/config [none]
+[debug] [2025-10-21T09:53:18.694Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/webApps/1:461069143501:web:50c3883c4be6fdd459c884/config 200
+[debug] [2025-10-21T09:53:18.694Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/webApps/1:461069143501:web:50c3883c4be6fdd459c884/config {"projectId":"qcreport-54164","appId":"1:461069143501:web:50c3883c4be6fdd459c884","storageBucket":"qcreport-54164.firebasestorage.app","apiKey":"AIzaSyBCKOeOYETnreaPypLQej73abkfeZ65X6U","authDomain":"qcreport-54164.firebaseapp.com","messagingSenderId":"461069143501","measurementId":"G-6BQN4213Y1","projectNumber":"461069143501","version":"2"}
+[debug] [2025-10-21T09:53:18.702Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:18.702Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:18.702Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164 [none]
+[debug] [2025-10-21T09:53:19.103Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164 200
+[debug] [2025-10-21T09:53:19.103Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164 {"projectId":"qcreport-54164","projectNumber":"461069143501","displayName":"QCReport","name":"projects/qcreport-54164","resources":{"hostingSite":"qcreport-54164"},"state":"ACTIVE","etag":"1_462fc5f5-76df-469b-a4e1-4dd64095f531"}
 [info] i  hosting[qcreport-54164]: Serving hosting files from: build {"metadata":{"emulator":{"name":"hosting"},"message":"Serving hosting files from: \u001b[1mbuild\u001b[22m"}}
 [info] +  hosting[qcreport-54164]: Local server: http://127.0.0.1:5000 {"metadata":{"emulator":{"name":"hosting"},"message":"Local server: \u001b[4m\u001b[1mhttp://127.0.0.1:5000\u001b[22m\u001b[24m"}}
-[debug] [2025-10-21T09:24:45.910Z] [Extensions] Connecting Extensions emulator, this is a noop.
+[debug] [2025-10-21T09:53:19.114Z] [Extensions] Connecting Extensions emulator, this is a noop.
 [info] i  functions: Watching "D:\qc-report-new\qc-functions" for Cloud Functions... {"metadata":{"emulator":{"name":"functions"},"message":"Watching \"D:\\qc-report-new\\qc-functions\" for Cloud Functions..."}}
-[debug] [2025-10-21T09:24:45.913Z] Validating nodejs source
+[debug] [2025-10-21T09:53:19.116Z] Validating nodejs source
 [warn] !  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
 [warn] !  functions: Please note that there will be breaking changes when you upgrade. 
-[debug] [2025-10-21T09:24:46.627Z] > [functions] package.json contents: {
+[debug] [2025-10-21T09:53:19.752Z] > [functions] package.json contents: {
   "name": "functions",
   "description": "Cloud Functions for Firebase",
   "scripts": {
@@ -143,21 +141,21 @@ INFO: Connected to new websocket client
     "typescript": "^5.9.3"
   }
 }
-[debug] [2025-10-21T09:24:46.627Z] Building nodejs source
-[debug] [2025-10-21T09:24:46.627Z] Failed to find version of module node: reached end of search path D:\qc-report-new\qc-functions\node_modules
+[debug] [2025-10-21T09:53:19.752Z] Building nodejs source
+[debug] [2025-10-21T09:53:19.753Z] Failed to find version of module node: reached end of search path D:\qc-report-new\qc-functions\node_modules
 [info] +  functions: Using node@20 from host. 
-[debug] [2025-10-21T09:24:46.629Z] Could not find functions.yaml. Must use http discovery
-[debug] [2025-10-21T09:24:46.632Z] Found firebase-functions binary at 'D:\qc-report-new\qc-functions\node_modules\.bin\firebase-functions'
-[info] Serving at port 8254
+[debug] [2025-10-21T09:53:19.755Z] Could not find functions.yaml. Must use http discovery
+[debug] [2025-10-21T09:53:19.758Z] Found firebase-functions binary at 'D:\qc-report-new\qc-functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 9000
 
 [info] 🔧 Running in EMULATOR mode
 
-[debug] [2025-10-21T09:24:47.033Z] Got response from /__/functions.yaml {"endpoints":{"api":{"availableMemoryMb":2048,"timeoutSeconds":540,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","region":["asia-southeast1"],"labels":{},"httpsTrigger":{},"entryPoint":"api"}},"specVersion":"v1alpha1","requiredAPIs":[],"extensions":{}}
-[debug] [2025-10-21T09:24:51.073Z] defaultcredentials: writing to file C:\Users\tts2004\AppData\Roaming\firebase\ttthaiii30_gmail_com_application_default_credentials.json
-[debug] [2025-10-21T09:24:51.074Z] Setting GAC to C:\Users\tts2004\AppData\Roaming\firebase\ttthaiii30_gmail_com_application_default_credentials.json {"metadata":{"emulator":{"name":"functions"},"message":"Setting GAC to C:\\Users\\tts2004\\AppData\\Roaming\\firebase\\ttthaiii30_gmail_com_application_default_credentials.json"}}
+[debug] [2025-10-21T09:53:20.120Z] Got response from /__/functions.yaml {"endpoints":{"api":{"availableMemoryMb":2048,"timeoutSeconds":540,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","region":["asia-southeast1"],"labels":{},"httpsTrigger":{},"entryPoint":"api"}},"specVersion":"v1alpha1","requiredAPIs":[],"extensions":{}}
+[debug] [2025-10-21T09:53:24.148Z] defaultcredentials: writing to file C:\Users\tts2004\AppData\Roaming\firebase\ttthaiii30_gmail_com_application_default_credentials.json
+[debug] [2025-10-21T09:53:24.149Z] Setting GAC to C:\Users\tts2004\AppData\Roaming\firebase\ttthaiii30_gmail_com_application_default_credentials.json {"metadata":{"emulator":{"name":"functions"},"message":"Setting GAC to C:\\Users\\tts2004\\AppData\\Roaming\\firebase\\ttthaiii30_gmail_com_application_default_credentials.json"}}
 [info] +  functions: Loaded functions definitions from source: api. {"metadata":{"emulator":{"name":"functions"},"message":"Loaded functions definitions from source: api."}}
 [info] +  functions[asia-southeast1-api]: http function initialized (http://127.0.0.1:5001/qcreport-54164/asia-southeast1/api). {"metadata":{"emulator":{"name":"functions"},"message":"\u001b[1mhttp\u001b[22m function initialized (http://127.0.0.1:5001/qcreport-54164/asia-southeast1/api)."}}
-[debug] [2025-10-21T09:24:51.079Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[debug] [2025-10-21T09:53:24.153Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
 [info] 
 ┌─────────────────────────────────────────────────────────────┐
 │ ✔  All emulators ready! It is now safe to connect your app. │
@@ -184,36 +182,20 @@ INFO: Connected to new websocket client
 └─────────────────────────┴───────────────┴─────────────────────┘
 Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
  
-[debug] [2025-10-21T09:25:07.455Z] Oct 21, 2025 4:25:07 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:07 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected HTTP/2 connection.\r\n"}}
-[debug] [2025-10-21T09:25:11.546Z] Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected non-HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected non-HTTP/2 connection.\r\n"}}
-[debug] [2025-10-21T09:25:11.548Z] Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected non-HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected non-HTTP/2 connection.\r\n"}}
-[debug] [2025-10-21T09:25:11.550Z] Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected non-HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected non-HTTP/2 connection.\r\n"}}
-[debug] [2025-10-21T09:25:11.560Z] Oct 21, 2025 4:25:11 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler channelClosed
-INFO: Websocket client disconnected
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler channelClosed\r\nINFO: Websocket client disconnected\r\n"}}
-[debug] [2025-10-21T09:25:11.561Z] Oct 21, 2025 4:25:11 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel
+[debug] [2025-10-21T09:53:42.228Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:42.228Z] Checked if tokens are valid: true, expires at: 1761042013056
+[debug] [2025-10-21T09:53:42.229Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig [none]
+[debug] [2025-10-21T09:53:42.231Z] Oct 21, 2025 4:53:42 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel
 INFO: Connected to new websocket client
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel\r\nINFO: Connected to new websocket client\r\n"}}
-[debug] [2025-10-21T09:25:11.563Z] Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected non-HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected non-HTTP/2 connection.\r\n"}}
-[debug] [2025-10-21T09:25:11.576Z] Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected non-HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected non-HTTP/2 connection.\r\n"}}
-[debug] [2025-10-21T09:25:11.583Z] Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:53:42 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel\r\nINFO: Connected to new websocket client\r\n"}}
+[debug] [2025-10-21T09:53:42.246Z] Oct 21, 2025 4:53:42 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel
+INFO: Connected to new websocket client
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:53:42 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler initChannel\r\nINFO: Connected to new websocket client\r\n"}}
+[debug] [2025-10-21T09:53:42.260Z] Oct 21, 2025 4:53:42 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler channelClosed
+INFO: Websocket client disconnected
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:53:42 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketChannelHandler channelClosed\r\nINFO: Websocket client disconnected\r\n"}}
+[debug] [2025-10-21T09:53:42.892Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig 200
+[debug] [2025-10-21T09:53:42.892Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/qcreport-54164/adminSdkConfig {"projectId":"qcreport-54164","storageBucket":"qcreport-54164.firebasestorage.app"}
+[debug] [2025-10-21T09:53:45.455Z] Oct 21, 2025 4:53:45 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected HTTP/2 connection.\r\n"}}
-[debug] [2025-10-21T09:25:11.698Z] Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected non-HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected non-HTTP/2 connection.\r\n"}}
-[debug] [2025-10-21T09:25:11.716Z] Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
-INFO: Detected non-HTTP/2 connection.
- {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:25:11 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected non-HTTP/2 connection.\r\n"}}
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Oct 21, 2025 4:53:45 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\r\nINFO: Detected HTTP/2 connection.\r\n"}}

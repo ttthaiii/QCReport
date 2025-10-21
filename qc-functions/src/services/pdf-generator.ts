@@ -42,49 +42,14 @@ interface PDFReportData {
 // HELPER FUNCTIONS
 // ========================================
 
-/**
- * ดาวน์โหลดรูปจาก URL และแปลงเป็น base64
- */
-async function downloadImageAsBase64(imageUrl: string): Promise<string | null> {
-  try {
-    console.log(`📥 Downloading image from: ${imageUrl}`);
-    
-    // 🔥 แปลง Production URL เป็น Emulator URL ถ้าจำเป็น
-    const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
-    let downloadUrl = imageUrl;
-    
-    if (isEmulator && imageUrl.includes('storage.googleapis.com')) {
-      // แปลงจาก: https://storage.googleapis.com/bucket/path
-      // เป็น: http://localhost:9199/bucket/path
-      downloadUrl = imageUrl.replace(
-        'https://storage.googleapis.com',
-        'http://localhost:9199'
-      );
-      console.log(`🔄 Converted to emulator URL: ${downloadUrl}`);
-    }
-    
-    const response = await fetch(downloadUrl);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString('base64');
-    
-    console.log(`✅ Image downloaded: ${base64.length} chars`);
-    return base64;
-    
-  } catch (error) {
-    console.error(`❌ Error downloading image from ${imageUrl}:`, error);
-    return null;
-  }
-}
 
 /**
  * โหลดรูปทั้งหมดจาก URL
  */
 async function loadImagesFromStorage(photos: PhotoData[]): Promise<PhotoData[]> {
+  
+  const bucket = admin.storage().bucket(); // <-- ✨ ย้ายมาไว้ที่นี่ครับ
+
   if (!photos || photos.length === 0) {
     console.log('⚠️ No photos to load');
     return photos;
@@ -93,57 +58,62 @@ async function loadImagesFromStorage(photos: PhotoData[]): Promise<PhotoData[]> 
   console.log(`📥 Loading ${photos.length} images...`);
   
   const photosWithImages: PhotoData[] = [];
-  
+  let loadedCount = 0;
+  let placeholderCount = 0;
+  let failedCount = 0;
+
   for (let i = 0; i < photos.length; i++) {
     const photo = photos[i];
     
     if (photo.isPlaceholder) {
       console.log(`🔳 Skipping placeholder ${i + 1}/${photos.length}: "${photo.topic}"`);
-      photosWithImages.push(photo);
+      photosWithImages.push({ ...photo, imageBase64: null });
+      placeholderCount++;
       continue;
     }
     
-    if (photo.imageBase64) {
-      console.log(`✅ Photo ${i + 1}/${photos.length} already has base64: "${photo.topic}"`);
-      photosWithImages.push(photo);
+    // เราจะใช้ storageUrl (filePath) เสมอ
+    const storagePath = photo.storageUrl; // นี่คือ filePath ที่เราบันทึกไว้
+    
+    if (!storagePath) {
+      console.log(`⚠️ No storageUrl for "${photo.topic}", skipping.`);
+      photosWithImages.push({ ...photo, imageBase64: null });
+      failedCount++;
       continue;
     }
-    
-    console.log(`📷 Loading image ${i + 1}/${photos.length}: "${photo.topic}"`);
+
+    console.log(`📷 Loading image ${i + 1}/${photos.length} from path: "${storagePath}"`);
     
     try {
-      const imageUrl = photo.storageUrl || photo.imageUrl;
+      // 1. อ้างอิงไฟล์ใน Storage
+      const file = bucket.file(storagePath);
       
-      if (!imageUrl) {
-        console.log(`⚠️ No image URL for "${photo.topic}"`);
-        photosWithImages.push({
-          ...photo,
-          imageBase64: null
-        });
-        continue;
-      }
+      // 2. ดาวน์โหลดไฟล์เป็น Buffer
+      const [buffer] = await file.download();
       
-      const base64 = await downloadImageAsBase64(imageUrl);
+      // 3. (Optional) ดึง Mime Type ที่ถูกต้อง
+      const [metadata] = await file.getMetadata();
+      const mimeType = metadata.contentType || 'image/jpeg';
       
+      // 4. แปลงเป็น Base64 Data URI ที่สมบูรณ์
+      const base64 = buffer.toString('base64');
       photosWithImages.push({
         ...photo,
-        imageBase64: base64
+        imageBase64: `data:${mimeType};base64,${base64}` // <-- สร้าง Data URI ที่สมบูรณ์ที่นี่
       });
+      loadedCount++;
       
     } catch (error) {
-      console.error(`❌ Failed to load image for "${photo.topic}":`, error);
+      console.error(`❌ Failed to load image for "${photo.topic}" from ${storagePath}:`, error);
       photosWithImages.push({
         ...photo,
-        imageBase64: null
+        imageBase64: null //  HTML (ข้อ 4) จะแสดง placeholder
       });
+      failedCount++;
     }
   }
   
-  const successCount = photosWithImages.filter(p => p.imageBase64).length;
-  const placeholderCount = photosWithImages.filter(p => p.isPlaceholder).length;
-  const failCount = photosWithImages.filter(p => !p.imageBase64 && !p.isPlaceholder).length;
-  
-  console.log(`📊 Image loading results: ${successCount} loaded, ${placeholderCount} placeholders, ${failCount} failed`);
+  console.log(`📊 Image loading results: ${loadedCount} loaded, ${placeholderCount} placeholders, ${failedCount} failed`);
   
   return photosWithImages;
 }
@@ -389,9 +359,9 @@ function createPhotosGrid(photos: PhotoData[], pageIndex: number): string {
         <div class="photo-frame">
           <div class="photo-container">
             ${photo.imageBase64 ? 
-              `<img src="data:image/jpeg;base64,${photo.imageBase64}" 
-                   alt="${topicName}" 
-                   class="photo-image">` :
+              `<img src="${photo.imageBase64}" 
+                  alt="${topicName}" 
+                  class="photo-image">` :
               `<div class="photo-placeholder">
                </div>`
             }
@@ -809,7 +779,7 @@ export async function getLatestPhotos(
     console.log(`✅ Found ${photos.length} unique photos`);
     
     // 🔥 โหลดรูปเฉพาะตัวที่ยังไม่มี base64
-    return await loadImagesFromStorage(photos);
+    return photos;
     
   } catch (error) {
     console.error('❌ Error getting latest photos:', error);
