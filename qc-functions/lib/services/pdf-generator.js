@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getUploadedTopicStatus = getUploadedTopicStatus;
 exports.getLatestPhotos = getLatestPhotos;
 exports.createFullLayout = createFullLayout;
 exports.generatePDF = generatePDF;
@@ -641,14 +642,57 @@ function createOptimizedHTML(reportData) {
 // ========================================
 // MAIN EXPORTED FUNCTIONS
 // ========================================
+async function getUploadedTopicStatus(projectId, category, dynamicFields) {
+    const db = admin.firestore();
+    let query = db.collection('qcPhotos')
+        .where('projectId', '==', projectId)
+        .where('category', '==', category);
+    // กรองด้วย Dynamic Fields
+    Object.entries(dynamicFields).forEach(([key, value]) => {
+        // ✨ [แก้ไข] เพิ่มการตรวจสอบว่า key ไม่ใช่ค่าว่าง
+        if (key && value) {
+            query = query.where(`dynamicFields.${key}`, '==', value);
+        }
+    });
+    const snapshot = await query.get();
+    if (snapshot.empty) {
+        return {}; // ไม่มีรูปเลย
+    }
+    const photosByTopic = new Map();
+    // หาอันใหม่สุดของแต่ละ Topic
+    snapshot.forEach(doc => {
+        var _a, _b, _c, _d;
+        const data = doc.data();
+        const topic = data.topic;
+        if (!photosByTopic.has(topic)) {
+            photosByTopic.set(topic, data);
+        }
+        else {
+            const existing = photosByTopic.get(topic);
+            const existingTime = ((_b = (_a = existing.createdAt) === null || _a === void 0 ? void 0 : _a.toDate) === null || _b === void 0 ? void 0 : _b.call(_a)) || new Date(0);
+            const newTime = ((_d = (_c = data.createdAt) === null || _c === void 0 ? void 0 : _c.toDate) === null || _d === void 0 ? void 0 : _d.call(_c)) || new Date(0);
+            if (newTime > existingTime) {
+                photosByTopic.set(topic, data);
+            }
+        }
+    });
+    const uploadedTopics = {};
+    for (const topic of photosByTopic.keys()) {
+        uploadedTopics[topic] = true;
+    }
+    console.log(`✅ Found ${Object.keys(uploadedTopics).length} unique uploaded topics`);
+    return uploadedTopics;
+}
 /**
  * ดึงรูปล่าสุดจาก Firestore
  */
 async function getLatestPhotos(projectId, mainCategory, subCategory, allTopics, dynamicFields) {
     try {
         console.log(`🔍 Getting latest photos for ${mainCategory} > ${subCategory}`);
-        const db = admin.firestore();
         const category = `${mainCategory} > ${subCategory}`;
+        // [แก้ไข] เราต้องดึงข้อมูลรูปภาพจริงๆ ไม่ใช่แค่สถานะ
+        // Logic เดิมยังคงจำเป็นสำหรับ getLatestPhotos
+        const db = admin.firestore();
         let query = db.collection('qcPhotos')
             .where('projectId', '==', projectId)
             .where('category', '==', category);
@@ -683,22 +727,19 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, allTopics, 
         for (const [topic, data] of photosByTopic.entries()) {
             const photoItem = {
                 topic: topic,
-                imageBase64: data.imageBase64 || null,
+                imageBase64: null, // เราจะโหลดทีหลังเสมอ
                 imageUrl: data.driveUrl || data.filePath,
                 storageUrl: data.filePath,
                 isPlaceholder: false
             };
-            // 🔥 Debug log
             console.log(`📸 Photo "${topic}":`, {
-                hasBase64: !!photoItem.imageBase64,
                 imageUrl: photoItem.imageUrl,
                 storageUrl: photoItem.storageUrl
             });
             photos.push(photoItem);
         }
         console.log(`✅ Found ${photos.length} unique photos`);
-        // 🔥 โหลดรูปเฉพาะตัวที่ยังไม่มี base64
-        return photos;
+        return await loadImagesFromStorage(photos);
     }
     catch (error) {
         console.error('❌ Error getting latest photos:', error);

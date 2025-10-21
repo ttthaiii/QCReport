@@ -186,4 +186,30 @@ export const api = {
       };
     }
   },
+  
+  getChecklistStatus: async (
+      projectId: string,
+      mainCategory: string,
+      subCategory: string,
+      dynamicFields: Record<string, string>
+    ): Promise<{ success: boolean; data?: Record<string, boolean>; error?: string }> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/checklist-status`, { // <-- ✨ แก้ไข
+        method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId,
+            mainCategory,
+            subCategory,
+            dynamicFields,
+          }),
+        });
+        const result = await response.json();
+        return result;
+      } catch (err) {
+        return { success: false, error: (err as Error).message };
+      }
+    },  
 };

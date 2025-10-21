@@ -1,10 +1,17 @@
-// Filename: src/App.tsx (REPLACE ALL)
+// Filename: src/App.tsx (REPLACED)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, Project, ProjectConfig } from './utils/api';
 import Camera from './components/Camera';
 import Reports from './components/Reports';
-import './App.css';
+import './App.css'; // เราจะใช้ CSS ที่อัปเดตใหม่
+
+// ใช้ Emoji ธรรมดาเป็นไอคอนแทนการติดตั้ง lib เพิ่ม
+const ICONS = {
+  PROJECTS: '🏗️',
+  CAMERA: '📷',
+  REPORTS: '📊',
+};
 
 type View = 'projects' | 'camera' | 'reports';
 
@@ -14,6 +21,9 @@ function App() {
   const [projectConfig, setProjectConfig] = useState<ProjectConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // View เริ่มต้นสำหรับ User ที่เข้ามา (ถ้ามี Project ค้างไว้)
+  // เราจะสมมติว่าเริ่มที่ 'projects' ก่อนเสมอเพื่อง่ายต่อการเลือก
   const [view, setView] = useState<View>('projects');
 
   const fetchProjects = useCallback(async () => {
@@ -38,150 +48,124 @@ function App() {
     const response = await api.getProjectConfig(selectedProject.id);
     if (response.success && response.data) {
       setProjectConfig(response.data);
-      setView('camera');
+      // หลังจากโหลด Config สำเร็จ, ให้เด้งไปหน้า Camera อัตโนมัติ
+      setView('camera'); 
     } else {
-      setError(response.error || 'เกิดข้อผิดพลาดในการโหลดข้อมูลตั้งค่าโครงการ');
-      setIsLoading(false);
+      setError(response.error || 'เกิดข้อผิดพลาดในการโหลด Config โครงการ');
     }
+    setIsLoading(false);
   }, [selectedProject]);
 
+  // โหลดรายชื่อโครงการตอนเปิดแอปครั้งแรก
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
 
-  const handleProjectSelect = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    if (project) {
-      setSelectedProject(project);
-    }
-  };
-
+  // เมื่อมีการเลือกโครงการ ให้โหลด Config
   useEffect(() => {
     if (selectedProject) {
       fetchProjectConfig();
     }
   }, [selectedProject, fetchProjectConfig]);
 
-  const handleBackToProjects = () => {
-    setView('projects');
-    setSelectedProject(null);
-    setProjectConfig(null);
+  const handleSelectProject = (project: Project) => {
+    setSelectedProject(project);
+    setProjectConfig(null); // ล้าง Config เก่า
   };
 
-  // Project Selection View
-  if (view === 'projects') {
+  const handleBackToProjects = () => {
+    setSelectedProject(null);
+    setProjectConfig(null);
+    setView('projects');
+  };
+
+  // --- Render Logic ---
+
+  if (isLoading && !selectedProject) {
+    return <div className="loading-container">กำลังโหลดโครงการ...</div>;
+  }
+
+  if (error) {
     return (
-      <div className="container">
-        <h1>QC Report Application</h1>
-        {isLoading ? (
-          <p>Loading Projects...</p>
-        ) : error ? (
-          <div className="error-message">{error}</div>
-        ) : (
-          <div className="project-list">
-            <h2>กรุณาเลือกโครงการ</h2>
-            {projects.map(project => (
-              <button key={project.id} onClick={() => handleProjectSelect(project.id)}>
-                {project.projectName}
-              </button>
-            ))}
+      <div className="error-container">
+        <p>{error}</p>
+        <button onClick={fetchProjects}>ลองใหม่</button>
+      </div>
+    );
+  }
+
+  // View 1: หน้าเลือกโครงการ (Default View)
+  if (!selectedProject) {
+    return (
+      <div className="project-list-container">
+        <h1>เลือกโครงการ</h1>
+        {projects.map((project) => (
+          <div
+            key={project.id}
+            className="project-card"
+            onClick={() => handleSelectProject(project)}
+          >
+            {project.projectName}
           </div>
+        ))}
+      </div>
+    );
+  }
+
+  // View 2: หน้าแอปหลัก (หลังจากเลือกโครงการแล้ว)
+  return (
+    <div className="App">
+      {/* 1. Top Header (ส่วนหัว) */}
+      <header className="app-header">
+        <button className="app-header-back-button" onClick={handleBackToProjects} title="เปลี่ยนโครงการ"> {/* <-- เพิ่ม title */}
+          🏗️ 
+        </button>
+        <div className="app-header-title" title={selectedProject.projectName}>
+          {selectedProject.projectName}
+        </div>
+        <div style={{ width: '40px' }}></div> {/* Spacer */}
+      </header>
+
+      {/* 2. Content Area (ส่วนเนื้อหา) */}
+      <main className={view === 'camera' ? 'content-area-full' : 'content-area'}>
+        {isLoading && <div className="loading-container">กำลังโหลด Config...</div>}
+        
+        {view === 'camera' && projectConfig && (
+          <Camera
+            qcTopics={projectConfig}
+            projectId={selectedProject.id}
+            projectName={selectedProject.projectName}
+          />
         )}
-      </div>
-    );
-  }
+        
+        {view === 'reports' && projectConfig && (
+          <Reports
+            projectId={selectedProject.id}
+            projectName={selectedProject.projectName}
+            projectConfig={projectConfig}
+          />
+        )}
+      </main>
 
-  // Main App View (Camera or Reports)
-  if (selectedProject) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-        {/* Navigation Bar */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '15px 20px',
-          backgroundColor: '#6c5ce7',
-          color: 'white',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <button
-              onClick={handleBackToProjects}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: 'rgba(255,255,255,0.2)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              ← เปลี่ยนโครงการ
-            </button>
-            <h2 style={{ margin: 0, fontSize: '18px' }}>
-              📋 {selectedProject.projectName}
-            </h2>
-          </div>
-          
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={() => setView('camera')}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: view === 'camera' ? 'white' : 'rgba(255,255,255,0.2)',
-                color: view === 'camera' ? '#6c5ce7' : 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: view === 'camera' ? 'bold' : 'normal'
-              }}
-            >
-              📷 ถ่ายรูป
-            </button>
-            <button
-              onClick={() => setView('reports')}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: view === 'reports' ? 'white' : 'rgba(255,255,255,0.2)',
-                color: view === 'reports' ? '#6c5ce7' : 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: view === 'reports' ? 'bold' : 'normal'
-              }}
-            >
-              📊 สร้างรายงาน
-            </button>
-          </div>
-        </div>
-
-        {/* Content Area */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {view === 'camera' && (
-            <Camera
-              qcTopics={projectConfig}
-              projectId={selectedProject.id}
-              projectName={selectedProject.projectName}
-            />
-          )}
-          
-          {view === 'reports' && (
-            <Reports
-              projectId={selectedProject.id}
-              projectName={selectedProject.projectName}
-              projectConfig={projectConfig}
-            />
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+      {/* 3. Bottom Tab Navigation (เมนูด้านล่าง) */}
+      <nav className="bottom-nav">
+        <button
+          className={`nav-button ${view === 'camera' ? 'active' : ''}`}
+          onClick={() => setView('camera')}
+        >
+          <span className="icon">{ICONS.CAMERA}</span>
+          ถ่ายรูป
+        </button>
+        <button
+          className={`nav-button ${view === 'reports' ? 'active' : ''}`}
+          onClick={() => setView('reports')}
+        >
+          <span className="icon">{ICONS.REPORTS}</span>
+          รายงาน
+        </button>
+      </nav>
+    </div>
+  );
 }
 
 export default App;

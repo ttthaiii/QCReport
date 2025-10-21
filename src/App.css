@@ -1,53 +1,161 @@
-/* Filename: src/App.css */
+/* Filename: src/App.css (REPLACED) */
+:root {
+  /* -- สีส้ม (สำหรับปุ่มหลัก/Action) -- */
+  --primary-color: #D95B00; /* สีส้มเข้ม (Burnt Orange) */
+  
+  /* -- สีน้ำตาล (สำหรับ Header/Navbar) -- */
+  --header-bg: #5D4037; /* สีน้ำตาลเข้ม (Dark Brown) */
+  
+  /* -- สีขาว/ครีม (สำหรับพื้นหลัง) -- */
+  --background-color: #FAF9F6; /* สีขาวนวล (Off-white / Warm) */
+  
+  /* -- สีข้อความ -- */
+  --text-color: #3E2723; /* สีน้ำตาลเข้มเกือบดำ */
+  --header-text: #FFFFFF; /* สีขาว (สำหรับบนพื้นสีน้ำตาล) */
+  
+  /* -- สีไอคอน Nav (บนพื้นสีน้ำตาล) -- */
+  --nav-icon-color: #A1887F; /* สีน้ำตาลอ่อน (Muted Brown) */
+  --nav-icon-active: #FFFFFF; /* สีขาว (เมื่อเลือก) */
+}
+
+body, html, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  overscroll-behavior: none; /* ป้องกันการ "bounce" ของหน้าจอ */
+}
 
 .App {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 100% ของความสูงหน้าจอ */
+  width: 100vw;
+  background-color: var(--background-color);
 }
 
-.App-header {
+/* --- Top Header (ส่วนหัวด้านบน) --- */
+.app-header {
   background-color: var(--header-bg);
-  padding: 15px 20px;
+  color: var(--header-text);
+  padding: 12px 15px;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0; /* ไม่ให้หด */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  z-index: 10;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 15px;
+.app-header-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.header-left h1 {
-  font-size: 1.5em;
-  margin: 0;
-  color: var(--primary-color);
-}
-
-.project-selector {
-  padding: 8px;
-  border-radius: 5px;
-  border: 1px solid var(--border-color);
-  font-size: 1em;
-}
-
-.App-header nav button {
-  padding: 8px 16px;
-  font-size: 1em;
-  border: none;
+.app-header-back-button {
   background: none;
+  border: none;
+  color: var(--header-text);
+  font-size: 1.1rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: color 0.2s;
-  border-radius: 5px;
+  margin-right: 10px;
 }
 
-.App-header nav button.active {
-  background-color: var(--primary-color);
-  color: white;
+/* --- Content Area (ส่วนเนื้อหา) --- */
+.content-area {
+  flex: 1; /* ทำให้ขยายเต็มพื้นที่ที่เหลือ */
+  overflow-y: auto; /* มี scrollbar เฉพาะส่วนนี้ */
+  padding: 15px;
+  background-color: var(--background-color);
 }
 
-.App-header nav button:not(.active):hover {
-  background-color: #e9ecef;
+.content-area-full {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0; /* Camera ใช้พื้นที่เต็ม */
+}
+
+/* --- Project List (หน้าเลือกโครงการ) --- */
+.project-list-container {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.project-card {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 25px;
+  margin: 10px 0;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.project-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.loading-container,
+.error-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 80vh;
+  font-size: 1.2rem;
+  color: #555;
+}
+
+.error-container {
+  color: #d93025;
+}
+
+/* --- Bottom Nav (เมนูด้านล่าง) --- */
+.bottom-nav {
+  display: flex;
+  background-color: var(--header-bg);
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0; /* ไม่ให้หด */
+  z-index: 10;
+}
+
+.nav-button {
+  flex: 1; /* แบ่งพื้นที่เท่ากัน */
+  background: none;
+  border: none;
+  color: var(--nav-icon-color);
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.nav-button .icon {
+  font-size: 1.5rem; /* ขนาดไอคอน */
+  margin-bottom: 4px;
+}
+
+.nav-button.active {
+  color: var(--nav-icon-active); /* สีตอนเลือก */
+  font-weight: 600;
 }

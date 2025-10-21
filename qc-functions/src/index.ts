@@ -10,7 +10,8 @@ import {
   getLatestPhotos, 
   createFullLayout, 
   generatePDF, 
-  uploadPDFToStorage 
+  uploadPDFToStorage,
+  getUploadedTopicStatus // <-- [ใหม่] Import
 } from './services/pdf-generator';
 
 // ✅ Import Firestore and Storage functions
@@ -371,6 +372,42 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
     });
   } catch (error) {
     console.error("❌ Error generating report:", error);
+    return res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
+  }
+});
+
+app.post("/checklist-status", async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { 
+      projectId, 
+      mainCategory, 
+      subCategory, 
+      dynamicFields 
+    } = req.body;
+    
+    if (!projectId || !mainCategory || !subCategory || !dynamicFields) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Missing required fields." 
+      });
+    }
+
+    const category = `${mainCategory} > ${subCategory}`;
+
+    const statusMap = await getUploadedTopicStatus(
+      projectId,
+      category,
+      dynamicFields
+    );
+    
+    // ส่งกลับเป็น JSON object ธรรมดา
+    return res.json({ success: true, data: statusMap });
+
+  } catch (error) {
+    console.error("❌ Error in /checklist-status:", error);
     return res.status(500).json({ 
       success: false, 
       error: (error as Error).message 

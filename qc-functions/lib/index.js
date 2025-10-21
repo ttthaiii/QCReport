@@ -322,6 +322,28 @@ app.post("/generate-report", async (req, res) => {
         });
     }
 });
+app.post("/checklist-status", async (req, res) => {
+    try {
+        const { projectId, mainCategory, subCategory, dynamicFields } = req.body;
+        if (!projectId || !mainCategory || !subCategory || !dynamicFields) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required fields."
+            });
+        }
+        const category = `${mainCategory} > ${subCategory}`;
+        const statusMap = await (0, pdf_generator_1.getUploadedTopicStatus)(projectId, category, dynamicFields);
+        // ส่งกลับเป็น JSON object ธรรมดา
+        return res.json({ success: true, data: statusMap });
+    }
+    catch (error) {
+        console.error("❌ Error in /checklist-status:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
 // ✅ Get photos by project ID
 app.get("/photos/:projectId", async (req, res) => {
     try {

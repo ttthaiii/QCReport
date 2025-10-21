@@ -704,6 +704,59 @@ function createOptimizedHTML(reportData: PDFReportData): string {
 // MAIN EXPORTED FUNCTIONS
 // ========================================
 
+export async function getUploadedTopicStatus(
+  projectId: string,
+  category: string,
+  dynamicFields: Record<string, string>
+): Promise<Record<string, boolean>> {
+  const db = admin.firestore();
+  let query = db.collection('qcPhotos')
+    .where('projectId', '==', projectId)
+    .where('category', '==', category);
+
+  // กรองด้วย Dynamic Fields
+  Object.entries(dynamicFields).forEach(([key, value]) => {
+    // ✨ [แก้ไข] เพิ่มการตรวจสอบว่า key ไม่ใช่ค่าว่าง
+    if (key && value) { 
+      query = query.where(`dynamicFields.${key}`, '==', value);
+    }
+  });
+
+  const snapshot = await query.get();
+
+  if (snapshot.empty) {
+    return {}; // ไม่มีรูปเลย
+  }
+
+  const photosByTopic = new Map<string, any>();
+
+  // หาอันใหม่สุดของแต่ละ Topic
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    const topic = data.topic;
+    
+    if (!photosByTopic.has(topic)) {
+      photosByTopic.set(topic, data);
+    } else {
+      const existing = photosByTopic.get(topic);
+      const existingTime = existing.createdAt?.toDate?.() || new Date(0);
+      const newTime = data.createdAt?.toDate?.() || new Date(0);
+      
+      if (newTime > existingTime) {
+        photosByTopic.set(topic, data);
+      }
+    }
+  });
+
+  const uploadedTopics: Record<string, boolean> = {};
+  for (const topic of photosByTopic.keys()) {
+    uploadedTopics[topic] = true;
+  }
+  
+  console.log(`✅ Found ${Object.keys(uploadedTopics).length} unique uploaded topics`);
+  return uploadedTopics;
+}
+
 /**
  * ดึงรูปล่าสุดจาก Firestore
  */
@@ -717,9 +770,11 @@ export async function getLatestPhotos(
   try {
     console.log(`🔍 Getting latest photos for ${mainCategory} > ${subCategory}`);
     
-    const db = admin.firestore();
     const category = `${mainCategory} > ${subCategory}`;
     
+    // [แก้ไข] เราต้องดึงข้อมูลรูปภาพจริงๆ ไม่ใช่แค่สถานะ
+    // Logic เดิมยังคงจำเป็นสำหรับ getLatestPhotos
+    const db = admin.firestore();
     let query = db.collection('qcPhotos')
       .where('projectId', '==', projectId)
       .where('category', '==', category);
@@ -760,15 +815,13 @@ export async function getLatestPhotos(
     for (const [topic, data] of photosByTopic.entries()) {
       const photoItem: PhotoData = {
         topic: topic,
-        imageBase64: data.imageBase64 || null,
+        imageBase64: null, // เราจะโหลดทีหลังเสมอ
         imageUrl: data.driveUrl || data.filePath,
         storageUrl: data.filePath,
         isPlaceholder: false
       };
       
-      // 🔥 Debug log
       console.log(`📸 Photo "${topic}":`, {
-        hasBase64: !!photoItem.imageBase64,
         imageUrl: photoItem.imageUrl,
         storageUrl: photoItem.storageUrl
       });
@@ -778,8 +831,7 @@ export async function getLatestPhotos(
     
     console.log(`✅ Found ${photos.length} unique photos`);
     
-    // 🔥 โหลดรูปเฉพาะตัวที่ยังไม่มี base64
-    return photos;
+    return await loadImagesFromStorage(photos);
     
   } catch (error) {
     console.error('❌ Error getting latest photos:', error);
