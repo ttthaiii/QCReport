@@ -10,8 +10,10 @@ import {
   getLatestPhotos, 
   createFullLayout, 
   generatePDF, 
+  generateDailyPDFWrapper,
   uploadPDFToStorage,
-  getUploadedTopicStatus // <-- [ใหม่] Import
+  getUploadedTopicStatus, // <-- [ใหม่] Import
+  getDailyPhotosByDate
 } from './services/pdf-generator';
 
 // ✅ Import Firestore and Storage functions
@@ -282,94 +284,163 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
     const { 
       projectId, 
       projectName, 
+      reportType, // <-- [ใหม่] รับ reportType
+      // QC fields
       mainCategory, 
       subCategory, 
-      dynamicFields 
+      dynamicFields,
+      // Daily fields
+      date // <-- [ใหม่] รับ date
     } = req.body;
     
-    if (!projectId || !mainCategory || !subCategory) {
+    if (!projectId || !reportType) {
       return res.status(400).json({ 
         success: false, 
-        error: "Missing required fields." 
+        error: "Missing projectId or reportType." 
       });
     }
     
-    console.log(`📊 Generating report for ${projectName}`);
-    
-    // 1. Get all topics from config
-    const mainCategoriesSnap = await db
-      .collection("projectConfig")
-      .doc(projectId)
-      .collection("mainCategories")
-      .where("name", "==", mainCategory)
-      .get();
-    
-    let allTopics: string[] = [];
-    
-    if (!mainCategoriesSnap.empty) {
-      const subCategoriesSnap = await mainCategoriesSnap.docs[0].ref
-        .collection("subCategories")
-        .where("name", "==", subCategory)
+    console.log(`📊 Generating ${reportType} report for ${projectName}`);
+
+    // ===================================
+    //  QC REPORT LOGIC (แบบเดิม)
+    // ===================================
+    if (reportType === 'QC') {
+      if (!mainCategory || !subCategory) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "Missing QC fields (mainCategory, subCategory)." 
+        });
+      }
+
+      // 1. Get all topics from config
+      const mainCategoriesSnap = await db
+        .collection("projectConfig")
+        .doc(projectId)
+        .collection("mainCategories")
+        .where("name", "==", mainCategory)
         .get();
       
-      if (!subCategoriesSnap.empty) {
-        const topicsSnap = await subCategoriesSnap.docs[0].ref
-          .collection("topics")
-          .orderBy("name")
+      let allTopics: string[] = [];
+      
+      if (!mainCategoriesSnap.empty) {
+        const subCategoriesSnap = await mainCategoriesSnap.docs[0].ref
+          .collection("subCategories")
+          .where("name", "==", subCategory)
           .get();
         
-        allTopics = topicsSnap.docs.map(doc => doc.data().name);
+        if (!subCategoriesSnap.empty) {
+          const topicsSnap = await subCategoriesSnap.docs[0].ref
+            .collection("topics")
+            .orderBy("name")
+            .get();
+          
+          allTopics = topicsSnap.docs.map(doc => doc.data().name);
+        }
       }
-    }
+      
+      if (allTopics.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          error: "No topics found." 
+        });
+      }
+      
+      console.log(`✅ Found ${allTopics.length} total topics for the layout.`);
+      
+      // 2. Get latest photos (QC)
+      const foundPhotos = await getLatestPhotos(
+        projectId, 
+        mainCategory, 
+        subCategory, 
+        allTopics, 
+        dynamicFields || {}
+      );
+      
+      console.log(`📸 Found and downloaded ${foundPhotos.length} photos.`);
+      
+      // 3. Create full layout (photos + placeholders)
+      const fullLayoutPhotos = createFullLayout(allTopics, foundPhotos);
+      
+      // 4. Generate PDF (QC)
+      const reportData = { 
+        projectId, 
+        projectName: projectName || projectId, 
+        mainCategory, 
+        subCategory, 
+        dynamicFields: dynamicFields || {} 
+      };
+      
+      const pdfBuffer = await generatePDF(reportData, fullLayoutPhotos); 
+      console.log(`✅ QC PDF generated: ${pdfBuffer.length} bytes`);
+      
+      // 5. Upload PDF to Storage
+      const uploadResult = await uploadPDFToStorage(pdfBuffer, reportData, 'QC');
+      
+      return res.json({
+        success: true,
+        data: {
+          filename: uploadResult.filename,
+          publicUrl: uploadResult.publicUrl,
+          totalTopics: allTopics.length,
+          photosFound: foundPhotos.length,
+          placeholders: allTopics.length - foundPhotos.length
+        }
+      });
     
-    if (allTopics.length === 0) {
-      return res.status(404).json({ 
+    // ===================================
+    //  [ใหม่] DAILY REPORT LOGIC
+    // ===================================
+    } else if (reportType === 'Daily') {
+      if (!date) {
+         return res.status(400).json({ 
+          success: false, 
+          error: "Missing Daily field (date)." 
+        });
+      }
+
+      console.log(`📅 Fetching Daily photos for date: ${date}`);
+
+      // 1. Get daily photos (ฟังก์ชันใหม่ที่เราต้องสร้าง)
+      const foundPhotos = await getDailyPhotosByDate(projectId, date);
+      console.log(`📸 Found and downloaded ${foundPhotos.length} daily photos.`);
+
+      if (foundPhotos.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: `ไม่พบรูปรายงานประจำวันสำหรับวันที่ ${date}`
+        });
+      }
+      
+      // 2. Generate PDF (ฟังก์ชันใหม่ที่เราต้องสร้าง)
+      const reportData = { 
+        projectId, 
+        projectName: projectName || projectId, 
+        date
+      };
+      
+      const pdfBuffer = await generateDailyPDFWrapper(reportData, foundPhotos);
+      console.log(`✅ Daily PDF generated: ${pdfBuffer.length} bytes`);
+
+      // 3. Upload PDF to Storage
+      const uploadResult = await uploadPDFToStorage(pdfBuffer, reportData, 'Daily');
+
+      return res.json({
+        success: true,
+        data: {
+          filename: uploadResult.filename,
+          publicUrl: uploadResult.publicUrl,
+          photosFound: foundPhotos.length
+        }
+      });
+
+    } else {
+      return res.status(400).json({ 
         success: false, 
-        error: "No topics found." 
+        error: "Invalid reportType." 
       });
     }
-    
-    console.log(`✅ Found ${allTopics.length} total topics for the layout.`);
-    
-    // 2. Get latest photos (with base64 images)
-    const foundPhotos = await getLatestPhotos(
-      projectId, 
-      mainCategory, 
-      subCategory, 
-      allTopics, 
-      dynamicFields || {}
-    );
-    
-    console.log(`📸 Found and downloaded ${foundPhotos.length} photos.`);
-    
-    // 3. Create full layout (photos + placeholders)
-    const fullLayoutPhotos = createFullLayout(allTopics, foundPhotos);
-    
-    // 4. Generate PDF
-    const reportData = { 
-      projectId, 
-      projectName: projectName || projectId, 
-      mainCategory, 
-      subCategory, 
-      dynamicFields: dynamicFields || {} 
-    };
-    
-    const pdfBuffer = await generatePDF(reportData, fullLayoutPhotos);
-    console.log(`✅ PDF generated: ${pdfBuffer.length} bytes`);
-    
-    // 5. Upload PDF to Storage
-    const uploadResult = await uploadPDFToStorage(pdfBuffer, reportData);
-    
-    return res.json({
-      success: true,
-      data: {
-        filename: uploadResult.filename,
-        publicUrl: uploadResult.publicUrl,
-        totalTopics: allTopics.length,
-        photosFound: foundPhotos.length,
-        placeholders: allTopics.length - foundPhotos.length
-      }
-    });
+
   } catch (error) {
     console.error("❌ Error generating report:", error);
     return res.status(500).json({ 

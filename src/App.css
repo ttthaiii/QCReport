@@ -159,3 +159,13 @@ body, html, #root {
   color: var(--nav-icon-active); /* สีตอนเลือก */
   font-weight: 600;
 }
+
+.daily-datepicker {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  box-sizing: border-box; /* เพิ่มอันนี้เพื่อให้ width 100% ทำงานถูกต้อง */
+}
+

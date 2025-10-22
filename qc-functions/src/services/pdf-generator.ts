@@ -1,7 +1,8 @@
 // pdf-generator.ts - Firebase Version v7 (Final - No Errors)
 
-import puppeteer from 'puppeteer';
+import * as puppeteer from 'puppeteer'; // <-- [FIX] Added import
 import * as admin from 'firebase-admin';
+import { PhotoData as FirestorePhotoData } from '../api/firestore';
 
 // ========================================
 // TYPE DEFINITIONS
@@ -13,8 +14,11 @@ export interface PhotoData {
   imageBase64?: string | null;
   isPlaceholder?: boolean;
   originalTopic?: string;
-  storageUrl?: string;
-  imageUrl?: string;
+  storageUrl?: string; // This should be the filePath
+  imageUrl?: string; // This could be the publicUrl/signedUrl
+  // [FIX 1b] Add optional properties used temporarily in getDailyPhotosByDate
+  location?: string;
+  timestamp?: string;
 }
 
 export interface FullLayoutPhoto extends PhotoData {
@@ -36,6 +40,20 @@ interface PDFReportData {
   dynamicFields?: Record<string, string>;
   building?: string;
   foundation?: string;
+}
+
+export interface ReportDataDaily {
+  projectId: string;
+  projectName: string;
+  date: string; // YYYY-MM-DD
+}
+
+// [ใหม่] 2. Interface สำหรับรูป Daily (มี Base64)
+export interface DailyPhotoWithBase64 {
+  description: string;
+  base64: string | null;
+  location: string;
+  timestamp: string;
 }
 
 // ========================================
@@ -663,18 +681,120 @@ function getInlineCSS(): string {
   `;
 }
 
-/**
- * สร้าง HTML Template
- */
+function createDailyHTML(data: ReportDataDaily, photos: DailyPhotoWithBase64[]): string {
+    const { projectName, date } = data;
+    const reportDate = new Date(date);
+    reportDate.setHours(reportDate.getHours() + 7); // Adjust timezone for Thai display
+    const thaiDate = reportDate.toLocaleDateString('th-TH', { dateStyle: 'full' });
+
+    return `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Daily Report</title>
+        <style>
+            @page { size: A4; margin: 10mm; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            html, body {
+              width: 100%; height: 100%; font-family: 'Sarabun', sans-serif;
+              font-size: 11pt; line-height: 1.5; color: #333; background: white;
+              -webkit-print-color-adjust: exact; print-color-adjust: exact;
+            }
+            .page {
+              width: 100%; height: 100vh; background: white; padding: 12px;
+              position: relative; display: flex; flex-direction: column;
+            }
+            .header { margin-bottom: 10px; flex-shrink: 0; font-size: 10pt; color: #555; }
+            .content { flex: 1; margin-top: 5mm; }
+            h1 { font-size: 16pt; color: #000; margin-bottom: 5px; font-weight: bold; }
+            h2 { font-size: 12pt; color: #444; margin-bottom: 15px; font-weight: normal; }
+            .photo-list { display: flex; flex-direction: column; gap: 8mm; }
+            .photo-card { border: 1px solid #ddd; border-radius: 4px; overflow: hidden; break-inside: avoid; background: #fff; }
+            .photo-img {
+              width: 100%; height: auto; max-height: 100mm; object-fit: contain;
+              background: #f0f0f0; display: block;
+            }
+            .photo-placeholder {
+              height: 100mm; display: flex; align-items: center; justify-content: center;
+              background: #f0f0f0; color: #999; font-style: italic;
+             }
+            .photo-caption { padding: 6px 10px; font-size: 10pt; background: #f9f9f9; }
+            .photo-caption.description { border-bottom: 1px solid #eee; }
+            .photo-caption.meta { font-size: 9pt; color: #666; }
+            .footer {
+               position: absolute; bottom: 0; left: 12px; right: 12px;
+               width: calc(100% - 24px); text-align: right; font-size: 9pt;
+               color: #777; padding-bottom: 5px;
+            }
+        </style>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    </head>
+    <body>
+        ${(() => {
+          let html = '';
+          let pageCount = 1;
+          const itemsPerPage = 2; // 2 photos per page
+
+          for (let i = 0; i < photos.length; i += itemsPerPage) {
+              const chunk = photos.slice(i, i + itemsPerPage);
+              html += `
+              <div class="page content-page" ${pageCount > 1 ? 'style="page-break-before: always;"' : ''}>
+                  <div class="header">
+                      <strong>${projectName}</strong> - รายงานประจำวัน
+                  </div>
+                  
+                  ${i === 0 ? `
+                  <div class="content">
+                      <h1>รายงานประจำวัน (Daily Report)</h1>
+                      <h2>${thaiDate}</h2>
+                  ` : `
+                  <div class="content" style="margin-top: 5mm;">
+                  `}
+                  
+                      <div class="photo-list">
+                          ${chunk.map(photo => `
+                          <div class="photo-card">
+                             ${photo.base64 ?
+                               `<img src="${photo.base64.startsWith('data:') ? photo.base64 : `data:image/jpeg;base64,${photo.base64}`}" class="photo-img" />` :
+                               `<div class="photo-placeholder"><span>ไม่มีรูปภาพ</span></div>`
+                             }
+                              ${photo.description ? `
+                              <div class="photo-caption description">
+                                  ${photo.description}
+                              </div>
+                              ` : ''}
+                              <div class="photo-caption meta">
+                                  ${new Date(photo.timestamp).toLocaleString('th-TH', { timeStyle: 'medium', dateStyle: 'short', hour12: false })} | ${photo.location || 'N/A'}
+                              </div>
+                          </div>
+                          `).join('')}
+                      </div>
+                  </div>
+
+                  <div class="footer">
+                      หน้า ${pageCount++}
+                  </div>
+              </div>
+              `;
+          }
+          return html;
+        })()}
+    </body>
+    </html>
+    `;
+}
+
 function createOptimizedHTML(reportData: PDFReportData): string {
   const { photos } = reportData;
-  
   const photosPerPage = 6;
   const pages: PhotoData[][] = [];
-  
+
   for (let i = 0; i < photos.length; i += photosPerPage) {
-    const pagePhotos = photos.slice(i, i + photosPerPage);
-    pages.push(pagePhotos);
+    pages.push(photos.slice(i, i + photosPerPage));
   }
 
   const pageHTML = pages.map((pagePhotos, pageIndex) => `
@@ -704,6 +824,9 @@ function createOptimizedHTML(reportData: PDFReportData): string {
 // MAIN EXPORTED FUNCTIONS
 // ========================================
 
+/**
+ * ดึงสถานะหัวข้อที่อัปโหลดแล้ว (QC)
+ */
 export async function getUploadedTopicStatus(
   projectId: string,
   category: string,
@@ -714,325 +837,365 @@ export async function getUploadedTopicStatus(
     .where('projectId', '==', projectId)
     .where('category', '==', category);
 
-  // กรองด้วย Dynamic Fields
   Object.entries(dynamicFields).forEach(([key, value]) => {
-    // ✨ [แก้ไข] เพิ่มการตรวจสอบว่า key ไม่ใช่ค่าว่าง
-    if (key && value) { 
+    if (key && value) {
       query = query.where(`dynamicFields.${key}`, '==', value);
     }
   });
 
   const snapshot = await query.get();
+  const uploadedTopics: Record<string, boolean> = {};
 
-  if (snapshot.empty) {
-    return {}; // ไม่มีรูปเลย
-  }
-
-  const photosByTopic = new Map<string, any>();
-
-  // หาอันใหม่สุดของแต่ละ Topic
+  // Simple approach: if a photo exists for a topic, mark it as uploaded.
   snapshot.forEach(doc => {
-    const data = doc.data();
-    const topic = data.topic;
-    
-    if (!photosByTopic.has(topic)) {
-      photosByTopic.set(topic, data);
-    } else {
-      const existing = photosByTopic.get(topic);
-      const existingTime = existing.createdAt?.toDate?.() || new Date(0);
-      const newTime = data.createdAt?.toDate?.() || new Date(0);
-      
-      if (newTime > existingTime) {
-        photosByTopic.set(topic, data);
-      }
+    const topic = doc.data().topic;
+    if (topic && !uploadedTopics[topic]) {
+      uploadedTopics[topic] = true;
     }
   });
 
-  const uploadedTopics: Record<string, boolean> = {};
-  for (const topic of photosByTopic.keys()) {
-    uploadedTopics[topic] = true;
-  }
-  
-  console.log(`✅ Found ${Object.keys(uploadedTopics).length} unique uploaded topics`);
+  console.log(`✅ Found ${Object.keys(uploadedTopics).length} unique uploaded topics status`);
   return uploadedTopics;
 }
 
 /**
- * ดึงรูปล่าสุดจาก Firestore
+ * ดึงรูป Daily Report ตามวันที่
+ */
+export const getDailyPhotosByDate = async (
+    projectId: string,
+    date: string // YYYY-MM-DD
+): Promise<DailyPhotoWithBase64[]> => {
+    const db = admin.firestore();
+    const startDate = new Date(`${date}T00:00:00+07:00`);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 1);
+
+    console.log(`Querying dailyPhotos from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    const photosSnapshot = await db
+        .collection("dailyPhotos")
+        .where("projectId", "==", projectId)
+        .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(startDate))
+        .where("createdAt", "<", admin.firestore.Timestamp.fromDate(endDate))
+        .orderBy("createdAt", "asc")
+        .get();
+
+    if (photosSnapshot.empty) {
+        return [];
+    }
+
+    // 1. Convert Firestore data to PhotoData structure for loading
+    const photosToLoad: PhotoData[] = photosSnapshot.docs.map(doc => {
+        const data = doc.data() as FirestorePhotoData;
+
+        // [FIX 1] อ่าน createdAt จาก data (FirestorePhotoData) มาเก็บในตัวแปรก่อน
+        let isoTimestamp = new Date().toISOString(); // Default fallback
+        // ตรวจสอบว่า createdAt มีอยู่จริง และเป็น Timestamp ก่อนเรียก toDate()
+        if (data.createdAt && typeof (data.createdAt as any).toDate === 'function') {
+           isoTimestamp = (data.createdAt as admin.firestore.Timestamp).toDate().toISOString();
+        }
+
+        // สร้าง Object ที่ตรงกับ Type PhotoData (ซึ่งมี location และ timestamp ที่เราเพิ่มไว้)
+        return {
+            topic: data.description || '', // Use 'topic' to store description temporarily
+            storageUrl: data.filePath,
+            isPlaceholder: false,
+            location: data.location || '',
+            timestamp: isoTimestamp // ใช้ตัวแปรที่อ่านค่ามาแล้ว
+            // ไม่มี createdAt ใน object นี้แล้ว
+        } as PhotoData; // Cast เป็น PhotoData
+    });
+
+    // 2. Load images (fetches base64)
+    const photosWithBase64 = await loadImagesFromStorage(photosToLoad);
+
+    // 3. Convert back to the correct DailyPhotoWithBase64 format
+    return photosWithBase64.map(photo => ({
+        description: photo.topic, // Convert back from 'topic'
+        base64: photo.imageBase64 || null,
+        location: photo.location || '', // Retrieve stored extra info
+        timestamp: photo.timestamp || '' // Retrieve stored extra info
+    }));
+};
+
+/**
+ * ดึงรูปล่าสุดจาก Firestore (QC)
  */
 export async function getLatestPhotos(
   projectId: string,
   mainCategory: string,
   subCategory: string,
-  allTopics: string[],
+  allTopics: string[], // Topics defined in config for this subCategory
   dynamicFields: Record<string, string>
 ): Promise<PhotoData[]> {
   try {
-    console.log(`🔍 Getting latest photos for ${mainCategory} > ${subCategory}`);
-    
+    console.log(`🔍 Getting latest photos for QC: ${mainCategory} > ${subCategory}`);
     const category = `${mainCategory} > ${subCategory}`;
-    
-    // [แก้ไข] เราต้องดึงข้อมูลรูปภาพจริงๆ ไม่ใช่แค่สถานะ
-    // Logic เดิมยังคงจำเป็นสำหรับ getLatestPhotos
     const db = admin.firestore();
+
     let query = db.collection('qcPhotos')
       .where('projectId', '==', projectId)
-      .where('category', '==', category);
-    
+      .where('category', '==', category)
+      // Query all photos matching the criteria first
+      .orderBy('createdAt', 'desc');
+
+    // Apply dynamic field filters
     Object.entries(dynamicFields).forEach(([key, value]) => {
-      if (value) {
+      if (key && value) {
         query = query.where(`dynamicFields.${key}`, '==', value);
       }
     });
-    
+
     const snapshot = await query.get();
-    
+
     if (snapshot.empty) {
-      console.log('⚠️ No photos found');
+      console.log('⚠️ No photos found for these criteria');
       return [];
     }
-    
-    const photosByTopic = new Map<string, any>();
-    
-    snapshot.forEach(doc => {
-      const data = doc.data();
+
+    // Process in memory to find the latest for each *required* topic
+    const latestPhotosMap = new Map<string, FirestorePhotoData>();
+
+    snapshot.docs.forEach(doc => {
+      const data = doc.data() as FirestorePhotoData;
       const topic = data.topic;
-      
-      if (!photosByTopic.has(topic)) {
-        photosByTopic.set(topic, data);
-      } else {
-        const existing = photosByTopic.get(topic);
-        const existingTime = existing.createdAt?.toDate?.() || new Date(0);
-        const newTime = data.createdAt?.toDate?.() || new Date(0);
-        
-        if (newTime > existingTime) {
-          photosByTopic.set(topic, data);
+
+      // Only consider topics relevant to this report
+      if (topic && allTopics.includes(topic)) {
+        // Since we ordered by createdAt desc, the first one we see for a topic is the latest
+        if (!latestPhotosMap.has(topic)) {
+          latestPhotosMap.set(topic, data);
         }
       }
     });
-    
-    const photos: PhotoData[] = [];
-    for (const [topic, data] of photosByTopic.entries()) {
-      const photoItem: PhotoData = {
+
+    // Convert the found latest photos to PhotoData format for loading
+    const photosToLoad: PhotoData[] = [];
+    latestPhotosMap.forEach((data, topic) => {
+      photosToLoad.push({
         topic: topic,
-        imageBase64: null, // เราจะโหลดทีหลังเสมอ
-        imageUrl: data.driveUrl || data.filePath,
-        storageUrl: data.filePath,
-        isPlaceholder: false
-      };
-      
-      console.log(`📸 Photo "${topic}":`, {
-        imageUrl: photoItem.imageUrl,
-        storageUrl: photoItem.storageUrl
+        originalTopic: topic, // Store original topic name if needed later
+        imageBase64: null,
+        storageUrl: data.filePath, // Use filePath for loading
+        isPlaceholder: false,
       });
-      
-      photos.push(photoItem);
-    }
-    
-    console.log(`✅ Found ${photos.length} unique photos`);
-    
-    return await loadImagesFromStorage(photos);
-    
+    });
+
+    console.log(`✅ Found ${photosToLoad.length} unique latest photos matching required topics`);
+
+    // Load images (fetches base64) - Function already handles errors/placeholders
+    return await loadImagesFromStorage(photosToLoad);
+
   } catch (error) {
-    console.error('❌ Error getting latest photos:', error);
-    return [];
+    console.error('❌ Error getting latest QC photos:', error);
+    return []; // Return empty array on error
   }
 }
 
 /**
- * สร้าง Full Layout
+ * สร้าง Full Layout (QC)
  */
 export function createFullLayout(allTopics: string[], foundPhotos: PhotoData[]): FullLayoutPhoto[] {
-  console.log(`📐 Creating full layout with ${allTopics.length} topics`);
-  
+  console.log(`📐 Creating full layout with ${allTopics.length} topics and ${foundPhotos.length} found photos`);
   const photosByTopic = new Map<string, PhotoData>();
   foundPhotos.forEach(photo => {
-    photosByTopic.set(photo.topic, photo);
+    // Use originalTopic if available, otherwise topic
+    const key = photo.originalTopic || photo.topic;
+    if (key) {
+       photosByTopic.set(key, photo);
+    }
   });
-  
-  const fullLayout: FullLayoutPhoto[] = [];
-  
-  allTopics.forEach((topic, index) => {
+
+  const fullLayout: FullLayoutPhoto[] = allTopics.map((topic, index) => {
     const photo = photosByTopic.get(topic);
-    
-    if (photo) {
-      fullLayout.push({
+    if (photo && !photo.isPlaceholder) { // Make sure it's not a placeholder from loading failure
+      return {
         ...photo,
+        topic: topic, // Ensure topic name is correct
         topicOrder: index + 1,
-        originalTopic: topic
-      });
+        originalTopic: topic // Keep original topic if needed
+      };
     } else {
-      fullLayout.push({
+      return {
         topic: topic,
         topicOrder: index + 1,
         imageBase64: null,
         isPlaceholder: true,
         originalTopic: topic
-      });
+      };
     }
   });
-  
+
   console.log(`✅ Created full layout: ${fullLayout.length} items`);
-  
   return fullLayout;
 }
 
 /**
- * สร้าง PDF
+ * สร้าง PDF (QC)
  */
 export async function generatePDF(reportData: ReportData, photos: FullLayoutPhoto[]): Promise<Buffer> {
+  // Note: loadImagesFromStorage should now be called within getLatestPhotos
+  // So 'photos' here should already have base64 or be marked as placeholder
   const pdfData: PDFReportData = {
     photos: photos,
     projectName: reportData.projectName,
     category: `${reportData.mainCategory} > ${reportData.subCategory}`,
     dynamicFields: reportData.dynamicFields,
     building: reportData.dynamicFields['อาคาร'] || '',
-    foundation: reportData.dynamicFields['ฐานรากเบอร์'] || ''
+    foundation: reportData.dynamicFields['ฐานรากเบอร์'] || '' // Adjust if field name differs
   };
-  
-  return await generateOptimizedPDF(pdfData);
+  return await generateOptimizedPDF(pdfData); // Call the common PDF generator
 }
 
 /**
- * อัปโหลด PDF
+ * สร้าง PDF (Daily) - Wrapper function
  */
-export async function uploadPDFToStorage(pdfBuffer: Buffer, reportData: ReportData) {
+export async function generateDailyPDFWrapper(reportData: ReportDataDaily, photos: DailyPhotoWithBase64[]): Promise<Buffer> {
+    // Note: photos should already have base64 from getDailyPhotosByDate
+    // [FIX 2] เปลี่ยนชื่อฟังก์ชันที่เรียกใช้
+    return await generateDailyPDFUsingPuppeteer(reportData, photos); 
+}
+
+
+/**
+ * อัปโหลด PDF to Storage
+ */
+export async function uploadPDFToStorage(
+  pdfBuffer: Buffer, // <-- [FIX 2c] Changed back to Buffer
+  reportData: any,
+  reportType: 'QC' | 'Daily'
+): Promise<{ filename: string; publicUrl: string; filePath: string }> {
   try {
     const bucket = admin.storage().bucket();
-    
-    const dynamicFieldsStr = Object.entries(reportData.dynamicFields)
-      .map(([k, v]) => v)
-      .filter(v => v)
-      .join('_') || 'd';
-    
-    const filename = `${reportData.projectId}_${reportData.mainCategory.replace(/\s/g, '_')}_${reportData.subCategory.replace(/\s/g, '_')}_${dynamicFieldsStr}.pdf`;
-    const filePath = `projects/${reportData.projectId}/reports/${filename}`;
-    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    let filename: string;
+    let filePath: string;
+    const basePath = `projects/${reportData.projectId}/reports`;
+
+    if (reportType === 'QC') {
+      const { mainCategory, subCategory, dynamicFields = {} } = reportData as ReportData;
+      const dynamicFieldsStr = Object.values(dynamicFields).filter(v => v).join('_') || 'all'; // Use 'all' if no fields
+      const catPath = `${mainCategory.replace(/\s/g, '_')}_${subCategory.replace(/\s/g, '_')}`;
+      filename = `QC-Report_${catPath}_${dynamicFieldsStr}_${timestamp}.pdf`;
+      filePath = `${basePath}/QC/${filename}`;
+    } else {
+      const { date } = reportData as ReportDataDaily;
+      filename = `Daily-Report_${date}_${timestamp}.pdf`;
+      filePath = `${basePath}/Daily/${filename}`;
+    }
+
     console.log(`📤 Uploading PDF to: ${filePath}`);
-    
     const file = bucket.file(filePath);
+
     await file.save(pdfBuffer, {
       metadata: {
         contentType: 'application/pdf',
-        metadata: {
+        metadata: { // Custom metadata
           projectId: reportData.projectId,
-          mainCategory: reportData.mainCategory,
-          subCategory: reportData.subCategory,
+          reportType: reportType,
+          mainCategory: (reportData as ReportData).mainCategory || '',
+          subCategory: (reportData as ReportData).subCategory || '',
+          date: (reportData as ReportDataDaily).date || '',
           generatedAt: new Date().toISOString()
         }
       }
     });
-    
-    // 🔥 Make public (จะไม่ทำงานใน emulator แต่ไม่ error)
-    await file.makePublic().catch(() => {
-      console.log('⚠️ makePublic() not supported in emulator');
+
+    console.log("Getting Signed URL...");
+    const [signedUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: '03-09-2491' // Far future expiry date
     });
-    
-    // 🔥 สร้าง URL ที่ถูกต้องตาม environment
-    const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' || 
-                       process.env.FIRESTORE_EMULATOR_HOST;
-    
-    let publicUrl: string;
-    
-    if (isEmulator) {
-      // Emulator URL
-      const encodedPath = encodeURIComponent(filePath);
-      publicUrl = `http://localhost:9199/${bucket.name}/${encodedPath}`;
-    } else {
-      // Production URL
-      publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
-    }
-    
+
     console.log(`✅ PDF uploaded successfully`);
-    console.log(`📎 PDF URL: ${publicUrl}`);
-    
-    return {
-      filename,
-      publicUrl,
-      filePath
-    };
-    
+    console.log(`📎 PDF URL: ${signedUrl}`);
+
+    return { filename, publicUrl: signedUrl, filePath };
+
   } catch (error) {
     console.error('❌ Error uploading PDF:', error);
+    // Re-throw the error so the calling function knows it failed
     throw error;
   }
 }
 
 /**
- * สร้าง PDF (Main Function)
+ * สร้าง PDF โดยใช้ Puppeteer (สำหรับ QC Report)
  */
-export async function generateOptimizedPDF(reportData: PDFReportData): Promise<Buffer> {
-  let browser = null;
-  let page = null;
-  
+export async function generateOptimizedPDF(reportData: PDFReportData): Promise<Buffer> { // <-- [FIX 2a] Changed back to Buffer
+  let browser: puppeteer.Browser | null = null;
+  let page: puppeteer.Page | null = null;
+
   try {
-    console.log('🎯 Starting Firebase PDF generation...');
-    
-    const photosWithImages = await loadImagesFromStorage(reportData.photos);
-    
-    const updatedReportData = {
-      ...reportData,
-      photos: photosWithImages
-    };
-    
-    const html = createOptimizedHTML(updatedReportData);
-    console.log('📄 HTML template created');
-    
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    });
-    
+    console.log('🎯 Starting QC PDF generation...');
+    // Photos should already have base64 data from the calling function (generatePDF -> createFullLayout -> getLatestPhotos -> loadImagesFromStorage)
+    const html = createOptimizedHTML(reportData);
+    console.log('📄 QC HTML template created');
+
+    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
     page = await browser.newPage();
-    
-    await page.setViewport({ 
-      width: 1200, 
-      height: 800, 
-      deviceScaleFactor: 2
-    });
-    
+    await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 2 });
     await page.setJavaScriptEnabled(false);
-    
-    await page.setContent(html, { 
-      waitUntil: ['domcontentloaded'],
-      timeout: 45000
-    });
-    
-    console.log('🌐 HTML content loaded');
-    
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      preferCSSPageSize: true,
-      margin: {
-        top: '12mm',
-        right: '12mm',
-        bottom: '12mm',
-        left: '12mm'
-      },
+    await page.setContent(html, { waitUntil: ['domcontentloaded'], timeout: 45000 });
+    console.log('🌐 QC HTML content loaded');
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for rendering
+
+    const pdfUint8Array = await page.pdf({ // <-- Returns Uint8Array
+      format: 'A4', printBackground: true, preferCSSPageSize: true,
+      margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
       timeout: 60000
     });
-    
-    console.log(`✅ PDF generated! Size: ${pdfBuffer.length} bytes`);
-    
-    return Buffer.from(pdfBuffer);
-    
+    console.log(`✅ QC PDF generated! Size: ${pdfUint8Array.length} bytes`);
+
+    return Buffer.from(pdfUint8Array); // <-- [FIX 2b] Convert to Buffer
+
   } catch (error) {
-    console.error('❌ Error in PDF generation:', error);
+    console.error('❌ Error in QC PDF generation:', error);
     throw error;
   } finally {
-    if (page) {
-      await page.close();
-    }
-    if (browser) {
-      await browser.close();
-    }
+    if (page) await page.close();
+    if (browser) await browser.close();
+    console.log('Browser closed for QC PDF');
+  }
+}
+
+/**
+ * สร้าง PDF โดยใช้ Puppeteer (สำหรับ Daily Report)
+ */
+// [FIX 3a] Renamed original function to avoid conflict
+export async function generateDailyPDFUsingPuppeteer(reportData: ReportDataDaily, photos: DailyPhotoWithBase64[]): Promise<Buffer> { // <-- [FIX 2a] Changed back to Buffer
+  let browser: puppeteer.Browser | null = null;
+  let page: puppeteer.Page | null = null;
+
+  try {
+    console.log('🎯 Starting Daily PDF generation...');
+    // Photos should already have base64 data from getDailyPhotosByDate -> loadImagesFromStorage
+    const html = createDailyHTML(reportData, photos);
+    console.log('📄 Daily HTML template created');
+
+    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
+    page = await browser.newPage();
+    await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 2 });
+    await page.setJavaScriptEnabled(false);
+    await page.setContent(html, { waitUntil: ['domcontentloaded'], timeout: 45000 });
+    console.log('🌐 Daily HTML content loaded');
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for rendering
+
+    const pdfUint8Array = await page.pdf({ // <-- Returns Uint8Array
+      format: 'A4', printBackground: true, preferCSSPageSize: true,
+      margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
+      timeout: 60000
+    });
+    console.log(`✅ Daily PDF generated! Size: ${pdfUint8Array.length} bytes`);
+
+    return Buffer.from(pdfUint8Array); // <-- [FIX 2b] Convert to Buffer
+
+  } catch (error) {
+    console.error('❌ Error in Daily PDF generation:', error);
+    throw error;
+  } finally {
+    if (page) await page.close();
+    if (browser) await browser.close();
+    console.log('Browser closed for Daily PDF');
   }
 }

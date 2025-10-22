@@ -18,6 +18,7 @@ export interface PhotoData {
 
   // --- Fields for Daily Report ---
   description?: string; // เพิ่ม field นี้
+  createdAt?: admin.firestore.Timestamp;
 }
 
 export async function logPhotoToFirestore(photoData: PhotoData): Promise<{success: boolean; firestoreId: string}> {
