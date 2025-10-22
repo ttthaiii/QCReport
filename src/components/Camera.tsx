@@ -41,6 +41,44 @@ const getRecentJobs = (projectId: string): PersistentJob[] => { // <-- [เพ�
   }
 };
 
+async function reverseGeocodeNominatim(latitude: number, longitude: number): Promise<string> {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=th&zoom=18&addressdetails=1`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        // [แก้ไข] เปลี่ยนเป็นภาษาอังกฤษทั้งหมด
+        // ❗️ อย่าลืมเปลี่ยน [your_email@example.com] เป็นอีเมลของคุณนะครับ
+        'User-Agent': 'QCReport-App/1.0 (Contact: [thai.l@tts2004.co.th] for issues)'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data && data.address) {
+      const addr = data.address;
+      
+      const district = addr.district || addr.city_district || addr.town || addr.municipality;
+      const province = addr.state || addr.province;
+
+      if (district && province) {
+        return `${district}\n${province}`;
+      } else if (province) {
+        return province;
+      } else if (district) {
+        return district;
+      }
+      
+      return data.display_name.split(',').slice(0, 3).join(', ');
+    } else {
+      return `พิกัด: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+    }
+  } catch (error) {
+    console.error('Error fetching Nominatim:', error);
+    return `ไม่สามารถระบุสถานที่`; // ⬅️ นี่คือที่มาของข้อความ "ไม่สามารถระบุสถานที่" ครับ
+  }
+}
+
 const saveRecentJob = ( // <-- [แก้ไข] ฟังก์ชันนี้ถูกแก้ไข
   projectId: string,
   job: Omit<PersistentJob, 'completedTopics' | 'totalTopics'>, // รับข้อมูลหลัก
@@ -75,16 +113,13 @@ type WizardStep =
 const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => {
   // --- State สำหรับ Wizard ---
   const [step, setStep] = useState<WizardStep>('type');
-
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState<boolean>(false);
   // --- State สำหรับกล้องและรูป ---
-  const streamRef = useRef<MediaStream | null>(null);
-  const [tempPhoto, setTempPhoto] = useState<string | null>(null); 
   const [photoQueue, setPhotoQueue] = useState<Map<string, string>>(new Map()); 
   const [currentTopic, setCurrentTopic] = useState<string>(''); 
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
-  const [location, setLocation] = useState<Geolocation | string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // --- 4. [ใหม่] State สำหรับ "งานที่ทำต่อเนื่อง" ---
   const [recentJobs, setRecentJobs] = useState<PersistentJob[]>([]); // <-- [เพิ่ม] State ใหม่
@@ -130,68 +165,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     }
   };
 
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      console.log("Camera stopped."); // <-- เพิ่ม Log
-    }
-  }, []);
-
-  const startCamera = useCallback(async (videoElement: HTMLVideoElement | null) => {
-    if (!videoElement) {
-        console.error("Video element is NULL in startCamera.");
-        stopCamera();
-        return;
-    }
-    // ป้องกันการเรียกซ้ำซ้อน ถ้า stream ยังทำงานอยู่
-    if (streamRef.current) {
-        console.log("Stream already exists, stopping old one.");
-        stopCamera();
-    }
-
-    console.log("Attempting to start camera...");
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      console.log("getUserMedia successful:", mediaStream);
-      streamRef.current = mediaStream; // <-- เก็บ stream ไว้ใน ref
-
-      console.log("Setting videoElement.srcObject");
-      videoElement.srcObject = mediaStream; // <-- ตั้งค่า srcObject ที่นี่
-
-      // ตั้งค่า Geolocation (ย้ายมาไว้หลังสุด)
-      navigator.geolocation.getCurrentPosition(
-        (position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
-        () => setLocation('ไม่สามารถเข้าถึงตำแหน่งได้')
-      );
-    } catch (error) {
-      console.error('ERROR in startCamera:', error);
-      alert('ไม่สามารถเปิดกล้องได้ (โปรดดู Console)');
-      stopCamera(); // <-- เรียก stopCamera ถ้าเกิด Error
-    }
-  }, [stopCamera]);
-  
-  useEffect(() => {
-    if (step !== 'camera') {
-        stopCamera();
-    }
-    // Cleanup ตอน unmount
-    return () => stopCamera();
-  }, [step, stopCamera]);
-
-  const videoCallbackRef = useCallback((node: HTMLVideoElement | null) => {
-      // node คือ <video> element ที่ Render เสร็จแล้ว (หรือ null ถ้า unmount)
-      if (node && step === 'camera' && !tempPhoto) {
-          // ถ้า element พร้อม, อยู่ใน step camera, และยังไม่มีรูปถ่าย
-          // ให้เรียก startCamera พร้อมส่ง element ไปด้วย
-          startCamera(node);
-      } else {
-          // ถ้าเงื่อนไขไม่ตรง (เช่น ออกจาก step camera) ให้หยุด stream
-          stopCamera();
-      }
-  // [แก้ไข] เพิ่ม dependency ให้ถูกต้อง
-  }, [step, tempPhoto, startCamera, stopCamera]);
-
   // 7. [ใหม่] Logic: ดึงสถานะ Checklist จาก API ---
   const fetchChecklistStatus = useCallback(async ( // <-- [เพิ่ม] ฟังก์ชันใหม่
     mainCat: string,
@@ -223,47 +196,71 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     }
   }, [step, selectedMainCategory, selectedSubCategory, dynamicFields, fetchChecklistStatus]);
   
-  // --- Logic การถ่าย/ยืนยันรูป (เหมือนเดิม) ---
-  const takePhoto = () => {
-    // [แก้ไข] ต้องเช็ค videoElement จาก Callback Ref (แต่เราใช้ tempPhoto แทน)
-    const videoNode = document.querySelector('.video-feed') as HTMLVideoElement; // <-- หา Element ตรงๆ (อาจจะไม่ใช่วิธีที่ดีที่สุด)
-    if (videoNode && canvasRef.current && videoNode.readyState >= 2) { // เช็ค readyState เพิ่ม
-      const canvas = canvasRef.current;
-      canvas.width = videoNode.videoWidth;
-      canvas.height = videoNode.videoHeight;
-      const context = canvas.getContext('2d');
-      if (context) {
-          context.drawImage(videoNode, 0, 0, canvas.width, canvas.height);
-          setTempPhoto(canvas.toDataURL('image/jpeg'));
-          stopCamera(); // หยุดกล้องหลังถ่าย
-      } else {
-          console.error("Failed to get canvas context");
-      }
-    } else {
-        console.error("Cannot take photo: video node not found, canvas ref missing, or video not ready.");
-        alert("ไม่สามารถถ่ายรูปได้: กล้องยังไม่พร้อม");
-    }
+  const processNativePhoto = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX_WIDTH = 1600;
+          const { width, height } = img;
+          if (width <= MAX_WIDTH) {
+            resolve(img.src);
+            return;
+          }
+          const ratio = MAX_WIDTH / width;
+          const newHeight = height * ratio;
+          const canvas = document.createElement('canvas');
+          canvas.width = MAX_WIDTH;
+          canvas.height = newHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return reject(new Error('ไม่สามารถสร้าง canvas context ได้'));
+          }
+          ctx.drawImage(img, 0, 0, MAX_WIDTH, newHeight);
+          const resizedBase64 = canvas.toDataURL('image/jpeg', 0.9);
+          resolve(resizedBase64);
+        };
+        img.onerror = (err) => reject(new Error('ไม่สามารถโหลด Image object ได้'));
+        img.src = readerEvent.target?.result as string;
+      };
+      reader.onerror = (err) => reject(new Error('ไม่สามารถอ่านไฟล์ได้'));
+      reader.readAsDataURL(file);
+    });
   };
-  const handleRetake = () => { setTempPhoto(null); };
 
-  const handleConfirmPhoto = () => { // <-- [แก้ไข] Logic สำหรับ Daily
-    if (!tempPhoto) return;
-    const timestampKey = `daily_${Date.now()}`; // <-- ใช้ Timestamp เป็น Key
+  // --- [ใหม่] Function เมื่อ Native Camera ถ่ายเสร็จ ---
+  const handleNativeFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (event.target) {
+      event.target.value = "";
+    }
+    if (!file) return;
 
-    if (reportType === 'QC') {
+    setIsProcessingPhoto(true);
+
+    try {
+      const photoBase64 = await processNativePhoto(file);
       const newQueue = new Map(photoQueue);
-      newQueue.set(currentTopic, tempPhoto);
-      setPhotoQueue(newQueue);
-      setTempPhoto(null);
-      setStep('topicList');
-    } else {
-      // --- [แก้ไข] Daily Report ---
-      const newQueue = new Map(photoQueue);
-      newQueue.set(timestampKey, tempPhoto); // <-- เพิ่มรูปล่าสุดเข้าคิว
-      setPhotoQueue(newQueue);
-      setTempPhoto(null); // <-- ล้างรูปชั่วคราว
-      // ไม่ต้องเปลี่ยน Step! ให้อยู่หน้า camera ต่อไป
-      // setStep('dailyReview'); // <-- ลบบรรทัดนี้
+
+      if (reportType === 'QC' && currentTopic) {
+          // --- QC Flow ---
+          newQueue.set(currentTopic, photoBase64);
+          setPhotoQueue(newQueue);
+          setCurrentTopic(''); // เคลียร์ topic
+      } else if (reportType === 'Daily' && step === 'camera') {
+          // --- Daily Flow ---
+          const timestampKey = `daily_${Date.now()}`;
+          newQueue.set(timestampKey, photoBase64);
+          setPhotoQueue(newQueue);
+          // ยังคงอยู่หน้า 'camera'
+      }
+
+    } catch (error) {
+      console.error("Error processing native photo:", error);
+      alert("เกิดข้อผิดพลาดในการประมวลผลรูป: " + (error as Error).message);
+    } finally {
+      setIsProcessingPhoto(false);
     }
   };
 
@@ -271,29 +268,55 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const handleUploadAll = async () => {
     if (photoQueue.size === 0) return;
     setIsUploading(true); setUploadStatus(`กำลังอัปโหลด 0/${photoQueue.size}...`); setStep('uploading');
-    const locationString = typeof location === 'object' && location ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}` : (location as string) || '';
+   
+    // [ใหม่] ดึง Location สดๆ ตอนกดอัปโหลด
+    let locationString = 'ไม่สามารถระบุตำแหน่งได้'; // ⬅️ นี่คือตัวแปรที่เราจะส่งให้ watermark
+    try {
+      // 1. ดึงพิกัด (เหมือนเดิม)
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { 
+          enableHighAccuracy: true, 
+          timeout: 10000 
+        });
+      });
+
+      // 2. [ใหม่] เรียก Nominatim เพื่อแปลพิกัด
+      locationString = await reverseGeocodeNominatim(
+        position.coords.latitude,
+        position.coords.longitude
+      );
+      
+    } catch (geoError) {
+      console.warn('Could not get geolocation or geocode:', geoError);
+      locationString = 'ไม่สามารถระบุตำแหน่งได้'; // Fallback
+    }
+    // [จบส่วนใหม่]
+
     let successCount = 0; const totalPhotosInQueue = photoQueue.size; const topicsJustUploaded = new Map<string, boolean>();
 
     try {
-      const photosToUpload = Array.from(photoQueue.entries()); // <-- [แก้ไข] ดึงทั้ง Key และ Value
+      const photosToUpload = Array.from(photoQueue.entries());
 
-      for (const [key, photoBase64] of photosToUpload) { // <-- [แก้ไข] วน Loop ด้วย Key และ Value
+      for (const [key, photoBase64] of photosToUpload) {
         if (!photoBase64) continue;
 
         setUploadStatus(`กำลังเพิ่มลายน้ำรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
-        const timestamp = new Date().toISOString(); const watermarkOptions: WatermarkOptions = { location: locationString, timestamp: timestamp }; const watermarkedPhoto = await addWatermark(photoBase64, watermarkOptions);
+        const timestamp = new Date().toISOString();
+        const watermarkOptions: WatermarkOptions = { location: locationString, timestamp: timestamp }; // <-- [แก้ไข] ใช้ locationString
+        const watermarkedPhoto = await addWatermark(photoBase64, watermarkOptions);
         setUploadStatus(`กำลังอัปโหลดรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
 
         let descriptionForUpload = '';
         if (reportType === 'Daily') {
-          descriptionForUpload = dailyDescriptions.get(key) || ''; // <-- [แก้ไข] ใช้ชื่อ State ที่ถูกต้อง
+          descriptionForUpload = dailyDescriptions.get(key) || '';
         }
 
         const uploadData: UploadPhotoData = {
-          projectId, projectName: projectName || 'N/A', reportType, photoBase64: watermarkedPhoto, timestamp, location: locationString,
+          projectId, projectName: projectName || 'N/A', reportType, photoBase64: watermarkedPhoto, timestamp, 
+          location: locationString, // <-- [แก้ไข] ใช้ locationString
           ...(reportType === 'QC'
-            ? { mainCategory: selectedMainCategory, subCategory: selectedSubCategory, topic: key, dynamicFields } // <-- QC ใช้ Key เป็น Topic
-            : { description: descriptionForUpload, dynamicFields: {} } // <-- Daily ใช้ Description ที่หามา
+            ? { mainCategory: selectedMainCategory, subCategory: selectedSubCategory, topic: key, dynamicFields }
+            : { description: descriptionForUpload, dynamicFields: {} }
           ),
         };
 
@@ -301,12 +324,12 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         if (!response.success) throw new Error(`อัปโหลดล้มเหลวที่รูป: ${reportType === 'QC' ? key : `Daily Photo ${successCount + 1}`} (${response.error})`);
 
         if (reportType === 'QC') {
-            topicsJustUploaded.set(key, true); // <-- QC เก็บ Topic ที่อัปโหลด
+            topicsJustUploaded.set(key, true);
         }
         successCount++;
       }
 
-      // --- Logic เมื่ออัปโหลดสำเร็จ ---
+      // --- Logic เมื่ออัปโหลดสำเร็จ (เหมือนเดิม V5) ---
       setUploadStatus(`อัปโหลดสำเร็จ ${successCount} รูป!`);
       const newUploadedStatus = new Map(uploadedStatus); topicsJustUploaded.forEach((value, key) => newUploadedStatus.set(key, value));
       const completedCount = newUploadedStatus.size; const totalTopicCount = topics.length;
@@ -315,13 +338,11 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       if (reportType === 'QC') {
         saveRecentJob(projectId, { id, label, reportType, mainCategory: selectedMainCategory, subCategory: selectedSubCategory, dynamicFields, description: '' }, completedCount, totalTopicCount);
         setRecentJobs(getRecentJobs(projectId));
-      } else {
-         // ไม่ต้องบันทึก Daily ลง Recent Jobs (ตาม Logic เดิม)
       }
 
       setTimeout(() => {
         setPhotoQueue(new Map());
-        setDailyDescriptions(new Map()); // <-- [แก้ไข] ใช้ชื่อ State ที่ถูกต้อง
+        setDailyDescriptions(new Map());
         setIsUploading(false); setUploadStatus('');
         setUploadedStatus(newUploadedStatus);
         setStep('type');
@@ -332,11 +353,10 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
 
   // --- Logic การควบคุม Wizard ---
-
   const resetAllState = () => {
-    setTempPhoto(null); setPhotoQueue(new Map()); setCurrentTopic(''); setUploadStatus('');
-    // setDescription(''); // <-- [ลบ] ลบ State description ตัวเก่า
-    setDailyDescriptions(new Map()); // <-- ใช้ State ใหม่แทน
+    // [ลบ] setTempPhoto(null)
+    setPhotoQueue(new Map()); setCurrentTopic(''); setUploadStatus('');
+    setDailyDescriptions(new Map());
     setSelectedMainCategory(''); setSelectedSubCategory(''); setDynamicFields({});
     setUploadedStatus(new Map()); setStep('type'); setRecentJobs(getRecentJobs(projectId));
   };
@@ -381,7 +401,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   
   const handleStartPhotoForTopic = (topic: string) => {
     setCurrentTopic(topic);
-    setStep('camera');
+    cameraInputRef.current?.click(); // <-- เรียกกล้อง Native ทันที
+    // [ลบ] setStep('camera');
   };
 
   // --- [ใหม่] ฟังก์ชันสำหรับอัปเดต Daily Description ---
@@ -414,19 +435,17 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     }
   };
 
-  const goBack = () => { // <-- [แก้ไข] ตาม Logic ล่าสุด
+  const goBack = () => {
     if (isUploading) return;
     switch (step) {
       case 'mainCat': setStep('type'); break;
       case 'subCat': setStep('mainCat'); break;
       case 'dynamicFields': setStep('subCat'); break;
-      case 'topicList': setStep('type'); break; // <-- กลับหน้าแรก
-      case 'dailyReview': setStep('camera'); break; // <-- [แก้ไข] Review กลับไป Camera
+      case 'topicList': setStep('type'); break;
+      case 'dailyReview': setStep('camera'); break;
       case 'camera':
-        // ถ้ามาจาก QC -> กลับไป topicList
-        // ถ้ามาจาก Daily -> กลับไป type
-        if (reportType === 'QC') setStep('topicList');
-        else setStep('type');
+        // [แก้ไข] หน้านี้สำหรับ Daily เท่านั้น (QC ไม่เข้ามาแล้ว)
+        setStep('type');
         break;
       default:
         setStep('type');
@@ -458,7 +477,31 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   return (
     <div className="wizard-container">
-      
+
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleNativeFileSelected}
+      />
+
+      {/* --- [ใหม่] Global Loading Overlay (สำหรับตอนประมวลผลรูป) --- */}
+      {isProcessingPhoto && (
+        // (คุณอาจจะต้องเพิ่ม CSS .global-loading-overlay เอง)
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white'
+          }}>
+          <div style={{textAlign: 'center'}}>
+            <h3>กำลังประมวลผลรูป...</h3>
+            <p>กรุณารอสักครู่...</p>
+          </div>
+        </div>
+      )}
+
       {/* 1. Step: เลือกประเภท (แก้ไข) */}
       {step === 'type' && (
         <div className="wizard-step">
@@ -644,43 +687,53 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
     {/* 6. Step: เปิดกล้อง (แก้ไขเล็กน้อย) */}
       {step === 'camera' && (
-        <div className="camera-view-container">
-          <div className="camera-topic-overlay">
-            {reportType === 'QC' ? currentTopic : '☀️ รายงานประจำวัน'}
-            {/* [เพิ่ม] แสดงจำนวนรูปในคิวสำหรับ Daily */}
-            {reportType === 'Daily' && photoQueue.size > 0 &&
-              ` (${photoQueue.size} รูปในคิว)`
-            }
+        // เราจะใช้ .wizard-step เพื่อรักษา Layout V5 เดิม
+        <div className="wizard-step" style={{ display: 'flex', flexDirection: 'column' }}>
+          <h2>☀️ รายงานประจำวัน</h2>
+          <p style={{ textAlign: 'center', color: '#666', marginBottom: '30px' }}>
+            กดปุ่ม "ถ่ายรูป" เพื่อเปิดกล้อง<br/>
+            รูปที่ถ่ายจะถูกเพิ่มเข้าคิวอัตโนมัติ
+          </p>
+
+          {/* [ใหม่] UI ส่วนกลางสำหรับปุ่มถ่าย */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button 
+              className="wizard-button" // <-- ใช้สไตล์ .wizard-button เดิม
+              style={{
+                padding: '20px 40px',
+                fontSize: '1.5rem',
+                height: 'auto',
+                lineHeight: '1.5'
+              }}
+              onClick={() => cameraInputRef.current?.click()}
+            >
+              <span style={{ fontSize: '2.5rem' }}>📷</span>
+              <br/>
+              ถ่ายรูป
+            </button>
           </div>
-          {tempPhoto ? (
-            <img src={tempPhoto} alt="Captured" className="photo-preview" />
-          ) : (
-            // [แก้ไข] ใช้ Callback Ref
-            <video ref={videoCallbackRef} autoPlay playsInline className="video-feed"></video>
-          )}
-          {/* canvas ยังต้องมี แต่ซ่อนไว้ */}
-          <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-          <div className="camera-controls">
-            {tempPhoto ? (
-              <>
-                <button onClick={handleRetake} className="retake-button">ถ่ายใหม่</button>
-                <button onClick={handleConfirmPhoto} className="confirm-button">ยืนยันรูปนี้</button>
-              </>
+          
+          <p style={{ textAlign: 'center', color: '#666', marginTop: '30px' }}>
+            มี {photoQueue.size} รูปในคิว
+          </p>
+
+          {/* [ใหม่] Navigation โดยใช้ .wizard-nav (เหมือน V5) */}
+          <div className="wizard-nav">
+            <button className="wizard-button secondary" onClick={goBack}>
+              ย้อนกลับ
+            </button>
+            
+            {photoQueue.size > 0 ? (
+              <button 
+                className="wizard-button" 
+                onClick={() => setStep('dailyReview')}
+                title="จัดการรูปและเพิ่มคำบรรยาย"
+              >
+                📝 จัดการรูป ({photoQueue.size})
+              </button>
             ) : (
-              <>
-                <button onClick={goBack} className="retake-button">
-                    {reportType === 'QC' ? 'ย้อนกลับ' : 'ยกเลิก'}
-                 </button>
-                <button onClick={takePhoto} className="capture-button"></button>
-                {/* [ใหม่] ปุ่มไปหน้า Review สำหรับ Daily */}
-                {reportType === 'Daily' && photoQueue.size > 0 ? (
-                  <button onClick={() => setStep('dailyReview')} className="review-button" title="จัดการรูป"> {/* <-- อาจจะต้องเพิ่ม Class นี้ใน CSS */}
-                    📝 ({photoQueue.size})
-                  </button>
-                ) : (
-                  <div style={{width: '90px'}}></div> /* Spacer */
-                )}
-              </>
+              // Spacer (เพื่อให้ปุ่ม 'ย้อนกลับ' อยู่ซ้ายสุด)
+              <div style={{minWidth: '120px', display: 'inline-block'}}></div> 
             )}
           </div>
         </div>

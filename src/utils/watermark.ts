@@ -6,7 +6,8 @@ export interface WatermarkOptions {
   subCategory?: string;
   topic?: string;
   description?: string;
-  location?: { latitude: number; longitude: number } | string | null;
+  // [แก้ไข] เราจะรับ location เป็น string ภาษาไทยแล้ว
+  location?: string | null; 
   timestamp: string;
 }
 
@@ -14,11 +15,12 @@ export async function addWatermark(
   imageBase64: string,
   options: WatermarkOptions
 ): Promise<string> {
+  // [ลบ] async ออกจาก Promise นี้
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     
-    img.onload = () => {
+    img.onload = () => { // [ลบ] async ออก
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
@@ -27,55 +29,70 @@ export async function addWatermark(
         return;
       }
 
-      // Set canvas size to match image
       canvas.width = img.width;
       canvas.height = img.height;
-      
-      // Draw the image
       ctx.drawImage(img, 0, 0);
       
-      // Prepare watermark text
+      // ---------------------------------------------------
+      // [แก้ไข] ส่วนการเตรียมข้อความ Watermark
+      // ---------------------------------------------------
       const lines: string[] = [];
       
-      // Add location
-      if (options.location) {
-        if (typeof options.location === 'string') {
-          lines.push(`Location: ${options.location}`); // <-- เปลี่ยนจาก "ตำแหน่ง:"
-        } else {
-          lines.push(`Location: ${options.location.latitude.toFixed(6)}, ${options.location.longitude.toFixed(6)}`); // <-- เปลี่ยนจาก "ตำแหน่ง:"
-        }
+      // --- 1. จัดรูปแบบ Timestamp (วว/ดด/ปปปป HH:mm:ss) ---
+      try {
+        const date = new Date(options.timestamp);
+        // 1.1 ได้วันที่ (พ.ศ.) -> "22/08/2568"
+        const datePart = date.toLocaleDateString('th-TH', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric', // th-TH จะให้ปี พ.ศ. อัตโนมัติ
+        });
+        // 1.2 ได้เวลา (24ชม. + วินาที) -> "15:22:41"
+        const timePart = date.toLocaleTimeString('th-TH', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false, // บังคับ 24-hour
+        });
+        // 1.3 รวมร่าง (ไม่มีคำว่า "Timestamp:")
+        lines.push(`${datePart} ${timePart}`);
+      } catch (e) {
+        lines.push(`Invalid Date`);
       }
+
+      // --- 2. จัดรูปแบบ Location (รับค่าที่แปลแล้วมา) ---
+      if (options.location) {
+        // รับ string ที่มี \n มา แล้วแยกบรรทัด
+        // เช่น "Phra Phrom\nจังหวัดนครศรีธรรมราช"
+        options.location.split('\n').forEach(line => {
+          if (line) lines.push(line); // เพิ่มทีละบรรทัด
+        });
+      } else {
+        lines.push("ไม่สามารถระบุตำแหน่งได้");
+      }
+      // ---------------------------------------------------
+      // (จบส่วนแก้ไขข้อความ)
+      // ---------------------------------------------------
       
-      // Add timestamp
-      const date = new Date(options.timestamp);
-      const formattedDate = date.toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: '2-digit', // <-- เปลี่ยนเป็นตัวเลข 2 หลัก
-        day: '2-digit', // <-- เปลี่ยนเป็นตัวเลข 2 หลัก
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      lines.push(`Timestamp: ${formattedDate}`); // <-- เปลี่ยนจาก "วันที่:"
-      
-      // Configure watermark style
-      const fontSize = Math.max(24, canvas.width / 60); // <-- ปรับขนาด Font
-      const lineHeight = fontSize * 1.2; // <-- ปรับระยะห่างบรรทัด
+      // Configure watermark style (เหมือนเดิม)
+      const fontSize = Math.max(24, canvas.width / 60);
+      const lineHeight = fontSize * 1.2;
       const padding = fontSize;
 
-      // Draw text
+      // Draw text (เหมือนเดิม)
       ctx.fillStyle = 'white';
-      ctx.font = `bold ${fontSize}px Arial, sans-serif`; // <-- เพิ่มความหนา
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
       ctx.textAlign = 'left';
-      ctx.shadowColor = 'rgba(0, 0, 0, 1)'; // <-- เพิ่มเงาสีดำ
-      ctx.shadowBlur = 3; // <-- ความเบลอของเงา
+      ctx.shadowColor = 'rgba(0, 0, 0, 1)';
+      ctx.shadowBlur = 3; 
       
+      // Logic การวาด (เหมือนเดิม)
+      // (บรรทัดแรก (Timestamp) จะอยู่ล่างสุด และบรรทัดต่อๆ ไป (Location) จะอยู่เหนือขึ้นไป)
       lines.forEach((line, index) => {
-        // จัดตำแหน่ง Y ใหม่ ให้อยู่มุมซ้ายล่าง
         const y = canvas.height - padding - ( (lines.length - 1 - index) * lineHeight );
         ctx.fillText(line, padding, y);
       });
 
-      // Convert canvas back to base64
       const watermarkedImage = canvas.toDataURL('image/jpeg', 0.9);
       resolve(watermarkedImage);
     };
@@ -87,6 +104,7 @@ export async function addWatermark(
     img.src = imageBase64;
   });
 }
+
 // Utility function to resize image if needed
 export async function resizeImage(
   imageBase64: string,
