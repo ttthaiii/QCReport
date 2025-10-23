@@ -4,16 +4,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api, Project, ProjectConfig } from './utils/api';
 import Camera from './components/Camera';
 import Reports from './components/Reports';
+import AdminConfig from './components/AdminConfig';
 import './App.css'; // เราจะใช้ CSS ที่อัปเดตใหม่
 
 // ใช้ Emoji ธรรมดาเป็นไอคอนแทนการติดตั้ง lib เพิ่ม
 const ICONS = {
-  PROJECTS: '🏗️',
-  CAMERA: '📷',
-  REPORTS: '📊',
+  PROJECTS: '🏗️',
+  CAMERA: '📷',
+  REPORTS: '📊',
+  ADMIN: '⚙️' // เพิ่มไอคอน Admin
 };
-
-type View = 'projects' | 'camera' | 'reports';
+type View = 'projects' | 'camera' | 'reports' | 'admin';
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -42,19 +43,17 @@ function App() {
   }, []);
 
   const fetchProjectConfig = useCallback(async () => {
-    if (!selectedProject) return;
+    if (!selectedProject) return; // ถ้าไม่มีโปรเจกต์ ก็ไม่ต้องทำอะไร
     setIsLoading(true);
     setError(null);
     const response = await api.getProjectConfig(selectedProject.id);
     if (response.success && response.data) {
       setProjectConfig(response.data);
-      // หลังจากโหลด Config สำเร็จ, ให้เด้งไปหน้า Camera อัตโนมัติ
-      setView('camera'); 
     } else {
       setError(response.error || 'เกิดข้อผิดพลาดในการโหลด Config โครงการ');
     }
     setIsLoading(false);
-  }, [selectedProject]);
+  }, [selectedProject]); // <-- เหลือแค่ selectedProject
 
   // โหลดรายชื่อโครงการตอนเปิดแอปครั้งแรก
   useEffect(() => {
@@ -67,6 +66,15 @@ function App() {
       fetchProjectConfig();
     }
   }, [selectedProject, fetchProjectConfig]);
+
+  useEffect(() => {
+    // ถ้า projectConfig มีข้อมูล (เพิ่งโหลดเสร็จ)
+    // และ view ยังเป็น 'projects' (ยังอยู่ที่หน้าเลือก)
+    if (projectConfig && view === 'projects') {
+      // ให้เปลี่ยนไปหน้า 'camera' อัตโนมัติ
+      setView('camera');
+    }
+  }, [projectConfig, view]);
 
   const handleSelectProject = (project: Project) => {
     setSelectedProject(project);
@@ -128,44 +136,64 @@ function App() {
 
       {/* 2. Content Area (ส่วนเนื้อหา) */}
       <main className={view === 'camera' ? 'content-area-full' : 'content-area'}>
-        {isLoading && <div className="loading-container">กำลังโหลด Config...</div>}
-        
-        {view === 'camera' && projectConfig && (
-          <Camera
-            qcTopics={projectConfig}
-            projectId={selectedProject.id}
-            projectName={selectedProject.projectName}
-          />
-        )}
-        
-        {view === 'reports' && projectConfig && (
-          <Reports
+        {isLoading && <div className="loading-container">กำลังโหลด Config...</div>}
+        
+        {view === 'camera' && projectConfig && (
+          <Camera
+            // [แก้ไข] ส่ง projectConfig ไปใน prop ที่ถูกต้อง (ตามไฟล์ Camera.tsx ของคุณ)
+            qcTopics={projectConfig} 
+            projectId={selectedProject.id}
+            projectName={selectedProject.projectName}
+          />
+        )}
+        
+        {view === 'reports' && projectConfig && (
+          <Reports
+            projectId={selectedProject.id}
+            projectName={selectedProject.projectName}
+            projectConfig={projectConfig}
+          />
+        )}
+
+        {/* 7. [เพิ่ม] หน้าสำหรับ Admin Config */}
+        {view === 'admin' && projectConfig && (
+          <AdminConfig
             projectId={selectedProject.id}
             projectName={selectedProject.projectName}
             projectConfig={projectConfig}
+            // ส่งฟังก์ชัน fetchProjectConfig ลงไปเพื่อให้หน้า Admin สั่งโหลด Config ใหม่ได้
+            onConfigUpdated={() => fetchProjectConfig()} 
           />
         )}
-      </main>
+      </main>
 
-      {/* 3. Bottom Tab Navigation (เมนูด้านล่าง) */}
-      <nav className="bottom-nav">
+      {/* 3. Bottom Tab Navigation (เมนูด้านล่าง) */}
+      <nav className="bottom-nav">
+        <button
+          className={`nav-button ${view === 'camera' ? 'active' : ''}`}
+          onClick={() => setView('camera')}
+        >
+          <span className="icon">{ICONS.CAMERA}</span>
+          ถ่ายรูป
+        </button>
+        <button
+          className={`nav-button ${view === 'reports' ? 'active' : ''}`}
+          onClick={() => setView('reports')}
+        >
+          <span className="icon">{ICONS.REPORTS}</span>
+          รายงาน
+        </button>
+        {/* 8. [เพิ่ม] ปุ่มสำหรับ Admin */}
         <button
-          className={`nav-button ${view === 'camera' ? 'active' : ''}`}
-          onClick={() => setView('camera')}
-        >
-          <span className="icon">{ICONS.CAMERA}</span>
-          ถ่ายรูป
-        </button>
-        <button
-          className={`nav-button ${view === 'reports' ? 'active' : ''}`}
-          onClick={() => setView('reports')}
-        >
-          <span className="icon">{ICONS.REPORTS}</span>
-          รายงาน
-        </button>
-      </nav>
-    </div>
-  );
+          className={`nav-button ${view === 'admin' ? 'active' : ''}`}
+          onClick={() => setView('admin')}
+        >
+          <span className="icon">{ICONS.ADMIN}</span>
+          จัดการ
+        </button>
+      </nav>
+    </div>
+  );
 }
 
 export default App;

@@ -23,13 +23,26 @@ import { uploadPhotoToStorage as uploadImageToStorage } from "./api/storage";
 const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
 
 if (!admin.apps.length) {
-  admin.initializeApp({
-    storageBucket: "qcreport-54164.appspot.com"
-  });
   if (IS_EMULATOR) {
-    console.log("🔧 Running in EMULATOR mode");
+    // --- 🔧 [EMULATOR] ---
+    console.log("🔧 Running in EMULATOR mode (with Service Account)");
+    
+    // 1. [แก้ไข] ระบุตำแหน่งไฟล์ Key ให้อยู่ในโฟลเดอร์ keys
+    // (!! อย่าลืมเปลี่ยน "YOUR-KEY-FILENAME.json" ให้เป็นชื่อไฟล์ Key จริงของคุณ !!)
+    const serviceAccount = require("../keys/qcreport-54164-4d8f26cbb52f.json");
+
+    admin.initializeApp({
+      // 2. ส่ง credential เข้าไปตรงๆ
+      credential: admin.credential.cert(serviceAccount), 
+      storageBucket: "qcreport-54164.appspot.com"
+    });
+
   } else {
+    // --- 🚀 [PRODUCTION] ---
     console.log("🚀 Running in PRODUCTION mode");
+    admin.initializeApp({
+      storageBucket: "qcreport-54164.appspot.com"
+    });
   }
 }
 

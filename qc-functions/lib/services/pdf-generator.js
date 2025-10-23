@@ -45,6 +45,7 @@ exports.generateOptimizedPDF = generateOptimizedPDF;
 exports.generateDailyPDFUsingPuppeteer = generateDailyPDFUsingPuppeteer;
 const puppeteer = __importStar(require("puppeteer")); // <-- [FIX] Added import
 const admin = __importStar(require("firebase-admin"));
+const firestore_1 = require("firebase-admin/firestore");
 // ========================================
 // HELPER FUNCTIONS
 // ========================================
@@ -779,8 +780,8 @@ const getDailyPhotosByDate = async (projectId, date // YYYY-MM-DD
     const photosSnapshot = await db
         .collection("dailyPhotos")
         .where("projectId", "==", projectId)
-        .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(startDate))
-        .where("createdAt", "<", admin.firestore.Timestamp.fromDate(endDate))
+        .where("createdAt", ">=", firestore_1.Timestamp.fromDate(startDate)) // 👈 [แก้ไข]
+        .where("createdAt", "<", firestore_1.Timestamp.fromDate(endDate)) // 👈 [แก้ไข]
         .orderBy("createdAt", "asc")
         .get();
     if (photosSnapshot.empty) {

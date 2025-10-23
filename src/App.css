@@ -32,7 +32,7 @@ body, html, #root {
 .App {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* 100% ของความสูงหน้าจอ */
+  height: 100dvh; /* 100% ของความสูงหน้าจอ */
   width: 100vw;
   background-color: var(--background-color);
 }
@@ -169,3 +169,81 @@ body, html, #root {
   box-sizing: border-box; /* เพิ่มอันนี้เพื่อให้ width 100% ทำงานถูกต้อง */
 }
 
+.project-name-display {
+  text-align: center;
+  font-size: 14px;
+  color: #666;
+  margin-top: -15px;
+  margin-bottom: 20px;
+}
+
+.admin-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.admin-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.admin-list-item-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.admin-list-item-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.admin-button {
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.admin-button.edit {
+  background-color: #ffc107;
+  color: #212529;
+}
+.admin-button.manage {
+  background-color: #007bff;
+  color: white;
+}
+.admin-button.delete {
+  background-color: #dc3545;
+  color: white;
+}
+.admin-button.submit {
+  background-color: #28a745;
+  color: white;
+}
+.admin-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.admin-divider {
+  border: none;
+  border-top: 1px solid #dee2e6;
+  margin: 20px 0;
+}
+
+.admin-input-group {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-input-group input {
+  flex-grow: 1;
+  /* (ใช้สไตล์จาก .report-form-box input ที่ควรจะมีอยู่แล้ว) */
+}

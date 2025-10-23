@@ -3,6 +3,7 @@
 import * as puppeteer from 'puppeteer'; // <-- [FIX] Added import
 import * as admin from 'firebase-admin';
 import { PhotoData as FirestorePhotoData } from '../api/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 
 // ========================================
 // TYPE DEFINITIONS
@@ -872,11 +873,11 @@ export const getDailyPhotosByDate = async (
 
     console.log(`Querying dailyPhotos from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-    const photosSnapshot = await db
+      const photosSnapshot = await db
         .collection("dailyPhotos")
         .where("projectId", "==", projectId)
-        .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(startDate))
-        .where("createdAt", "<", admin.firestore.Timestamp.fromDate(endDate))
+        .where("createdAt", ">=", Timestamp.fromDate(startDate)) // 👈 [แก้ไข]
+        .where("createdAt", "<", Timestamp.fromDate(endDate))   // 👈 [แก้ไข]
         .orderBy("createdAt", "asc")
         .get();
 
