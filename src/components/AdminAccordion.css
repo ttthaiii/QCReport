@@ -1,0 +1,188 @@
+/* Filename: src/components/AdminAccordion.css (ไฟล์ใหม่) */
+
+/* ใช้ CSS เดิมจาก AdminConfig */
+.admin-button {
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background-color: #f0f0f0;
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-left: 5px;
+}
+.admin-button.edit { border-color: #007bff; color: #007bff; }
+.admin-button.delete { border-color: #dc3545; color: #dc3545; }
+.admin-button.manage { border-color: #28a745; color: #28a745; }
+.admin-button.secondary { background-color: #6c757d; color: white; border-color: #6c757d;}
+.admin-button.submit { background-color: #007bff; color: white; border-color: #007bff; }
+
+.admin-divider {
+  border: 0;
+  border-top: 1px solid #eee;
+  margin: 20px 0;
+}
+
+/* * CSS ใหม่สำหรับ Accordion 
+ */
+
+.admin-accordion {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #fdfdfd;
+}
+
+.admin-item {
+  border-bottom: 1px solid #e0e0e0;
+}
+.admin-item:last-child {
+  border-bottom: none;
+}
+
+.admin-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+}
+
+.admin-item.level1 > .admin-item-header {
+  background-color: #f7f7f7;
+}
+
+.admin-item-name {
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 1.1em;
+  flex: 1;
+  min-width: 0; /* Prevents text overflow */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 15px;
+}
+.admin-item.level2 > .admin-item-header > .admin-item-name {
+  font-size: 1.0em;
+  font-weight: 500;
+}
+.admin-item.level3 > .admin-item-header > .admin-item-name {
+  font-size: 0.95em;
+  font-weight: 400;
+  cursor: default;
+}
+
+.admin-item-actions {
+  flex-shrink: 0; /* ไม่ให้ปุ่มถูกบีบ */
+}
+
+.admin-item-content {
+  padding: 10px 15px 15px 30px; /* ย่อหน้า Level 2 */
+  background-color: #ffffff;
+  border-top: 1px dashed #e0e0e0;
+}
+
+.admin-item.level2 > .admin-item-content {
+  padding-left: 20px; /* ย่อหน้า Level 3 */
+  background-color: #fcfcfc;
+}
+
+/* ปุ่ม "เพิ่มใหม่" */
+.admin-button.add-new {
+  font-size: 0.95em;
+  background-color: #f0f7ff;
+  border: 1px dashed #007bff;
+  color: #007bff;
+  display: block;
+  width: 100%;
+  margin: 10px 0 0 0;
+  padding: 8px;
+}
+.admin-accordion > .admin-button.add-new {
+  margin: 15px;
+  width: auto;
+}
+
+/* ฟอร์ม "เพิ่มใหม่" */
+.admin-add-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.admin-add-form input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+
+/* * CSS ใหม่สำหรับ Modal (Level 4)
+ */
+
+.admin-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.admin-modal-content {
+  background-color: white;
+  padding: 25px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.admin-modal-content h3 {
+  margin-top: 0;
+  line-height: 1.4;
+}
+.admin-modal-content h3 small {
+  font-weight: 500;
+  color: #555;
+}
+.admin-modal-content p {
+  font-size: 0.95em;
+  color: #333;
+}
+
+.admin-fields-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 10px;
+  background-color: #fcfcfc;
+}
+.admin-field-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.admin-field-item:last-child {
+  border-bottom: none;
+}
+.admin-field-item .delete {
+  font-size: 0.8em;
+  padding: 3px 8px;
+}
+.empty-fields {
+  color: #888;
+}
+
+
+.admin-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}

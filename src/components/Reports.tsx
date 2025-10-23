@@ -1,8 +1,8 @@
-// Filename: src/components/Reports.tsx (REPLACED - V8 - Adds Daily Report)
+// Filename: src/components/Reports.tsx (REFACTORED - V9 - ID Based)
 
 import React, { useState, useEffect } from 'react';
-import { api, ProjectConfig } from '../utils/api';
-// [เพิ่ม] 1. Import Date Picker
+// [แก้ไข] 1. Import Types ใหม่ที่เราสร้างขึ้นมาด้วย
+import { api, ProjectConfig, MainCategory, SubCategory, Topic } from '../utils/api';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -13,15 +13,15 @@ interface ReportsProps {
 }
 
 const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig }) => {
-  const [qcTopics, setQcTopics] = useState<ProjectConfig>(projectConfig || {});
+  // [แก้ไข] 2. ค่าเริ่มต้นของ Array คือ [] (ไม่ใช่ {})
+  const [qcTopics, setQcTopics] = useState<ProjectConfig>(projectConfig || []);
   
-  // [เพิ่ม] 2. State สำหรับเลือกประเภท
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
 
   const [formData, setFormData] = useState({
-    mainCategory: '',
-    subCategory: ''
+    mainCategory: '', // <-- เราจะเก็บ 'name' ไว้ใน state
+    subCategory: '',  // <-- เราจะเก็บ 'name' ไว้ใน state
   });
   
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
@@ -31,19 +31,27 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   useEffect(() => {
     if (projectConfig) {
       setQcTopics(projectConfig);
-      const mainCategories = Object.keys(projectConfig);
+      // [แก้ไข] 3. projectConfig เป็น Array แล้ว
+      const mainCategories = projectConfig;
       if (mainCategories.length > 0) {
-        setFormData(prev => ({ ...prev, mainCategory: mainCategories[0] }));
+        // [แก้ไข] 4. เราจะใช้ .name ในการ set ค่า
+        setFormData(prev => ({ ...prev, mainCategory: mainCategories[0].name }));
       }
     }
   }, [projectConfig]);
 
   useEffect(() => {
-    if (reportType === 'QC' && formData.mainCategory && qcTopics[formData.mainCategory]) {
-      const subCategories = Object.keys(qcTopics[formData.mainCategory]);
-      if (subCategories.length > 0) {
+    if (reportType === 'QC' && formData.mainCategory && qcTopics.length > 0) {
+      // [แก้ไข] 5. ค้นหา MainCategory จาก Array
+      const selectedMainCat = qcTopics.find(m => m.name === formData.mainCategory);
+      
+      if (selectedMainCat && selectedMainCat.subCategories.length > 0) {
         setDynamicFields({});
-        setFormData(prev => ({ ...prev, subCategory: subCategories[0] }));
+        // [แก้ไข] 6. ตั้งค่า SubCategory แรกโดยใช้ .name
+        setFormData(prev => ({ ...prev, subCategory: selectedMainCat.subCategories[0].name }));
+      } else {
+        // ถ้าไม่เจอ SubCategory ให้ล้างค่า
+        setFormData(prev => ({ ...prev, subCategory: '' }));
       }
     }
   }, [formData.mainCategory, qcTopics, reportType]);
@@ -62,14 +70,13 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     return false;
   };
 
-  // [แก้ไข] 3. อัปเดตฟังก์ชัน Generate Report
   const generateReport = async () => {
     if (!isFieldsComplete()) {
       alert('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
     setIsGenerating(true);
-    setGeneratedReport(null); // ล้างรายงานเก่า
+    setGeneratedReport(null);
     
     try {
       let reportData: any;
@@ -84,16 +91,16 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
           dynamicFields
         };
       } else {
-        // สำหรับ Daily Report
         reportData = {
           reportType: 'Daily',
           projectId,
           projectName,
-          date: selectedDate!.toISOString().split('T')[0] // ส่งวันที่ในรูปแบบ YYYY-MM-DD
+          date: selectedDate!.toISOString().split('T')[0]
         };
       }
       
-      const response = await api.generateReport(reportData);
+      // [แก้ไข] 7. api.generateReport ถูกอัปเดตในขั้นตอนที่ 3 แล้ว
+      const response = await api.generateReport(reportData); 
       
       if (response.success && response.data) {
         setGeneratedReport(response.data);
@@ -109,19 +116,23 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     }
   };
 
-  const mainCategories = Object.keys(qcTopics);
+  // [แก้ไข] 8. mainCategories คือ qcTopics (Array)
+  const mainCategories: MainCategory[] = qcTopics;
   
-  const subCategories = formData.mainCategory && qcTopics[formData.mainCategory] 
-    ? Object.keys(qcTopics[formData.mainCategory]) 
-    : [];
+  // [แก้ไข] 9. ค้นหา MainCategory ที่เลือก
+  const selectedMainCat = mainCategories.find(m => m.name === formData.mainCategory);
 
-  const topics = formData.mainCategory && formData.subCategory && qcTopics[formData.mainCategory]?.[formData.subCategory]
-    ? qcTopics[formData.mainCategory][formData.subCategory].topics
-    : [];
+  // [แก้ไข] 10. ดึง subCategories จาก MainCategory ที่เลือก
+  const subCategories: SubCategory[] = selectedMainCat ? selectedMainCat.subCategories : [];
+
+  // [แก้ไข] 11. ค้นหา SubCategory ที่เลือก
+  const selectedSubCat = subCategories.find(s => s.name === formData.subCategory);
+
+  // [แก้ไข] 12. ดึง topics จาก SubCategory ที่เลือก
+  const topics: Topic[] = selectedSubCat ? selectedSubCat.topics : [];
     
-  const requiredDynamicFields = formData.mainCategory && formData.subCategory && qcTopics[formData.mainCategory]?.[formData.subCategory]
-    ? qcTopics[formData.mainCategory][formData.subCategory].dynamicFields
-    : [];
+  // [แก้ไข] 13. ดึง dynamicFields จาก SubCategory ที่เลือก
+  const requiredDynamicFields: string[] = selectedSubCat ? selectedSubCat.dynamicFields : [];
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
@@ -136,7 +147,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       }}>
         <h3 style={{ marginTop: 0, color: '#495057' }}>เลือกข้อมูลสำหรับสร้างรายงาน</h3>
         
-        {/* [เพิ่ม] 4. ปุ่มเลือกประเภทรายงาน */}
+        {/* ... (ส่วนปุ่ม Daily/QC ไม่ต้องแก้) ... */}
         <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
           <button
             onClick={() => setReportType('QC')}
@@ -173,10 +184,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
             ☀️ รายงานประจำวัน (Daily)
           </button>
         </div>
-
-        {/* [แก้ไข] 5. แสดงฟอร์มตามประเภทที่เลือก */}
         
-        {/* --- ฟอร์ม QC (แบบเดิม) --- */}
         {reportType === 'QC' && (
           <div>
             <div style={{ 
@@ -201,9 +209,10 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                     borderRadius: '4px'
                   }}
                 >
+                  {/* [แก้ไข] 14. .map() จาก Array ใหม่ */}
                   {mainCategories.map(category => (
-                    <option key={category} value={category}>
-                      {category}
+                    <option key={category.id} value={category.name}>
+                      {category.name}
                     </option>
                   ))}
                 </select>
@@ -229,16 +238,17 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                   }}
                   disabled={subCategories.length === 0}
                 >
+                  {/* [แก้ไข] 15. .map() จาก Array ใหม่ */}
                   {subCategories.map(subcategory => (
-                    <option key={subcategory} value={subcategory}>
-                      {subcategory}
+                    <option key={subcategory.id} value={subcategory.name}>
+                      {subcategory.name}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
-            {/* Dynamic Fields */}
+            {/* ... (Dynamic Fields ไม่ต้องแก้) ... */}
             {requiredDynamicFields.length > 0 && (
               <div style={{ marginBottom: '20px' }}>
                 <h4 style={{ marginTop: 0, marginBottom: '10px', color: '#495057' }}>
@@ -275,22 +285,22 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
           </div>
         )}
         
-        {/* --- [เพิ่ม] ฟอร์ม Daily --- */}
+        {/* ... (Daily Form ไม่ต้องแก้) ... */}
         {reportType === 'Daily' && (
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
               เลือกวันที่:
             </label>
-        <DatePicker
-          selected={selectedDate}
-          onChange={(date: Date | null) => setSelectedDate(date)}
-          dateFormat="dd/MM/yyyy"
-          className="daily-datepicker" // <-- เหลือไว้แค่ className
-        />
+            <DatePicker
+              selected={selectedDate}
+              onChange={(date: Date | null) => setSelectedDate(date)}
+              dateFormat="dd/MM/yyyy"
+              className="daily-datepicker" 
+            />
           </div>
         )}
 
-        {/* Generate Button */}
+        {/* ... (Generate Button ไม่ต้องแก้) ... */}
         <div style={{ textAlign: 'center' }}>
           <button 
             onClick={generateReport}
@@ -317,16 +327,17 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         <div style={{ marginBottom: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6' }}>
             <h4 style={{ color: '#495057', marginBottom: '15px', marginTop: 0 }}>📝 หัวข้อในรายงาน ({topics.length} หัวข้อ):</h4>
             <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '4px', border: '1px solid #dee2e6', maxHeight: '300px', overflowY: 'auto' }}>
-            {topics.map((topic: string, index: number) => (
-                <div key={index} style={{ padding: '8px 0', borderBottom: index < topics.length - 1 ? '1px solid #e9ecef' : 'none', fontSize: '14px' }}>
-                <span style={{ color: '#495057' }}>{index + 1}. {topic}</span>
+            {/* [แก้ไข] 16. .map() จาก Array ใหม่ (topic เป็น Object) */}
+            {topics.map((topic: Topic, index: number) => (
+                <div key={topic.id} style={{ padding: '8px 0', borderBottom: index < topics.length - 1 ? '1px solid #e9ecef' : 'none', fontSize: '14px' }}>
+                <span style={{ color: '#495057' }}>{index + 1}. {topic.name}</span>
                 </div>
             ))}
             </div>
         </div>
       )}
       
-      {/* --- Generated Report Info --- */}
+      {/* ... (Generated Report Info ไม่ต้องแก้) ... */}
       {generatedReport && (
         <div style={{ 
           marginTop: '20px',

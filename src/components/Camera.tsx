@@ -1,12 +1,13 @@
-// Filename: src/components/Camera.tsx (REPLACED - V5 - Persistent State)
+// Filename: src/components/Camera.tsx (REFACTORED - V6 - ID Based)
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { api, UploadPhotoData, ProjectConfig } from '../utils/api';
+// [แก้ไข] 1. Import Types ใหม่ที่เราสร้างขึ้นมา
+import { api, UploadPhotoData, ProjectConfig, MainCategory, SubCategory, Topic } from '../utils/api';
 import { addWatermark, WatermarkOptions } from '../utils/watermark';
 import './Camera.css';
 
 interface CameraProps {
-  qcTopics: ProjectConfig | null;
+  qcTopics: ProjectConfig | null; // <-- นี่คือ MainCategory[] | null
   projectId: string;
   projectName: string | undefined;
 }
@@ -16,23 +17,21 @@ interface Geolocation {
   longitude: number;
 }
 
-// 1. [ใหม่] ประเภทข้อมูล "งานที่ทำต่อเนื่อง" ที่เราจะเก็บใน localStorage
+// ... (Interface PersistentJob, getRecentJobs, reverseGeocodeNominatim, saveRecentJob ไม่ต้องแก้) ...
 interface PersistentJob {
   id: string;
   label: string;
   reportType: 'QC' | 'Daily';
   mainCategory: string;
   subCategory: string;
+  description: string; // <--- เพิ่มบรรทัดนี้กลับเข้าไป
   dynamicFields: Record<string, string>;
-  description: string;
-  completedTopics: number; // <-- [เพิ่ม]
-  totalTopics: number;     // <-- [เพิ่ม]
+  completedTopics: number;
+  totalTopics: number;
 }
 
-// 2. [ใหม่] Helper สำหรับ localStorage
 const RECENT_JOBS_KEY = 'qc-recent-jobs';
-
-const getRecentJobs = (projectId: string): PersistentJob[] => { // <-- [เพิ่ม] ฟังก์ชันใหม่
+const getRecentJobs = (projectId: string): PersistentJob[] => {
   try {
     const data = localStorage.getItem(`${RECENT_JOBS_KEY}_${projectId}`);
     return data ? JSON.parse(data) : [];
@@ -40,141 +39,119 @@ const getRecentJobs = (projectId: string): PersistentJob[] => { // <-- [เพ�
     return [];
   }
 };
-
 async function reverseGeocodeNominatim(latitude: number, longitude: number): Promise<string> {
   const url = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=th&zoom=18&addressdetails=1`;
-  
   try {
     const response = await fetch(url, {
-      headers: {
-        // [แก้ไข] เปลี่ยนเป็นภาษาอังกฤษทั้งหมด
-        // ❗️ อย่าลืมเปลี่ยน [your_email@example.com] เป็นอีเมลของคุณนะครับ
-        'User-Agent': 'QCReport-App/1.0 (Contact: [thai.l@tts2004.co.th] for issues)'
-      }
+      headers: { 'User-Agent': 'QCReport-App/1.0 (Contact: [thai.l@tts2004.co.th] for issues)' }
     });
-    
     const data = await response.json();
-    
     if (data && data.address) {
       const addr = data.address;
-      
       const district = addr.district || addr.city_district || addr.town || addr.municipality;
       const province = addr.state || addr.province;
-
-      if (district && province) {
-        return `${district}\n${province}`;
-      } else if (province) {
-        return province;
-      } else if (district) {
-        return district;
-      }
-      
+      if (district && province) return `${district}\n${province}`;
+      else if (province) return province;
+      else if (district) return district;
       return data.display_name.split(',').slice(0, 3).join(', ');
     } else {
       return `พิกัด: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     }
   } catch (error) {
     console.error('Error fetching Nominatim:', error);
-    return `ไม่สามารถระบุสถานที่`; // ⬅️ นี่คือที่มาของข้อความ "ไม่สามารถระบุสถานที่" ครับ
+    return `ไม่สามารถระบุสถานที่`;
   }
 }
-
-const saveRecentJob = ( // <-- [แก้ไข] ฟังก์ชันนี้ถูกแก้ไข
+const saveRecentJob = (
   projectId: string,
-  job: Omit<PersistentJob, 'completedTopics' | 'totalTopics'>, // รับข้อมูลหลัก
-  completedTopics: number, // <-- [เพิ่ม] Parameter
-  totalTopics: number      // <-- [เพิ่ม] Parameter
+  job: Omit<PersistentJob, 'completedTopics' | 'totalTopics'>,
+  completedTopics: number,
+  totalTopics: number
 ) => {
   const jobs = getRecentJobs(projectId);
   const otherJobs = jobs.filter(j => j.id !== job.id);
-
-  // สร้าง object ที่สมบูรณ์ก่อนบันทึก
-  const jobToSave: PersistentJob = { // <-- [เพิ่ม] สร้าง object ที่มี Progress
-      ...job,
-      completedTopics,
-      totalTopics
-  };
-
+  const jobToSave: PersistentJob = { ...job, completedTopics, totalTopics };
   const updatedJobs = [jobToSave, ...otherJobs].slice(0, 5);
   localStorage.setItem(`${RECENT_JOBS_KEY}_${projectId}`, JSON.stringify(updatedJobs));
 };
 
-// 3. กำหนดขั้นตอนของ Wizard (เหมือนเดิม)
 type WizardStep = 
-  | 'type'          // 1. เลือกประเภท
-  | 'mainCat'       // 2. เลือก Main Category
-  | 'subCat'        // 3. เลือก Sub Category
-  | 'dynamicFields' // 4. กรอก Dynamic Fields
-  | 'topicList'     // 5. หน้า Checklist ของ Topics
-  | 'dailyReview'     // 5b. (Daily) กรอก Description
-  | 'camera'        // 6. เปิดกล้อง
-  | 'uploading';    // 7. กำลังอัปโหลด
+  | 'type'
+  | 'mainCat'
+  | 'subCat'
+  | 'dynamicFields'
+  | 'topicList'
+  | 'dailyReview'
+  | 'camera'
+  | 'uploading';
 
 const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => {
-  // --- State สำหรับ Wizard ---
+  // ... (States ส่วนใหญ่เหมือนเดิม) ...
   const [step, setStep] = useState<WizardStep>('type');
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState<boolean>(false);
-  // --- State สำหรับกล้องและรูป ---
   const [photoQueue, setPhotoQueue] = useState<Map<string, string>>(new Map()); 
   const [currentTopic, setCurrentTopic] = useState<string>(''); 
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
-
-  // --- 4. [ใหม่] State สำหรับ "งานที่ทำต่อเนื่อง" ---
-  const [recentJobs, setRecentJobs] = useState<PersistentJob[]>([]); // <-- [เพิ่ม] State ใหม่
-  const [uploadedStatus, setUploadedStatus] = useState<Map<string, boolean>>(new Map()); // <-- [เพิ่ม] State ใหม่
+  const [recentJobs, setRecentJobs] = useState<PersistentJob[]>([]);
+  const [uploadedStatus, setUploadedStatus] = useState<Map<string, boolean>>(new Map());
   const [isChecklistLoading, setIsChecklistLoading] = useState(false);
-
-  // --- State สำหรับข้อมูล ---
-  const [selectedMainCategory, setSelectedMainCategory] = useState<string>('');
-  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('');
+  const [selectedMainCategory, setSelectedMainCategory] = useState<string>(''); // <-- เก็บ 'name'
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('');  // <-- เก็บ 'name'
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [dailyDescriptions, setDailyDescriptions] = useState<Map<string, string>>(new Map());
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
 
-  // --- Logic การดึงข้อมูล (เหมือนเดิม) ---
-  const mainCategories = useMemo(() => qcTopics ? Object.keys(qcTopics) : [], [qcTopics]);
-  const subCategories = useMemo(() =>
-    (qcTopics && selectedMainCategory && qcTopics[selectedMainCategory])
-      ? Object.keys(qcTopics[selectedMainCategory])
-      : [],
-    [qcTopics, selectedMainCategory]);
-  const currentSubCategoryConfig = useMemo(() => {
-    if (qcTopics && selectedMainCategory && selectedSubCategory) {
-      return qcTopics[selectedMainCategory]?.[selectedSubCategory];
-    }
-    return { topics: [], dynamicFields: [] };
-  }, [qcTopics, selectedMainCategory, selectedSubCategory]);
-  const topics = currentSubCategoryConfig?.topics || [];
-  const requiredDynamicFields = currentSubCategoryConfig?.dynamicFields || [];
+  // --- [แก้ไข] 2. Logic การดึงข้อมูล (Refactored for ID-based Array) ---
+  const mainCategories: MainCategory[] = useMemo(() => qcTopics || [], [qcTopics]);
+  
+  const selectedMainCat: MainCategory | undefined = useMemo(() =>
+    mainCategories.find(m => m.name === selectedMainCategory),
+  [mainCategories, selectedMainCategory]);
+
+  const subCategories: SubCategory[] = useMemo(() =>
+    selectedMainCat?.subCategories || [],
+  [selectedMainCat]);
+
+  const selectedSubCat: SubCategory | undefined = useMemo(() =>
+    subCategories.find(s => s.name === selectedSubCategory),
+  [subCategories, selectedSubCategory]);
+
+  const topics: Topic[] = useMemo(() =>
+    selectedSubCat?.topics || [],
+  [selectedSubCat]);
+  
+  const requiredDynamicFields: string[] = useMemo(() =>
+    selectedSubCat?.dynamicFields || [],
+  [selectedSubCat]);
+  // --- สิ้นสุดการแก้ไข ---
 
   useEffect(() => { setRecentJobs(getRecentJobs(projectId)); }, [projectId]);
 
-  // 6. [ใหม่] Helper: สร้าง Label และ ID สำหรับ "Job"
-  const getCurrentJobIdentifier = (): { id: string, label: string } => { // <-- [เพิ่ม] ฟังก์ชันใหม่
+  const getCurrentJobIdentifier = (): { id: string, label: string } => {
     if (reportType === 'QC') {
       const fieldValues = Object.values(dynamicFields).filter(Boolean).join('_') || 'default';
-      const id = `${selectedMainCategory}_${selectedSubCategory}_${fieldValues}`;
+      // [แก้ไข] 3. ใช้ ID ที่เสถียร (ถ้ามี) หรือ Name (ถ้าไม่มี)
+      const mainId = selectedMainCat?.id || selectedMainCategory;
+      const subId = selectedSubCat?.id || selectedSubCategory;
+      const id = `${mainId}_${subId}_${fieldValues}`;
       const label = [selectedMainCategory, selectedSubCategory, ...Object.values(dynamicFields).filter(Boolean)].join(' / ');
       return { id, label: `📋 ${label}` };
     } else {
-      // ทำให้ Daily มี ID ไม่ซ้ำ (เผื่ออนาคต)
-      const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const dateStr = new Date().toISOString().split('T')[0];
       return { id: `daily_${dateStr}`, label: '☀️ รายงานประจำวัน' };
     }
   };
 
-  // 7. [ใหม่] Logic: ดึงสถานะ Checklist จาก API ---
-  const fetchChecklistStatus = useCallback(async ( // <-- [เพิ่ม] ฟังก์ชันใหม่
+  const fetchChecklistStatus = useCallback(async (
     mainCat: string,
     subCat: string,
     fields: Record<string, string>
   ) => {
     if (!mainCat || !subCat) return;
-
     setIsChecklistLoading(true);
-    setUploadedStatus(new Map()); // ล้างสถานะเก่า
+    setUploadedStatus(new Map());
     try {
       const response = await api.getChecklistStatus(projectId, mainCat, subCat, fields);
       if (response.success && response.data) {
@@ -189,14 +166,14 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setIsChecklistLoading(false);
   }, [projectId]);
 
-  // 8. [ใหม่] Effect: เรียก API นี้เมื่อเข้าสู่หน้า topicList
-  useEffect(() => { // <-- [เพิ่ม] Effect ใหม่
-    if (step === 'topicList') {
+  useEffect(() => {
+    if (step === 'topicList' && reportType === 'QC') { // <-- [แก้ไข] เพิ่ม check reportType
       fetchChecklistStatus(selectedMainCategory, selectedSubCategory, dynamicFields);
     }
-  }, [step, selectedMainCategory, selectedSubCategory, dynamicFields, fetchChecklistStatus]);
+  }, [step, reportType, selectedMainCategory, selectedSubCategory, dynamicFields, fetchChecklistStatus]);
   
   const processNativePhoto = (file: File): Promise<string> => {
+    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (readerEvent) => {
@@ -229,33 +206,24 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     });
   };
 
-  // --- [ใหม่] Function เมื่อ Native Camera ถ่ายเสร็จ ---
   const handleNativeFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
     const file = event.target.files?.[0];
-    if (event.target) {
-      event.target.value = "";
-    }
+    if (event.target) event.target.value = "";
     if (!file) return;
-
     setIsProcessingPhoto(true);
-
     try {
       const photoBase64 = await processNativePhoto(file);
       const newQueue = new Map(photoQueue);
-
       if (reportType === 'QC' && currentTopic) {
-          // --- QC Flow ---
           newQueue.set(currentTopic, photoBase64);
           setPhotoQueue(newQueue);
-          setCurrentTopic(''); // เคลียร์ topic
+          setCurrentTopic('');
       } else if (reportType === 'Daily' && step === 'camera') {
-          // --- Daily Flow ---
           const timestampKey = `daily_${Date.now()}`;
           newQueue.set(timestampKey, photoBase64);
           setPhotoQueue(newQueue);
-          // ยังคงอยู่หน้า 'camera'
       }
-
     } catch (error) {
       console.error("Error processing native photo:", error);
       alert("เกิดข้อผิดพลาดในการประมวลผลรูป: " + (error as Error).message);
@@ -264,82 +232,67 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     }
   };
 
-  // 9. [แก้ไข] Logic การอัปโหลดทั้งหมด ---
   const handleUploadAll = async () => {
+    // ... (ตรรกะการดึง Location ไม่ต้องแก้) ...
     if (photoQueue.size === 0) return;
     setIsUploading(true); setUploadStatus(`กำลังอัปโหลด 0/${photoQueue.size}...`); setStep('uploading');
-   
-    // [ใหม่] ดึง Location สดๆ ตอนกดอัปโหลด
-    let locationString = 'ไม่สามารถระบุตำแหน่งได้'; // ⬅️ นี่คือตัวแปรที่เราจะส่งให้ watermark
+    let locationString = 'ไม่สามารถระบุตำแหน่งได้';
     try {
-      // 1. ดึงพิกัด (เหมือนเดิม)
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { 
-          enableHighAccuracy: true, 
-          timeout: 10000 
+          enableHighAccuracy: true, timeout: 10000 
         });
       });
-
-      // 2. [ใหม่] เรียก Nominatim เพื่อแปลพิกัด
       locationString = await reverseGeocodeNominatim(
         position.coords.latitude,
         position.coords.longitude
       );
-      
     } catch (geoError) {
       console.warn('Could not get geolocation or geocode:', geoError);
-      locationString = 'ไม่สามารถระบุตำแหน่งได้'; // Fallback
+      locationString = 'ไม่สามารถระบุตำแหน่งได้';
     }
-    // [จบส่วนใหม่]
-
+    
+    // ... (ตรรกะการวนลูป Upload ไม่ต้องแก้) ...
     let successCount = 0; const totalPhotosInQueue = photoQueue.size; const topicsJustUploaded = new Map<string, boolean>();
-
     try {
       const photosToUpload = Array.from(photoQueue.entries());
-
       for (const [key, photoBase64] of photosToUpload) {
         if (!photoBase64) continue;
-
         setUploadStatus(`กำลังเพิ่มลายน้ำรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
         const timestamp = new Date().toISOString();
-        const watermarkOptions: WatermarkOptions = { location: locationString, timestamp: timestamp }; // <-- [แก้ไข] ใช้ locationString
+        const watermarkOptions: WatermarkOptions = { location: locationString, timestamp: timestamp };
         const watermarkedPhoto = await addWatermark(photoBase64, watermarkOptions);
         setUploadStatus(`กำลังอัปโหลดรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
-
         let descriptionForUpload = '';
         if (reportType === 'Daily') {
           descriptionForUpload = dailyDescriptions.get(key) || '';
         }
-
         const uploadData: UploadPhotoData = {
           projectId, projectName: projectName || 'N/A', reportType, photoBase64: watermarkedPhoto, timestamp, 
-          location: locationString, // <-- [แก้ไข] ใช้ locationString
+          location: locationString,
           ...(reportType === 'QC'
             ? { mainCategory: selectedMainCategory, subCategory: selectedSubCategory, topic: key, dynamicFields }
             : { description: descriptionForUpload, dynamicFields: {} }
           ),
         };
-
         const response = await api.uploadPhoto(uploadData);
         if (!response.success) throw new Error(`อัปโหลดล้มเหลวที่รูป: ${reportType === 'QC' ? key : `Daily Photo ${successCount + 1}`} (${response.error})`);
-
         if (reportType === 'QC') {
             topicsJustUploaded.set(key, true);
         }
         successCount++;
       }
 
-      // --- Logic เมื่ออัปโหลดสำเร็จ (เหมือนเดิม V5) ---
+      // ... (ตรรกะ Success ไม่ต้องแก้) ...
       setUploadStatus(`อัปโหลดสำเร็จ ${successCount} รูป!`);
       const newUploadedStatus = new Map(uploadedStatus); topicsJustUploaded.forEach((value, key) => newUploadedStatus.set(key, value));
-      const completedCount = newUploadedStatus.size; const totalTopicCount = topics.length;
+      const completedCount = newUploadedStatus.size;
+      const totalTopicCount = topics.length; // <-- [แก้ไข] 4. topics ตอนนี้เป็น Array
       const { id, label } = getCurrentJobIdentifier();
-
       if (reportType === 'QC') {
         saveRecentJob(projectId, { id, label, reportType, mainCategory: selectedMainCategory, subCategory: selectedSubCategory, dynamicFields, description: '' }, completedCount, totalTopicCount);
         setRecentJobs(getRecentJobs(projectId));
       }
-
       setTimeout(() => {
         setPhotoQueue(new Map());
         setDailyDescriptions(new Map());
@@ -354,7 +307,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   // --- Logic การควบคุม Wizard ---
   const resetAllState = () => {
-    // [ลบ] setTempPhoto(null)
     setPhotoQueue(new Map()); setCurrentTopic(''); setUploadStatus('');
     setDailyDescriptions(new Map());
     setSelectedMainCategory(''); setSelectedSubCategory(''); setDynamicFields({});
@@ -365,11 +317,11 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setDynamicFields(prev => ({ ...prev, [fieldName]: value }));
   };
 
-  const handleSelectReportType = (type: 'QC' | 'Daily') => { // <-- [แก้ไข] Daily ไป Camera
+  const handleSelectReportType = (type: 'QC' | 'Daily') => {
       resetAllState();
       setReportType(type);
       if (type === 'QC') setStep('mainCat');
-      else setStep('camera'); // <-- ไป Camera เลย
+      else setStep('camera');
   };
 
   const handleSelectMainCat = (mainCat: string) => {
@@ -385,7 +337,10 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setPhotoQueue(new Map());
     setUploadedStatus(new Map());
     
-    const config = qcTopics?.[selectedMainCategory]?.[subCat];
+    // [แก้ไข] 5. ใช้ Array .find() เพื่อหา config
+    const mainCat = mainCategories.find(m => m.name === selectedMainCategory);
+    const config = mainCat?.subCategories.find(s => s.name === subCat);
+    
     if (config?.dynamicFields && config.dynamicFields.length > 0) {
       setStep('dynamicFields');
     } else {
@@ -401,50 +356,50 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   
   const handleStartPhotoForTopic = (topic: string) => {
     setCurrentTopic(topic);
-    cameraInputRef.current?.click(); // <-- เรียกกล้อง Native ทันที
-    // [ลบ] setStep('camera');
+    cameraInputRef.current?.click();
   };
 
-  // --- [ใหม่] ฟังก์ชันสำหรับอัปเดต Daily Description ---
   const handleDailyDescriptionChange = (photoKey: string, text: string) => {
-    const newDescriptions = new Map(dailyDescriptions); // <-- [แก้ไข] ใช้ชื่อ State ที่ถูกต้อง
+    const newDescriptions = new Map(dailyDescriptions);
     newDescriptions.set(photoKey, text);
-    setDailyDescriptions(newDescriptions); // <-- [แก้ไข] ใช้ชื่อ State ที่ถูกต้อง
+    setDailyDescriptions(newDescriptions);
   };
 
-  // --- [ใหม่] ฟังก์ชันสำหรับลบรูป Daily ออกจากคิว ---
   const handleDeleteDailyPhoto = (photoKey: string) => {
     const newQueue = new Map(photoQueue);
-    const newDescriptions = new Map(dailyDescriptions); // <-- [แก้ไข] ใช้ชื่อ State ที่ถูกต้อง
+    const newDescriptions = new Map(dailyDescriptions);
     newQueue.delete(photoKey);
     newDescriptions.delete(photoKey);
     setPhotoQueue(newQueue);
-    setDailyDescriptions(newDescriptions); // <-- [แก้ไข] ใช้ชื่อ State ที่ถูกต้อง
+    setDailyDescriptions(newDescriptions);
   };
 
-  // 10. [ใหม่] เมื่อกดเลือก "Job" จาก localStorage
   const handleSelectRecentJob = (job: PersistentJob) => {
+    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
     if (job.reportType === 'QC') {
         setReportType('QC'); setSelectedMainCategory(job.mainCategory); setSelectedSubCategory(job.subCategory); setDynamicFields(job.dynamicFields);
         setPhotoQueue(new Map()); setUploadedStatus(new Map()); setStep('topicList');
     } else {
         setReportType('Daily');
-        // setDescription(job.description || ''); // <-- [ลบ] ไม่มี State description ตัวเก่าแล้ว
-        setPhotoQueue(new Map()); setDailyDescriptions(new Map()); // <-- เคลียร์ Map แทน
+        setPhotoQueue(new Map()); setDailyDescriptions(new Map());
         setStep('camera');
     }
   };
 
   const goBack = () => {
+    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
     if (isUploading) return;
     switch (step) {
       case 'mainCat': setStep('type'); break;
       case 'subCat': setStep('mainCat'); break;
       case 'dynamicFields': setStep('subCat'); break;
-      case 'topicList': setStep('type'); break;
+      case 'topicList': 
+        // [แก้ไข] 6. กลับไปหน้า subCat ถ้ามี dynamic fields
+        if (requiredDynamicFields.length > 0) setStep('dynamicFields');
+        else setStep('subCat');
+        break;
       case 'dailyReview': setStep('camera'); break;
       case 'camera':
-        // [แก้ไข] หน้านี้สำหรับ Daily เท่านั้น (QC ไม่เข้ามาแล้ว)
         setStep('type');
         break;
       default:
@@ -454,6 +409,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   // --- Render ส่วนของ Wizard ---
   const renderChecklistHeader = () => {
+    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
     if (reportType === 'QC') {
       const parts = [selectedMainCategory, selectedSubCategory, ...Object.values(dynamicFields)];
       return <div className="checklist-header">{parts.filter(Boolean).join(' / ')}</div>;
@@ -462,22 +418,23 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   };
 
   const renderDailyReviewItem = ([key, photoBase64]: [string, string]) => (
-    <div key={key} className="daily-review-item"> {/* <-- ใช้ Class ใหม่ */}
-      <img src={photoBase64} alt={`Daily ${key}`} className="daily-review-thumbnail" /> {/* <-- ใช้ Class ใหม่ */}
+    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
+    <div key={key} className="daily-review-item">
+      <img src={photoBase64} alt={`Daily ${key}`} className="daily-review-thumbnail" />
       <textarea
         value={dailyDescriptions.get(key) || ''}
         onChange={(e) => handleDailyDescriptionChange(key, e.target.value)}
         placeholder="เพิ่มคำบรรยาย (Optional)..."
-        rows={3} // <-- ลด rows ลงได้
-        className="daily-review-textarea" // <-- ใช้ Class ใหม่
+        rows={3}
+        className="daily-review-textarea"
       />
-      <button onClick={() => handleDeleteDailyPhoto(key)} className="daily-review-delete-button">🗑️</button> {/* <-- ใช้ Class ใหม่, เอาคำว่า ลบ ออก */}
+      <button onClick={() => handleDeleteDailyPhoto(key)} className="daily-review-delete-button">🗑️</button>
     </div>
   );
 
   return (
     <div className="wizard-container">
-
+      {/* ... (Input Ref, Global Loading ไม่ต้องแก้) ... */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -486,10 +443,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         style={{ display: 'none' }}
         onChange={handleNativeFileSelected}
       />
-
-      {/* --- [ใหม่] Global Loading Overlay (สำหรับตอนประมวลผลรูป) --- */}
       {isProcessingPhoto && (
-        // (คุณอาจจะต้องเพิ่ม CSS .global-loading-overlay เอง)
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999,
@@ -502,9 +456,10 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         </div>
       )}
 
-      {/* 1. Step: เลือกประเภท (แก้ไข) */}
+      {/* 1. Step: เลือกประเภท (Recent Jobs) */}
       {step === 'type' && (
         <div className="wizard-step">
+          {/* ... (ปุ่ม QC/Daily ไม่ต้องแก้) ... */}
           <h2>1. เลือกประเภทรายงาน</h2>
           <div className="selection-grid">
             <div className="selection-card" onClick={() => handleSelectReportType('QC')}>
@@ -516,8 +471,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
               <p>รายงานประจำวัน (Daily)</p>
             </div>
           </div>
-
-          {/* --- 11. [ใหม่] แสดง "งานที่ทำต่อเนื่อง" --- */}
+          
+          {/* ... (Recent Jobs render ไม่ต้องแก้) ... */}
           {recentJobs.length > 0 && (
             <div className="recent-jobs-container">
               <h3>📌 งานที่ค้างอยู่</h3>
@@ -525,11 +480,9 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 <div
                   key={job.id}
                   className="recent-job-item"
-                  onClick={() => handleSelectRecentJob(job)} // <-- [แก้ไข] ใช้ handleSelectRecentJob
+                  onClick={() => handleSelectRecentJob(job)}
                 >
-                  {/* แสดง Label */}
                   <span>{job.label}</span>
-                  {/* แสดง Progress เฉพาะ QC และถ้ามีข้อมูล */}
                   {job.reportType === 'QC' && job.totalTopics > 0 && (
                      <span className="job-progress">
                        (ถ่ายแล้ว {job.completedTopics}/{job.totalTopics})
@@ -548,9 +501,10 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           <h2>2. เลือกหมวดงานหลัก</h2>
           {renderChecklistHeader()}
           <div className="selection-grid">
+            {/* [แก้ไข] 7. .map() จาก Array (MainCategory[]) */}
             {mainCategories.map((mainCat) => (
-              <div key={mainCat} className="selection-card" onClick={() => handleSelectMainCat(mainCat)}>
-                {mainCat}
+              <div key={mainCat.id} className="selection-card" onClick={() => handleSelectMainCat(mainCat.name)}>
+                {mainCat.name}
               </div>
             ))}
           </div>
@@ -566,9 +520,10 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           <h2>3. เลือกหมวดงานย่อย</h2>
           {renderChecklistHeader()}
           <div className="selection-grid">
+            {/* [แก้ไข] 8. .map() จาก Array (SubCategory[]) */}
             {subCategories.map((subCat) => (
-              <div key={subCat} className="selection-card" onClick={() => handleSelectSubCat(subCat)}>
-                {subCat}
+              <div key={subCat.id} className="selection-card" onClick={() => handleSelectSubCat(subCat.name)}>
+                {subCat.name}
               </div>
             ))}
           </div>
@@ -583,7 +538,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         <div className="wizard-step">
           <h2>4. กรอกข้อมูลเพิ่มเติม</h2>
           {renderChecklistHeader()}
-          {requiredDynamicFields.map((fieldName) => (
+          {/* [แก้ไข] 9. เพิ่ม Type (string) เพื่อแก้ TS7006 */}
+          {requiredDynamicFields.map((fieldName: string) => (
             <div className="form-group" key={fieldName}>
               <label>{fieldName}</label>
               <input
@@ -601,39 +557,39 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         </div>
       )}
 
-      {/* 5. [แก้ไข] Step: Topic Checklist */}
+      {/* 5. Step: Topic Checklist */}
       {step === 'topicList' && (
         <div className="wizard-step">
           <h2>5. ถ่ายรูปตามหัวข้อ</h2>
           {renderChecklistHeader()}
 
-          {isChecklistLoading ? ( // <-- [เพิ่ม] แสดง Loading ตอนรอ API
+          {isChecklistLoading ? (
             <div className="loading-container" style={{height: '50vh'}}>กำลังตรวจสอบสถานะ...</div>
           ) : (
             <>
               <div className="topic-list">
-                {topics.map((topic) => {
-                  // 10. [แก้ไข] Logic การแสดงสถานะ ✅/🔄/⚪️
-                  const isQueued = photoQueue.has(topic); // อยู่ในคิวรออัปโหลด
-                  const isUploaded = uploadedStatus.has(topic); // อัปโหลดไปแล้ว (จาก API)
+                {/* [แก้ไข] 10. .map() จาก Array (Topic[]) และใช้ topic.name */}
+                {topics.map((topic: Topic) => {
+                  const topicName = topic.name; // <-- ใช้ .name เป็น Key
+                  const isQueued = photoQueue.has(topicName);
+                  const isUploaded = uploadedStatus.has(topicName);
 
                   const statusIcon = isUploaded ? '✅' : (isQueued ? '🔄' : '⚪️');
-                  // [แก้ไข] ถ้าอัปโหลดแล้ว ให้เป็นปุ่มถ่ายใหม่ (🔄) ไม่ใช่ 📷
                   const buttonIcon = (isUploaded || isQueued) ? '🔄' : '📷';
                   const buttonClass = (isQueued || isUploaded) ? 'retake' : '';
                   const statusLabel = isUploaded ? '(อัปโหลดแล้ว)' : (isQueued ? '(ในคิว)' : '');
 
                   return (
-                    <div key={topic} className="topic-list-item">
+                    <div key={topic.id} className="topic-list-item"> {/* <-- ใช้ topic.id ที่เสถียรเป็น key */}
                       <span className="topic-list-item-status">
                         {statusIcon}
                       </span>
                       <span className="topic-list-item-name">
-                        {topic} <span style={{color: '#888', fontSize: '0.8em'}}>{statusLabel}</span>
+                        {topicName} <span style={{color: '#888', fontSize: '0.8em'}}>{statusLabel}</span>
                       </span>
                       <button
                         className={`topic-list-item-button ${buttonClass}`}
-                        onClick={() => handleStartPhotoForTopic(topic)}
+                        onClick={() => handleStartPhotoForTopic(topicName)}
                       >
                         {buttonIcon}
                       </button>
@@ -658,18 +614,14 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         </div>
       )}
 
+      {/* 6. Step: Daily Review */}
       {step === 'dailyReview' && (
         <div className="wizard-step">
           <h2>📝 จัดการรูป & คำบรรยาย (Daily)</h2>
-
-          {/* ใช้ List Layout ใหม่ */}
-          <div className="daily-review-list"> {/* <-- ใช้ Class ใหม่ */}
+          <div className="daily-review-list">
              {photoQueue.size > 0 ? Array.from(photoQueue.entries()).map(renderDailyReviewItem) : null}
           </div>
-
           {photoQueue.size === 0 && ( <p style={{textAlign: 'center', color: '#888', margin: '40px 0'}}>ยังไม่มีรูปถ่าย</p> )}
-
-          {/* ปุ่มควบคุมเหมือนเดิม */}
           <button
             className="upload-all-button"
             onClick={handleUploadAll}
@@ -685,26 +637,18 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         </div>
       )}
 
-    {/* 6. Step: เปิดกล้อง (แก้ไขเล็กน้อย) */}
+    {/* 7. Step: Camera (Daily) */}
       {step === 'camera' && (
-        // เราจะใช้ .wizard-step เพื่อรักษา Layout V5 เดิม
         <div className="wizard-step" style={{ display: 'flex', flexDirection: 'column' }}>
           <h2>☀️ รายงานประจำวัน</h2>
           <p style={{ textAlign: 'center', color: '#666', marginBottom: '30px' }}>
             กดปุ่ม "ถ่ายรูป" เพื่อเปิดกล้อง<br/>
             รูปที่ถ่ายจะถูกเพิ่มเข้าคิวอัตโนมัติ
           </p>
-
-          {/* [ใหม่] UI ส่วนกลางสำหรับปุ่มถ่าย */}
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <button 
-              className="wizard-button" // <-- ใช้สไตล์ .wizard-button เดิม
-              style={{
-                padding: '20px 40px',
-                fontSize: '1.5rem',
-                height: 'auto',
-                lineHeight: '1.5'
-              }}
+              className="wizard-button"
+              style={{ padding: '20px 40px', fontSize: '1.5rem', height: 'auto', lineHeight: '1.5' }}
               onClick={() => cameraInputRef.current?.click()}
             >
               <span style={{ fontSize: '2.5rem' }}>📷</span>
@@ -712,17 +656,13 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
               ถ่ายรูป
             </button>
           </div>
-          
           <p style={{ textAlign: 'center', color: '#666', marginTop: '30px' }}>
             มี {photoQueue.size} รูปในคิว
           </p>
-
-          {/* [ใหม่] Navigation โดยใช้ .wizard-nav (เหมือน V5) */}
           <div className="wizard-nav">
             <button className="wizard-button secondary" onClick={goBack}>
               ย้อนกลับ
             </button>
-            
             {photoQueue.size > 0 ? (
               <button 
                 className="wizard-button" 
@@ -732,20 +672,18 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 📝 จัดการรูป ({photoQueue.size})
               </button>
             ) : (
-              // Spacer (เพื่อให้ปุ่ม 'ย้อนกลับ' อยู่ซ้ายสุด)
               <div style={{minWidth: '120px', display: 'inline-block'}}></div> 
             )}
           </div>
         </div>
       )}
 
-    {/* 7. Step: กำลังอัปโหลด (แก้ไขปุ่ม "กลับไปแก้ไข") */}
+    {/* 8. Step: Uploading */}
     {step === 'uploading' && (
       <div className="wizard-step" style={{textAlign: 'center', paddingTop: '100px'}}>
         <h2>{uploadStatus}</h2>
         {isUploading && <p>กรุณารอสักครู่...</p>}
         {!isUploading && uploadStatus.includes('ล้มเหลว') && (
-          // [แก้ไข] ถ้า Daily ล้มเหลว ให้กลับไปหน้า Review
           <button className="wizard-button" onClick={() => setStep(reportType === 'QC' ? 'topicList' : 'dailyReview')}>
             กลับไปแก้ไข
           </button>

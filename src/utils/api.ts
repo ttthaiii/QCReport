@@ -1,20 +1,32 @@
 // Filename: src/utils/api.ts
 
 // --- Type definitions ---
+export interface Topic {
+  id: string;
+  name: string;
+  dynamicFields: string[];
+}
+
+export interface SubCategory {
+  id: string;
+  name: string;
+  dynamicFields: string[];
+  topics: Topic[];
+}
+
+export interface MainCategory {
+  id: string;
+  name: string;
+  subCategories: SubCategory[];
+}
+
 export interface Project {
   id: string;
   projectName: string;
   isActive?: boolean;
 }
 
-export interface ProjectConfig {
-  [mainCategory: string]: {
-    [subCategory: string]: {
-      topics: string[];
-      dynamicFields: string[];
-    };
-  };
-}
+export type ProjectConfig = MainCategory[];
 
 export interface UploadPhotoData {
   projectId: string;
@@ -89,6 +101,282 @@ export const api = {
     }
   },
 
+  async updateMainCategoryName(
+    projectId: string, 
+    mainCatId: string, 
+    newName: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/main-category/${mainCatId}`, 
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ newName: newName }), // ส่งชื่อใหม่ไปใน body
+        }
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error updating main category name:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'ไม่สามารถอัปเดตชื่อได้' 
+      };
+    }
+  },
+
+  async deleteMainCategory(
+    projectId: string, 
+    mainCatId: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/main-category/${mainCatId}`, 
+        {
+          method: 'DELETE', // ใช้วิธี DELETE
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error deleting main category name:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'ไม่สามารถลบหมวดหมู่ได้' 
+      };
+    }
+  },
+
+  async addMainCategory(
+    projectId: string, 
+    newName: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/main-categories`, 
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ newName: newName }), // ส่งชื่อใหม่ไปใน body
+        }
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error adding main category name:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'ไม่สามารถเพิ่มหมวดหมู่ได้' 
+      };
+    }
+  },
+
+  async addSubCategory(
+    projectId: string, 
+    mainCategoryId: string, 
+    mainCategoryName: string, 
+    newName: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/sub-categories`, 
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            newName: newName,
+            mainCategoryId: mainCategoryId, // <-- ส่ง ID ของ Level 1
+            mainCategoryName: mainCategoryName // <-- ส่ง Name ของ Level 1 (เพื่อสร้าง Slug)
+          }),
+        }
+      );
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error adding sub category:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * ✅ [ใหม่] ฟังก์ชันสำหรับ "แก้ไข" Sub Category
+   */
+  async updateSubCategoryName(
+    projectId: string, 
+    subCatId: string, 
+    newName: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/sub-category/${subCatId}`, 
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newName: newName }),
+        }
+      );
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating sub category name:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * ✅ [ใหม่] ฟังก์ชันสำหรับ "ลบ" Sub Category
+   */
+  async deleteSubCategory(
+    projectId: string, 
+    subCatId: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/sub-category/${subCatId}`, 
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting sub category:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * ✅ [ใหม่] ฟังก์ชันสำหรับ "เพิ่ม" Topic (Level 3)
+   */
+  async addTopic(
+    projectId: string, 
+    subCategoryId: string, 
+    mainCategoryName: string, // <-- ต้องการสำหรับ Slug
+    subCategoryName: string,  // <-- ต้องการสำหรับ Slug
+    newName: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/topics`, 
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            newName: newName,
+            subCategoryId: subCategoryId,
+            mainCategoryName: mainCategoryName,
+            subCategoryName: subCategoryName
+          }),
+        }
+      );
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error adding topic:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * ✅ [ใหม่] ฟังก์ชันสำหรับ "แก้ไข" Topic
+   */
+  async updateTopicName(
+    projectId: string, 
+    topicId: string, 
+    newName: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/topic/${topicId}`, 
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newName: newName }),
+        }
+      );
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating topic name:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * ✅ [ใหม่] ฟังก์ชันสำหรับ "ลบ" Topic
+   */
+  async deleteTopic(
+    projectId: string, 
+    topicId: string
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/topic/${topicId}`, 
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting topic:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * ✅ [ใหม่] ฟังก์ชันสำหรับ "อัปเดต" Dynamic Fields (Level 4)
+   */
+  async updateDynamicFields(
+    projectId: string, 
+    subCatId: string, 
+    fields: string[] // <-- ส่ง Array
+  ): Promise<ApiResponse> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/project-config/${projectId}/sub-category/${subCatId}/fields`, 
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: fields }), // <-- ส่ง Array
+        }
+      );
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating dynamic fields:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
   /**
    * ✅ เพิ่มฟังก์ชันใหม่นี้เข้าไป
    * ดึงรูปภาพทั้งหมด (ทั้ง QC และ Daily) จากโปรเจกต์ที่ระบุ
@@ -158,24 +446,26 @@ export const api = {
   async generateReport(reportData: {
     projectId: string;
     projectName: string;
-    mainCategory: string;
-    subCategory: string;
+    reportType: 'QC' | 'Daily'; // <-- [ใหม่]
+    mainCategory?: string;       // <-- [ใหม่] optional
+    subCategory?: string;        // <-- [ใหม่] optional
+    date?: string;               // <-- [ใหม่]
     dynamicFields?: { [key: string]: string };
-  }): Promise<ApiResponse> {
+  }): Promise<ApiResponse> { // <-- [แก้ไข] Type ของ reportData
     try {
       const response = await fetch(`${API_BASE_URL}/generate-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(reportData),
+        body: JSON.stringify(reportData), // <-- ส่ง reportData ไปตรงๆ
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
-      
+
       const data = await response.json();
       return data;
     } catch (error) {

@@ -48,6 +48,17 @@ const pdf_generator_1 = require("./services/pdf-generator");
 const firestore_1 = require("./api/firestore");
 const storage_1 = require("./api/storage");
 const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
+function slugify(text) {
+    if (typeof text !== 'string')
+        return `doc-${Date.now()}`; // Fallback
+    return text.toString().toLowerCase()
+        .replace(/\s+/g, '-') // Replace spaces with -
+        .replace(/[^\u0E00-\u0E7F\w-]+/g, '') // Remove all non-word chars except Thai
+        .replace(/--+/g, '-') // Replace multiple - with single -
+        .replace(/^-+/, '') // Trim - from start of text
+        .replace(/-+$/, '') // Trim - from end of text
+        || `doc-${Date.now()}`; // Fallback for empty string
+}
 if (!admin.apps.length) {
     if (IS_EMULATOR) {
         // --- 🔧 [EMULATOR] ---
@@ -107,43 +118,79 @@ app.get("/projects", async (req, res) => {
 app.get("/project-config/:projectId", async (req, res) => {
     try {
         const { projectId } = req.params;
-        const projectConfig = {};
-        const mainCategoriesSnapshot = await db
-            .collection("projectConfig")
-            .doc(projectId)
+        // 1. อ้างอิงไปยัง Collection หลักของ Config
+        const projectConfigRef = db.collection("projectConfig").doc(projectId);
+        // 2. [ใหม่] Query ทั้ง 3 Collections พร้อมกัน (Parallel Fetch)
+        // (เราเพิ่ม .where("isArchived", "==", false) เพื่อรองรับการ "Soft Delete" ในอนาคต)
+        const mainCategoriesPromise = projectConfigRef
             .collection("mainCategories")
+            .where("isArchived", "==", false)
             .get();
-        if (mainCategoriesSnapshot.empty) {
+        const subCategoriesPromise = projectConfigRef
+            .collection("subCategories")
+            .where("isArchived", "==", false)
+            .get();
+        const topicsPromise = projectConfigRef
+            .collection("topics")
+            .where("isArchived", "==", false)
+            .get();
+        const [mainSnap, subSnap, topicSnap] = await Promise.all([
+            mainCategoriesPromise,
+            subCategoriesPromise,
+            topicsPromise,
+        ]);
+        // 3. [ใหม่] ประมวลผล Topics (ลูกสุด) ให้เป็น Map
+        // (Key: subCategoryId, Value: Topic[])
+        const topicsMap = new Map();
+        topicSnap.forEach(doc => {
+            const topicData = doc.data();
+            const subId = topicData.subCategoryId; // นี่คือ "Foreign Key"
+            if (!topicsMap.has(subId)) {
+                topicsMap.set(subId, []);
+            }
+            topicsMap.get(subId).push({
+                id: doc.id,
+                name: topicData.name,
+                dynamicFields: topicData.dynamicFields || [],
+            });
+        });
+        // 4. [ใหม่] ประมวลผล SubCategories และ "Join" Topics เข้ามา
+        // (Key: mainCategoryId, Value: SubCategory[])
+        const subCategoriesMap = new Map();
+        subSnap.forEach(doc => {
+            const subData = doc.data();
+            const mainId = subData.mainCategoryId; // นี่คือ "Foreign Key"
+            if (!subCategoriesMap.has(mainId)) {
+                subCategoriesMap.set(mainId, []);
+            }
+            subCategoriesMap.get(mainId).push({
+                id: doc.id,
+                name: subData.name,
+                dynamicFields: subData.dynamicFields || [],
+                topics: topicsMap.get(doc.id) || [], // ดึง Topics จาก Map ด้านบน
+            });
+        });
+        // 5. [ใหม่] ประมวลผล MainCategories และ "Join" SubCategories เข้ามา
+        const finalConfig = [];
+        mainSnap.forEach(doc => {
+            finalConfig.push({
+                id: doc.id,
+                name: doc.data().name,
+                // (เราไม่ต้องส่ง isArchived ไปให้ Frontend ก็ได้)
+                subCategories: subCategoriesMap.get(doc.id) || [], // ดึง SubCategories จาก Map
+            });
+        });
+        if (finalConfig.length === 0) {
             return res.status(404).json({
                 success: false,
-                error: "Config not found."
+                error: "Config not found or is empty."
             });
         }
-        // Build nested config structure
-        for (const mainCategoryDoc of mainCategoriesSnapshot.docs) {
-            const mainData = mainCategoryDoc.data();
-            const mainName = mainData.name;
-            projectConfig[mainName] = {};
-            const subCategoriesSnapshot = await mainCategoryDoc.ref
-                .collection("subCategories")
-                .get();
-            for (const subCategoryDoc of subCategoriesSnapshot.docs) {
-                const subData = subCategoryDoc.data();
-                const subName = subData.name;
-                const topicsSnapshot = await subCategoryDoc.ref
-                    .collection("topics")
-                    .get();
-                const topics = topicsSnapshot.docs.map((doc) => doc.data().name);
-                projectConfig[mainName][subName] = {
-                    topics: topics,
-                    dynamicFields: subData.dynamicFields || []
-                };
-            }
-        }
-        return res.json({ success: true, data: projectConfig });
+        // 6. ส่งข้อมูลโครงสร้างใหม่ (Array of Objects) กลับไป
+        return res.json({ success: true, data: finalConfig });
     }
     catch (error) {
-        console.error("Error in /project-config:", error);
+        console.error("Error in /project-config (V2):", error);
         return res.status(500).json({
             success: false,
             error: error.message
@@ -261,7 +308,7 @@ app.post("/upload-photo-base64", async (req, res) => {
 app.post("/generate-report", async (req, res) => {
     try {
         const { projectId, projectName, reportType, // <-- [ใหม่] รับ reportType
-        // QC fields
+        // QC fields (นี่คือ "ชื่อ" ที่ส่งมาจาก Frontend)
         mainCategory, subCategory, dynamicFields, 
         // Daily fields
         date // <-- [ใหม่] รับ date
@@ -274,7 +321,7 @@ app.post("/generate-report", async (req, res) => {
         }
         console.log(`📊 Generating ${reportType} report for ${projectName}`);
         // ===================================
-        //  QC REPORT LOGIC (แบบเดิม)
+        //  QC REPORT LOGIC (แก้ไข V2 - อ่าน Flat)
         // ===================================
         if (reportType === 'QC') {
             if (!mainCategory || !subCategory) {
@@ -283,35 +330,46 @@ app.post("/generate-report", async (req, res) => {
                     error: "Missing QC fields (mainCategory, subCategory)."
                 });
             }
-            // 1. Get all topics from config
-            const mainCategoriesSnap = await db
-                .collection("projectConfig")
-                .doc(projectId)
+            // 1. [ใหม่] ค้นหา Topics จากโครงสร้าง Flat
+            const projectConfigRef = db.collection("projectConfig").doc(projectId);
+            // 1a. ค้นหา MainCategory ID (จาก "ชื่อ")
+            const mainCatSnap = await projectConfigRef
                 .collection("mainCategories")
                 .where("name", "==", mainCategory)
+                .limit(1)
                 .get();
-            let allTopics = [];
-            if (!mainCategoriesSnap.empty) {
-                const subCategoriesSnap = await mainCategoriesSnap.docs[0].ref
-                    .collection("subCategories")
-                    .where("name", "==", subCategory)
-                    .get();
-                if (!subCategoriesSnap.empty) {
-                    const topicsSnap = await subCategoriesSnap.docs[0].ref
-                        .collection("topics")
-                        .orderBy("name")
-                        .get();
-                    allTopics = topicsSnap.docs.map(doc => doc.data().name);
-                }
+            if (mainCatSnap.empty) {
+                return res.status(404).json({ success: false, error: `Main category '${mainCategory}' not found.` });
             }
+            const mainCatId = mainCatSnap.docs[0].id;
+            // 1b. ค้นหา SubCategory ID (จาก "ชื่อ" และ "mainCatId")
+            const subCatSnap = await projectConfigRef
+                .collection("subCategories")
+                .where("name", "==", subCategory)
+                .where("mainCategoryId", "==", mainCatId) // กันชื่อซ้ำ
+                .limit(1)
+                .get();
+            if (subCatSnap.empty) {
+                return res.status(404).json({ success: false, error: `Sub category '${subCategory}' not found under '${mainCategory}'.` });
+            }
+            const subCatId = subCatSnap.docs[0].id;
+            // 1c. ดึง Topics ทั้งหมดของ SubCategory นี้
+            const topicsSnap = await projectConfigRef
+                .collection("topics")
+                .where("subCategoryId", "==", subCatId)
+                .where("isArchived", "==", false)
+                .get();
+            const allTopics = topicsSnap.docs.map(doc => doc.data().name);
+            // 1d. ตรวจสอบ (จุดที่เคยเกิด Error)
             if (allTopics.length === 0) {
                 return res.status(404).json({
                     success: false,
-                    error: "No topics found."
+                    error: "No topics found." // <-- Error เดิม
                 });
             }
             console.log(`✅ Found ${allTopics.length} total topics for the layout.`);
             // 2. Get latest photos (QC)
+            // (ฟังก์ชันนี้ยังทำงานกับ "ชื่อ" Category ได้อยู่)
             const foundPhotos = await (0, pdf_generator_1.getLatestPhotos)(projectId, mainCategory, subCategory, allTopics, dynamicFields || {});
             console.log(`📸 Found and downloaded ${foundPhotos.length} photos.`);
             // 3. Create full layout (photos + placeholders)
@@ -339,7 +397,7 @@ app.post("/generate-report", async (req, res) => {
                 }
             });
             // ===================================
-            //  [ใหม่] DAILY REPORT LOGIC
+            //  DAILY REPORT LOGIC (อันนี้ถูกต้องอยู่แล้ว)
             // ===================================
         }
         else if (reportType === 'Daily') {
@@ -350,7 +408,7 @@ app.post("/generate-report", async (req, res) => {
                 });
             }
             console.log(`📅 Fetching Daily photos for date: ${date}`);
-            // 1. Get daily photos (ฟังก์ชันใหม่ที่เราต้องสร้าง)
+            // 1. Get daily photos
             const foundPhotos = await (0, pdf_generator_1.getDailyPhotosByDate)(projectId, date);
             console.log(`📸 Found and downloaded ${foundPhotos.length} daily photos.`);
             if (foundPhotos.length === 0) {
@@ -359,7 +417,7 @@ app.post("/generate-report", async (req, res) => {
                     error: `ไม่พบรูปรายงานประจำวันสำหรับวันที่ ${date}`
                 });
             }
-            // 2. Generate PDF (ฟังก์ชันใหม่ที่เราต้องสร้าง)
+            // 2. Generate PDF
             const reportData = {
                 projectId,
                 projectName: projectName || projectId,
@@ -451,6 +509,324 @@ app.get("/photos/:projectId", async (req, res) => {
     }
     catch (error) {
         console.error("Error in /photos/:projectId:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+// ✅ [ใหม่] Endpoint สำหรับแก้ไขชื่อ Main Category
+app.post("/project-config/:projectId/main-category/:mainCatId", async (req, res) => {
+    try {
+        const { projectId, mainCatId } = req.params;
+        const { newName } = req.body;
+        if (!newName || typeof newName !== 'string' || newName.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                error: "Missing or invalid 'newName' in request body."
+            });
+        }
+        // อ้างอิงไปยัง Document ที่ต้องการ
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("mainCategories")
+            .doc(mainCatId);
+        // ทำการ Update เฉพาะ field 'name'
+        await docRef.update({
+            name: newName.trim()
+        });
+        console.log(`✅ Config updated: ${projectId}/${mainCatId} -> ${newName.trim()}`);
+        return res.json({
+            success: true,
+            data: { id: mainCatId, name: newName.trim() }
+        });
+    }
+    catch (error) {
+        console.error("Error updating main category:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+// ✅ [ใหม่] Endpoint สำหรับ "ลบ" (Soft Delete) Main Category
+app.delete("/project-config/:projectId/main-category/:mainCatId", async (req, res) => {
+    try {
+        const { projectId, mainCatId } = req.params;
+        // อ้างอิงไปยัง Document ที่ต้องการ
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("mainCategories")
+            .doc(mainCatId);
+        // ทำการ "Soft Delete" โดยการอัปเดต field 'isArchived'
+        // เราไม่ลบข้อมูลจริง เพื่อรักษาความสมบูรณ์ของรายงานเก่า
+        await docRef.update({
+            isArchived: true
+        });
+        console.log(`✅ Config soft-deleted: ${projectId}/${mainCatId}`);
+        return res.json({
+            success: true,
+            data: { id: mainCatId, status: 'archived' }
+        });
+    }
+    catch (error) {
+        console.error("Error soft-deleting main category:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+// ✅ [ใหม่] Endpoint สำหรับ "เพิ่ม" Main Category
+app.post("/project-config/:projectId/main-categories", async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { newName } = req.body;
+        if (!newName || typeof newName !== 'string' || newName.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                error: "Missing or invalid 'newName' in request body."
+            });
+        }
+        const trimmedName = newName.trim();
+        // 1. สร้าง ID ที่เสถียรจากชื่อ
+        const newId = slugify(trimmedName);
+        // 2. อ้างอิงไปยัง Document ใหม่
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("mainCategories")
+            .doc(newId); // <-- ใช้ ID ที่เราสร้างเอง
+        // 3. ตรวจสอบว่า ID นี้ซ้ำหรือไม่ (ป้องกันการสร้างทับ)
+        const existingDoc = await docRef.get();
+        if (existingDoc.exists) {
+            return res.status(409).json({
+                success: false,
+                error: `หมวดหมู่ชื่อ '${trimmedName}' (ID: ${newId}) มีอยู่แล้ว`
+            });
+        }
+        // 4. สร้างข้อมูลใหม่
+        const newData = {
+            name: trimmedName,
+            isArchived: false
+            // (คุณอาจจะเพิ่ม field 'order' หรือ 'createdAt' ที่นี่ก็ได้)
+        };
+        await docRef.set(newData); // ใช้ .set() เพราะเราระบุ ID เอง
+        console.log(`✅ Config created: ${projectId}/${newId} -> ${trimmedName}`);
+        return res.status(201).json({
+            success: true,
+            data: Object.assign({ id: newId }, newData)
+        });
+    }
+    catch (error) {
+        console.error("Error creating main category:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+app.post("/project-config/:projectId/sub-categories", async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { newName, mainCategoryId, mainCategoryName } = req.body;
+        if (!newName || !mainCategoryId || !mainCategoryName) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required fields (newName, mainCategoryId, mainCategoryName)."
+            });
+        }
+        const trimmedName = newName.trim();
+        // 1. สร้าง ID ที่เสถียร (เหมือนตอน Migration)
+        // เราใช้ mainCategoryName เพื่อให้ ID ไม่ซ้ำกันข้ามหมวด
+        const newId = slugify(`${mainCategoryName}-${trimmedName}`);
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("subCategories")
+            .doc(newId);
+        const existingDoc = await docRef.get();
+        if (existingDoc.exists) {
+            return res.status(409).json({
+                success: false,
+                error: `หมวดหมู่ย่อยชื่อ '${trimmedName}' (ID: ${newId}) มีอยู่แล้ว`
+            });
+        }
+        const newData = {
+            name: trimmedName,
+            mainCategoryId: mainCategoryId, // <-- อ้างอิงกลับไปหา Level 1
+            dynamicFields: [], // <-- ค่าเริ่มต้น
+            isArchived: false
+        };
+        await docRef.set(newData);
+        console.log(`✅ SubConfig created: ${projectId}/${newId} -> ${trimmedName}`);
+        return res.status(201).json({ success: true, data: Object.assign({ id: newId }, newData) });
+    }
+    catch (error) {
+        console.error("Error creating sub category:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ✅ [ใหม่] Endpoint สำหรับ "แก้ไข" Sub Category
+app.post("/project-config/:projectId/sub-category/:subCatId", async (req, res) => {
+    try {
+        const { projectId, subCatId } = req.params;
+        const { newName } = req.body;
+        if (!newName) {
+            return res.status(400).json({ success: false, error: "Missing 'newName'." });
+        }
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("subCategories")
+            .doc(subCatId);
+        await docRef.update({ name: newName.trim() });
+        console.log(`✅ SubConfig updated: ${projectId}/${subCatId} -> ${newName.trim()}`);
+        return res.json({ success: true, data: { id: subCatId, name: newName.trim() } });
+    }
+    catch (error) {
+        console.error("Error updating sub category:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ✅ [ใหม่] Endpoint สำหรับ "ลบ" (Soft Delete) Sub Category
+app.delete("/project-config/:projectId/sub-category/:subCatId", async (req, res) => {
+    try {
+        const { projectId, subCatId } = req.params;
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("subCategories")
+            .doc(subCatId);
+        // ทำ "Soft Delete"
+        await docRef.update({ isArchived: true });
+        console.log(`✅ SubConfig soft-deleted: ${projectId}/${subCatId}`);
+        // (TODO ในอนาคต: เราควรจะต้อง Soft Delete "Topics" ที่อยู่ข้างใต้นี้ด้วย)
+        return res.json({ success: true, data: { id: subCatId, status: 'archived' } });
+    }
+    catch (error) {
+        console.error("Error soft-deleting sub category:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ✅ [ใหม่] Endpointสำหรับ "เพิ่ม" Topic (Level 3)
+app.post("/project-config/:projectId/topics", async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { newName, subCategoryId, mainCategoryName, subCategoryName } = req.body; // <-- ต้องการ ID/Name จาก 2 ระดับบน
+        if (!newName || !subCategoryId || !mainCategoryName || !subCategoryName) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required fields (newName, subCategoryId, mainCategoryName, subCategoryName)."
+            });
+        }
+        const trimmedName = newName.trim();
+        // 1. สร้าง ID ที่เสถียร (เหมือนตอน Migration)
+        const newId = slugify(`${mainCategoryName}-${subCategoryName}-${trimmedName}`);
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("topics")
+            .doc(newId);
+        const existingDoc = await docRef.get();
+        if (existingDoc.exists) {
+            return res.status(409).json({
+                success: false,
+                error: `หัวข้อชื่อ '${trimmedName}' (ID: ${newId}) มีอยู่แล้ว`
+            });
+        }
+        const newData = {
+            name: trimmedName,
+            subCategoryId: subCategoryId, // <-- อ้างอิงกลับไปหา Level 2
+            isArchived: false
+            // (เราจะจัดการ dynamicFields ใน Level 4)
+        };
+        await docRef.set(newData);
+        console.log(`✅ Topic created: ${projectId}/${newId} -> ${trimmedName}`);
+        return res.status(201).json({ success: true, data: Object.assign({ id: newId }, newData) });
+    }
+    catch (error) {
+        console.error("Error creating topic:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ✅ [ใหม่] Endpoint สำหรับ "แก้ไข" Topic
+app.post("/project-config/:projectId/topic/:topicId", async (req, res) => {
+    try {
+        const { projectId, topicId } = req.params;
+        const { newName } = req.body;
+        if (!newName) {
+            return res.status(400).json({ success: false, error: "Missing 'newName'." });
+        }
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("topics")
+            .doc(topicId);
+        await docRef.update({ name: newName.trim() });
+        console.log(`✅ Topic updated: ${projectId}/${topicId} -> ${newName.trim()}`);
+        return res.json({ success: true, data: { id: topicId, name: newName.trim() } });
+    }
+    catch (error) {
+        console.error("Error updating topic:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ✅ [ใหม่] Endpoint สำหรับ "ลบ" (Soft Delete) Topic
+app.delete("/project-config/:projectId/topic/:topicId", async (req, res) => {
+    try {
+        const { projectId, topicId } = req.params;
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("topics")
+            .doc(topicId);
+        // ทำ "Soft Delete"
+        await docRef.update({ isArchived: true });
+        console.log(`✅ Topic soft-deleted: ${projectId}/${topicId}`);
+        return res.json({ success: true, data: { id: topicId, status: 'archived' } });
+    }
+    catch (error) {
+        console.error("Error soft-deleting topic:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ✅ [ใหม่] Endpoint สำหรับ "อัปเดต" Dynamic Fields (Level 4)
+app.post("/project-config/:projectId/sub-category/:subCatId/fields", async (req, res) => {
+    try {
+        const { projectId, subCatId } = req.params;
+        const { fields } = req.body; // <-- รับ Array ของ Fields ใหม่
+        // 1. ตรวจสอบว่า fields เป็น Array จริงๆ
+        if (!Array.isArray(fields)) {
+            return res.status(400).json({
+                success: false,
+                error: "Invalid input: 'fields' must be an array."
+            });
+        }
+        // 2. (Optional) กรองค่าว่างและค่าซ้ำ
+        const cleanedFields = fields
+            .map(f => typeof f === 'string' ? f.trim() : '')
+            .filter((f, index, self) => f && self.indexOf(f) === index);
+        // 3. อ้างอิงไปยัง Sub Category
+        const docRef = db
+            .collection("projectConfig")
+            .doc(projectId)
+            .collection("subCategories")
+            .doc(subCatId);
+        // 4. ทำการ Update field 'dynamicFields' ทั้ง array
+        await docRef.update({
+            dynamicFields: cleanedFields
+        });
+        console.log(`✅ Fields updated: ${projectId}/${subCatId} -> [${cleanedFields.join(', ')}]`);
+        return res.json({
+            success: true,
+            data: { id: subCatId, dynamicFields: cleanedFields }
+        });
+    }
+    catch (error) {
+        console.error("Error updating dynamic fields:", error);
         return res.status(500).json({
             success: false,
             error: error.message
