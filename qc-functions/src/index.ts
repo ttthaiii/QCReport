@@ -1,12 +1,11 @@
 // Filename: qc-functions/src/index.ts (VERSION 8 - Dynamic PDF Settings)
 
 import * as admin from "firebase-admin";
-import { getStorage } from "firebase-admin/storage";
+import { getStorage } from 'firebase-admin/storage';
 import { onRequest } from "firebase-functions/v2/https";
 import express, { Request, Response } from "express";
 import cors from "cors";
-import Busboy from 'busboy';
-import { FileInfo } from 'busboy';
+import Busboy, { FileInfo } from 'busboy';
 import { Readable } from 'stream';
 
 // ✅ [แก้ไข] Import ReportSettings (ต้องสร้าง Interface นี้ใน pdf-generator.ts ด้วย)
@@ -182,6 +181,36 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
   }
 });
 
+// ✅ [ใหม่ V11.3] Get Project Report Settings
+app.get("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { projectId } = req.params;
+    const projectRef = db.collection("projects").doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      return res.status(404).json({ success: false, error: "Project not found." });
+    }
+
+    const projectData = projectDoc.data();
+    // ใช้ Default Settings ถ้าใน DB ไม่มีค่า
+    const settings = projectData?.reportSettings || DEFAULT_SETTINGS;
+
+    // Merge defaults เพื่อให้แน่ใจว่ามีครบทุกคีย์
+    const completeSettings = { ...DEFAULT_SETTINGS, ...settings };
+
+    return res.json({ success: true, data: completeSettings });
+
+  } catch (error) {
+    console.error("Error fetching report settings:", error);
+    return res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+      data: DEFAULT_SETTINGS // คืนค่า Default เมื่อเกิด Error
+    });
+  }
+});
+
 // ✅ Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
 app.post("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
   try {
@@ -210,166 +239,134 @@ app.post("/projects/:projectId/report-settings", async (req: Request, res: Respo
 });
 
 // ✅ Endpoint สำหรับ Upload Logo โครงการ
-app.post("/projects/:projectId/upload-logo", async (req: Request, res: Response): Promise<Response> => { // <-- ✅ ทำให้เป็น async และคืนค่า Promise<Response>
+// ✅ [แก้ไข V11.3] Endpoint สำหรับ Upload Logo โครงการ (แก้ไขปัญหา Busboy)
+app.post("/projects/:projectId/upload-logo", async (req: Request, res: Response): Promise<Response> => {
   const { projectId } = req.params;
 
   if (!req.headers['content-type']?.startsWith('multipart/form-data')) {
-      // ✅ เพิ่ม return
-      return res.status(400).json({ success: false, error: 'Invalid Content-Type. Expected multipart/form-data.' });
+    return res.status(400).json({ success: false, error: 'Invalid Content-Type. Expected multipart/form-data.' });
   }
 
-  const busboy = Busboy({
+  // [ใหม่] ห่อหุ้ม Busboy ใน Promise
+  return new Promise<Response>((resolve, reject) => {
+    const busboy = Busboy({
       headers: req.headers,
-      limits: { fileSize: 5 * 1024 * 1024 }
-  });
-
-  let uploadData: { file: Readable | null, filename: string | null, mimetype: string | undefined } =
-    { file: null, filename: null, mimetype: undefined };
-  let hasError = false;
-  let fileProcessed = false;
-
-  busboy.on('file', (fieldname: string, file: Readable, info: FileInfo): void => {
-    if (fieldname !== 'logo') {
-        console.warn(`Unexpected field name: ${fieldname}. Skipping file.`);
-        file.resume();
-        return; // <-- จบ callback นี้ แต่ไม่ได้จบ request
-    }
-    if (hasError || fileProcessed) {
-      file.resume();
-      return; // <-- จบ callback นี้ แต่ไม่ได้จบ request
-    }
-    fileProcessed = true;
-
-    const { filename, mimeType } = info;
-    console.log(`Receiving logo file: ${filename}, mimetype: ${mimeType}`);
-
-    if (!mimeType.startsWith('image/')) {
-      console.error('Invalid file type uploaded.');
-      hasError = true;
-      if (!res.headersSent) {
-           // ส่ง response แต่ไม่คืนค่า Response object จาก callback ที่ typed เป็น void
-           res.status(400).json({ success: false, error: 'Invalid file type. Only images are allowed.' });
-           return;
-      }
-      return; // <-- ถ้า headersSent แล้ว ก็ return เฉยๆ
-    }
-    uploadData = { file, filename, mimetype: mimeType };
-  });
-
-  busboy.on('field', (_fieldname: string, val: any) => {
-     console.log(`Field [${_fieldname}]: value length: ${val?.length ?? 'undefined'}`);
-  });
-
-  busboy.on('finish', async (): Promise<void> => {
-    console.log('Busboy finish event triggered.');
-    if (hasError) {
-        console.log('Finish called, but error flag is set.');
-        // ถ้า hasError เป็น true หมายความว่า response ถูกส่งไปแล้วใน 'file' หรือ 'error' handler
-        return Promise.resolve(); // <-- Return resolved promise
-    }
-    if (!uploadData.file || !uploadData.filename) {
-       console.log('Finish called, but no valid file was processed.');
-       if (!res.headersSent) {
-         res.status(400).json({ success: false, error: 'No valid file uploaded or fieldname mismatch.' });
-       }
-       return;
-     }
+      limits: { fileSize: 5 * 1024 * 1024 } // 5MB Limit
+    });
 
     const bucket = getStorage().bucket();
-    const fileExtension = uploadData.filename.split('.').pop()?.toLowerCase() || 'png';
-    const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
-    const filePath = `logos/${projectId}/${uniqueFilename}`;
-    const fileUpload = bucket.file(filePath);
+    let uploadPromise: Promise<void> | null = null;
+    let publicUrl = "";
 
-    console.log(`Uploading logo to: ${filePath}`);
-
-    const stream = fileUpload.createWriteStream({
-      metadata: { contentType: uploadData.mimetype, cacheControl: 'public, max-age=3600' },
-      resumable: false,
-    });
-
-    await new Promise<void>((resolve, reject) => {
-        // ✅ ตรวจสอบ null ก่อน pipe
-        if (!uploadData.file) {
-            return reject(new Error("uploadData.file is null before piping"));
-        }
-        uploadData.file.pipe(stream)
-            .on('finish', resolve)
-            .on('error', reject);
-    }).then(async () => {
-        try {
-            await fileUpload.makePublic();
-            const publicUrl = fileUpload.publicUrl();
-            console.log(`Logo uploaded successfully: ${publicUrl}`);
-            const projectRef = db.collection("projects").doc(projectId);
-            await projectRef.set({ reportSettings: { projectLogoUrl: publicUrl } }, { merge: true });
-            if (!res.headersSent) {
-                return res.json({ success: true, data: { logoUrl: publicUrl } });
-            }
-            return undefined;
-        } catch (err: any) {
-            console.error('Error making file public or saving URL:', err);
-            if (!res.headersSent) {
-                return res.status(500).json({ success: false, error: 'Error processing file after upload.'});
-            }
-            return undefined;
-        }
-    }).catch((err: Error) => {
-        console.error('Error uploading to Storage or during piping:', err);
-        if (!res.headersSent) {
-            return res.status(500).json({ success: false, error: `Storage upload error: ${err.message}` });
-        }
-        return Promise.resolve(res); // Ensure a response is always returned
-    });
-
-  }); // <-- ปิด busboy.on('finish')
-
-  busboy.on('error', (err: Error) => {
-      console.error('Busboy error:', err);
-      hasError = true;
-      if (!res.headersSent) {
-          res.status(400).json({ success: false, error: `Error parsing upload request: ${err.message}` });
+    busboy.on('file', (fieldname: string, file: Readable, info: FileInfo): void => {
+      // ตรวจสอบ Field name
+      if (fieldname !== 'logo') {
+        console.warn(`Unexpected field name: ${fieldname}. Skipping file.`);
+        file.resume();
+        return;
       }
-      return Promise.resolve(res);
-  });
+      
+      const { filename, mimeType } = info;
+      console.log(`Receiving logo file: ${filename}, mimetype: ${mimeType}`);
 
-   req.pipe(busboy);
+      // ตรวจสอบ MimeType
+      if (!mimeType.startsWith('image/')) {
+        console.error('Invalid file type uploaded.');
+        file.resume(); 
+        // [แก้ไข] ส่ง Error ผ่าน reject ของ Promise หลัก
+        if (!res.headersSent) {
+          res.status(400).json({ success: false, error: 'Invalid file type. Only images are allowed.' });
+          resolve(res); // จบ Promise นี้ด้วย Response ที่ส่งไปแล้ว
+        }
+        return;
+      }
 
-   // ✅ [ใหม่ V11.2] เพิ่ม fallback เผื่อกรณีที่ไม่คาดคิด (ไม่ควรจะมาถึงตรงนี้)
-   // ตั้ง Timeout เล็กน้อยเพื่อให้ Busboy มีเวลาทำงาน
-   setTimeout(() => {
-     if (!res.headersSent) {
-       console.error("Timeout reached: No response sent by Busboy handlers.");
-       res.status(500).json({ success: false, error: "Processing timeout or unexpected state." });
-     }
-   }, 30000); // 30 วินาที
+      // สร้าง Path และ File Upload
+      const fileExtension = filename.split('.').pop()?.toLowerCase() || 'png';
+      const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
+      const filePath = `logos/${projectId}/${uniqueFilename}`;
+      const fileUpload = bucket.file(filePath);
+      
+      console.log(`Uploading logo to: ${filePath}`);
 
-   // รอจนกว่าจะมีการส่ง response หรือ timeout เพื่อให้ฟังก์ชัน async คืนค่าเสมอ
-   await new Promise<void>((resolve) => {
-     const checkInterval = 200;
-     const maxWait = 30000;
-     let waited = 0;
-     const interval = setInterval(() => {
-       if (res.headersSent) {
-         clearInterval(interval);
-         return resolve();
-       }
-       waited += checkInterval;
-       if (waited >= maxWait) {
-         clearInterval(interval);
-         if (!res.headersSent) {
-           try {
-             res.status(500).json({ success: false, error: "Processing timeout or unexpected state." });
-           } catch (e) {
-             // ignore send errors
-           }
-         }
-         return resolve();
-       }
-     }, checkInterval);
-   });
+      const stream = fileUpload.createWriteStream({
+        metadata: { contentType: mimeType, cacheControl: 'public, max-age=3600' },
+        resumable: false,
+      });
 
-   return res;
+      // [ใหม่] สร้าง Promise สำหรับการอัปโหลดไฟล์นี้
+      uploadPromise = new Promise((resolveUpload, rejectUpload) => {
+        file.pipe(stream)
+            .on('finish', () => {
+              console.log('File pipe finished.');
+              // เมื่ออัปโหลดเสร็จ ให้ Make Public และเก็บ URL
+              fileUpload.makePublic()
+                .then(() => {
+                  publicUrl = fileUpload.publicUrl();
+                  console.log(`Logo uploaded successfully: ${publicUrl}`);
+                  resolveUpload();
+                })
+                .catch(rejectUpload);
+            })
+            .on('error', rejectUpload);
+      });
+    }); // ปิด busboy.on('file')
+
+    busboy.on('error', (err: Error) => {
+      console.error('Busboy error:', err);
+      if (!res.headersSent) {
+        res.status(400).json({ success: false, error: `Error parsing upload request: ${err.message}` });
+        resolve(res); // จบ Promise
+      }
+    });
+
+    busboy.on('finish', async () => {
+      console.log('Busboy finish event triggered.');
+      
+      try {
+        // [ใหม่] รอให้การอัปโหลดไฟล์ (ถ้ามี) เสร็จสิ้น
+        if (uploadPromise) {
+          await uploadPromise;
+        } else {
+          // กรณีที่ไม่มีไฟล์ 'logo' ถูกส่งมา
+          if (!res.headersSent) {
+             console.log('Finish called, but no valid file was processed.');
+             res.status(400).json({ success: false, error: 'No valid file uploaded or fieldname mismatch.' });
+             resolve(res);
+          }
+          return;
+        }
+
+        // ถ้าอัปโหลดสำเร็จ (publicUrl ต้องมีค่า)
+        if (publicUrl) {
+          // บันทึก URL ลง Firestore
+          const projectRef = db.collection("projects").doc(projectId);
+          await projectRef.set({ reportSettings: { projectLogoUrl: publicUrl } }, { merge: true });
+
+          // [ใหม่] ส่ง Response สำเร็จกลับไป
+          if (!res.headersSent) {
+            res.json({ success: true, data: { logoUrl: publicUrl } });
+            resolve(res);
+          }
+        } else if (!res.headersSent) {
+          // กรณีแปลกๆ ที่ uploadPromise สำเร็จ แต่ publicUrl ไม่มีค่า
+           res.status(500).json({ success: false, error: 'Upload finished but no URL was generated.' });
+           resolve(res);
+        }
+        
+      } catch (err: any) {
+        console.error('Error during Storage upload or Firestore save:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ success: false, error: `Error processing file after upload: ${err.message}` });
+          resolve(res);
+        }
+      }
+    }); // ปิด busboy.on('finish')
+
+    // เริ่มกระบวนการ
+    req.pipe(busboy);
+
+  }); // ปิด new Promise
 });
 
 // ✅ Upload photo with base64
@@ -611,9 +608,14 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
         subCategory, 
         dynamicFields: dynamicFields || {} 
       };
-      
+
+      const qcReportSettings: ReportSettings = {
+        ...reportSettings,
+        photosPerPage: reportSettings.qcPhotosPerPage // <-- แปลงค่า!
+      };
+
       // ✅ [แก้ไข] ส่ง reportSettings เข้าไปด้วย
-      const pdfBuffer = await generatePDF(reportData, fullLayoutPhotos, reportSettings); 
+      const pdfBuffer = await generatePDF(reportData, fullLayoutPhotos, qcReportSettings); 
       console.log(`✅ QC PDF generated: ${pdfBuffer.length} bytes`);
       
       const uploadResult = await uploadPDFToStorage(pdfBuffer, reportData, 'QC');
@@ -657,9 +659,14 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
         projectName: projectName || projectId, 
         date
       };
-      
+
+      const dailyReportSettings: ReportSettings = {
+        ...reportSettings,
+        photosPerPage: reportSettings.dailyPhotosPerPage // <-- แปลงค่า!
+      };
+
       // ✅ [แก้ไข] ส่ง reportSettings เข้าไปด้วย
-      const pdfBuffer = await generateDailyPDFWrapper(reportData, foundPhotos, reportSettings);
+      const pdfBuffer = await generateDailyPDFWrapper(reportData, foundPhotos, dailyReportSettings);
       console.log(`✅ Daily PDF generated: ${pdfBuffer.length} bytes`);
 
       const uploadResult = await uploadPDFToStorage(pdfBuffer, reportData, 'Daily');
