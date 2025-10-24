@@ -1,9 +1,13 @@
 // Filename: qc-functions/src/index.ts (VERSION 7 - Final)
 
 import * as admin from "firebase-admin";
+import { getStorage } from "firebase-admin/storage";
 import { onRequest } from "firebase-functions/v2/https";
 import express, { Request, Response } from "express";
 import cors from "cors";
+import Busboy from 'busboy';
+import { FileInfo } from 'busboy';
+import { Readable } from 'stream';
 
 // ✅ Import functions from pdf-generator v7
 import { 
@@ -197,6 +201,171 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
       error: (error as Error).message 
     });
   }
+});
+
+// ✅ [แก้ไข] Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
+app.post("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { projectId } = req.params;
+    const newSettings = req.body; // <-- รับ Object settings ใหม่ทั้งหมด
+
+    // (*** คุณสามารถเพิ่มการ Validate ข้อมูล newSettings ที่นี่ได้ ***)
+    // ตัวอย่างเช่น ตรวจสอบว่า photosPerPage เป็นตัวเลขที่ถูกต้องหรือไม่
+    if (typeof newSettings.photosPerPage !== 'number' || ![1, 2, 4, 6].includes(newSettings.photosPerPage)) {
+         console.warn("Invalid photosPerPage value received:", newSettings.photosPerPage);
+         // อาจจะตั้งค่า Default ให้ หรือส่ง Error กลับไป
+         newSettings.photosPerPage = 6; // ตั้งค่า Default กลับไป
+         // หรือ return res.status(400).json({ success: false, error: "Invalid photosPerPage value." });
+    }
+    // (เพิ่ม Validation อื่นๆ ตามต้องการ)
+
+
+    const projectRef = db.collection("projects").doc(projectId);
+
+    // ใช้ merge: true เพื่ออัปเดตเฉพาะ field reportSettings
+    // และไม่เขียนทับ field อื่นๆ ของ Project (เช่น projectName)
+    await projectRef.set({ reportSettings: newSettings }, { merge: true });
+
+    console.log(`✅ Report settings updated for project: ${projectId}`);
+    return res.json({ success: true, data: newSettings }); // ส่ง settings ที่บันทึกแล้วกลับไป
+
+  } catch (error) {
+    console.error("Error updating report settings:", error);
+    return res.status(500).json({
+      success: false,
+      error: (error as Error).message
+    });
+  }
+});
+
+// ✅ [ใหม่] Endpoint สำหรับ Upload Logo โครงการ
+app.post("/projects/:projectId/upload-logo", (req: Request, res: Response) => {
+  const { projectId } = req.params;
+
+  const busboy = Busboy({
+      headers: req.headers,
+      limits: { fileSize: 5 * 1024 * 1024 }
+  });
+
+  // [แก้ไข] เปลี่ยน mimetype เป็น undefined ได้
+  let uploadData: { file: Readable | null, filename: string | null, mimetype: string | undefined } = // <-- แก้ไข Type
+    { file: null, filename: null, mimetype: undefined }; // <-- แก้ไขค่าเริ่มต้น
+  let hasError = false;
+
+  // [แก้ไข] เพิ่ม Types ให้ Parameters
+  busboy.on('file', (fieldname: string, file: Readable, info: FileInfo) => {
+    if (hasError) {
+      file.resume();
+      return;
+    }
+
+    // [แก้ไข] ลบ encoding ที่ไม่ได้ใช้
+    const { filename, mimeType } = info; // <-- เอา encoding ออก
+    console.log(`Receiving logo file: ${filename}, mimetype: ${mimeType}`);
+
+    if (!mimeType.startsWith('image/')) {
+      console.error('Invalid file type uploaded.');
+      hasError = true;
+      req.unpipe(busboy);
+      if (!res.headersSent) {
+          res.writeHead(400, { Connection: 'close', 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Invalid file type. Only images are allowed.' }));
+      }
+      return;
+    }
+    uploadData = { file, filename, mimetype: mimeType };
+  });
+
+  // [แก้ไข] เพิ่ม Type (any เพราะเราไม่ได้ใช้ val) และทำ fieldname เป็น optional
+  busboy.on('field', (_fieldname: string, val: any) => { // <-- เพิ่ม Type และ _
+     console.log(`Field [${_fieldname}]: value: ${val}`);
+  });
+
+  busboy.on('finish', async () => {
+    if (hasError || !uploadData.file || !uploadData.filename) {
+       if (!hasError && !res.headersSent) {
+         res.status(400).json({ success: false, error: 'No file uploaded.' });
+       }
+       return;
+     }
+
+    const bucket = getStorage().bucket();
+    // [แก้ไข] ทำให้ fileExtension ชัวร์ว่าเป็น string
+    const fileExtension = uploadData.filename.split('.').pop()?.toLowerCase() || 'png';
+    const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
+    const filePath = `logos/${projectId}/${uniqueFilename}`;
+    const fileUpload = bucket.file(filePath);
+
+    console.log(`Uploading logo to: ${filePath}`);
+
+    const stream = fileUpload.createWriteStream({
+      // [แก้ไข] รวม metadata เป็น object เดียว
+      metadata: {
+        contentType: uploadData.mimetype, // <-- Type ถูกต้องแล้ว
+        cacheControl: 'public, max-age=3600',
+      },
+      resumable: false,
+      // [แก้ไข] ลบ metadata ซ้ำซ้อน
+      // metadata: {
+      //   contentType: uploadData.mimetype,
+      //   cacheControl: 'public, max-age=3600',
+      // }
+    });
+
+    uploadData.file.pipe(stream);
+
+    stream.on('finish', async () => {
+       try {
+         await fileUpload.makePublic();
+         const publicUrl = fileUpload.publicUrl();
+         console.log(`Logo uploaded successfully: ${publicUrl}`);
+
+         const projectRef = db.collection("projects").doc(projectId);
+         await projectRef.set({
+           reportSettings: {
+             projectLogoUrl: publicUrl
+           }
+         }, { merge: true });
+
+         if (!res.headersSent) {
+             res.json({ success: true, data: { logoUrl: publicUrl } });
+         }
+
+       } catch (err: any) { // [แก้ไข] เพิ่ม Type err
+         console.error('Error making file public or saving URL:', err);
+         if (!res.headersSent) {
+             res.status(500).json({ success: false, error: 'Error processing file after upload.'});
+         }
+       }
+     });
+
+    stream.on('error', (err: Error) => { // [แก้ไข] เพิ่ม Type err
+      console.error('Error uploading to Storage:', err);
+       if (!res.headersSent) {
+           res.status(500).json({ success: false, error: 'Storage upload error.' });
+       }
+    });
+  });
+
+  busboy.on('error', (err: Error) => { // [แก้ไข] เพิ่ม Type err
+      console.error('Busboy error:', err);
+      hasError = true;
+      req.unpipe(busboy);
+      if (!res.headersSent) {
+          res.writeHead(500, { Connection: 'close', 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Error parsing upload request.' }));
+      }
+  });
+
+   req.on('error', (err: Error) => { // [แก้ไข] เพิ่ม Type err
+     console.error('Request pipe error:', err);
+     hasError = true;
+     if (!res.headersSent) {
+       res.status(500).json({ success: false, error: 'Request error during upload.' });
+     }
+   });
+
+   req.pipe(busboy);
 });
 
 // ✅ Upload photo with base64
@@ -856,48 +1025,66 @@ app.delete("/project-config/:projectId/sub-category/:subCatId", async (req: Requ
 app.post("/project-config/:projectId/topics", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
-    const { newName, subCategoryId, mainCategoryName, subCategoryName } = req.body; // <-- ต้องการ ID/Name จาก 2 ระดับบน
+    // 1. [แก้ไข] รับ 'newTopicNames' ที่เป็น Array
+    const { newTopicNames, subCategoryId, mainCategoryName, subCategoryName } = req.body; 
 
-    if (!newName || !subCategoryId || !mainCategoryName || !subCategoryName) {
+    if (!Array.isArray(newTopicNames) || !subCategoryId || !mainCategoryName || !subCategoryName) {
       return res.status(400).json({ 
         success: false, 
-        error: "Missing required fields (newName, subCategoryId, mainCategoryName, subCategoryName)." 
+        error: "Missing required fields (newTopicNames must be an array, subCategoryId, mainCategoryName, subCategoryName)." 
       });
     }
 
-    const trimmedName = newName.trim();
-    
-    // 1. สร้าง ID ที่เสถียร (เหมือนตอน Migration)
-    const newId = slugify(`${mainCategoryName}-${subCategoryName}-${trimmedName}`); 
-    
-    const docRef = db
+    const topicsCollectionRef = db
       .collection("projectConfig")
       .doc(projectId)
-      .collection("topics")
-      .doc(newId);
+      .collection("topics");
       
-    const existingDoc = await docRef.get();
-    if (existingDoc.exists) {
-        return res.status(409).json({
-            success: false,
-            error: `หัวข้อชื่อ '${trimmedName}' (ID: ${newId}) มีอยู่แล้ว`
-        });
+    // 2. [ใหม่] สร้าง Batch
+    const batch = db.batch();
+    const addedTopics: any[] = [];
+    
+    // 3. [ใหม่] วนลูปประมวลผลทุกชื่อที่ส่งมา
+    for (const name of newTopicNames) {
+      const trimmedName = name.trim();
+      if (!trimmedName) continue; // ข้ามบรรทัดว่าง
+
+      // 4. สร้าง ID ที่เสถียร (เหมือนเดิม)
+      const newId = slugify(`${mainCategoryName}-${subCategoryName}-${trimmedName}`); 
+      const docRef = topicsCollectionRef.doc(newId);
+      
+      // 5. [ใหม่] เราจะใช้ .create() ใน Batch
+      // .create() จะล้มเหลวถ้า ID นั้นมีอยู่แล้ว (ป้องกันการเขียนทับ)
+      // (เราจะ catch error ทีหลังถ้า Batch ล้มเหลว)
+      const newData = {
+          name: trimmedName,
+          subCategoryId: subCategoryId,
+          isArchived: false
+      };
+      
+      batch.create(docRef, newData); // <-- ใช้ .create()
+      addedTopics.push({ id: newId, ...newData });
     }
-      
-    const newData = {
-        name: trimmedName,
-        subCategoryId: subCategoryId, // <-- อ้างอิงกลับไปหา Level 2
-        isArchived: false
-        // (เราจะจัดการ dynamicFields ใน Level 4)
-    };
     
-    await docRef.set(newData);
+    if (addedTopics.length === 0) {
+       return res.status(400).json({ success: false, error: "No valid topic names provided." });
+    }
+
+    // 6. [ใหม่] Commit Batch
+    await batch.commit();
     
-    console.log(`✅ Topic created: ${projectId}/${newId} -> ${trimmedName}`);
-    return res.status(201).json({ success: true, data: { id: newId, ...newData } });
+    console.log(`✅ ${addedTopics.length} Topics created under: ${projectId}/${subCategoryId}`);
+    return res.status(201).json({ success: true, data: addedTopics });
 
   } catch (error) {
-    console.error("Error creating topic:", error);
+    console.error("Error creating bulk topics:", error);
+    // (Error นี้มักจะเกิดถ้ามีหัวข้อใดหัวข้อหนึ่งซ้ำ)
+    if ((error as any).code === 6) { // ALREADY_EXISTS
+         return res.status(409).json({ 
+            success: false, 
+            error: "การสร้างล้มเหลว: มีบางหัวข้อ (หรือ ID) ที่คุณพยายามเพิ่มซ้ำกับของเดิมที่มีอยู่" 
+        });
+    }
     return res.status(500).json({ success: false, error: (error as Error).message });
   }
 });

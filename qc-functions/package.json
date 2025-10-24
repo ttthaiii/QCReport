@@ -28,6 +28,7 @@
   },
   "private": true,
   "devDependencies": {
+    "@types/busboy": "^1.5.4",
     "@types/cors": "^2.8.19",
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.0.0",

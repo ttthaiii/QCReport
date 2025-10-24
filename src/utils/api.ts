@@ -20,13 +20,22 @@ export interface MainCategory {
   subCategories: SubCategory[];
 }
 
+export type ProjectConfig = MainCategory[];
+
+export interface ReportSettings {
+  layoutType: string; // "default" | "templateA" | ...
+  photosPerPage: number;
+  customHeaderText: string;
+  customFooterText: string;
+  projectLogoUrl: string; // <-- เพิ่ม
+}
+
 export interface Project {
   id: string;
   projectName: string;
   isActive?: boolean;
+  reportSettings?: ReportSettings; // <-- เพิ่ม Optional field
 }
-
-export type ProjectConfig = MainCategory[];
 
 export interface UploadPhotoData {
   projectId: string;
@@ -98,6 +107,67 @@ export const api = {
         success: false, 
         error: 'ไม่สามารถโหลดข้อมูลตั้งค่าโครงการได้' 
       };
+    }
+  },
+
+  async getReportSettings(projectId: string): Promise<ApiResponse<ReportSettings>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/report-settings`);
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching report settings:', error);
+      // คืนค่า Default ที่นี่ด้วย เผื่อ Backend ล้มเหลว
+      const defaultSettings: ReportSettings = {
+          layoutType: "default", photosPerPage: 6,
+          customHeaderText: "", customFooterText: "", projectLogoUrl: ""
+      };
+      return { success: false, error: (error as Error).message, data: defaultSettings };
+    }
+  },
+
+  /**
+   * ✅ [ใหม่] บันทึกค่าตั้งค่า Report ของ Project
+   */
+  async saveReportSettings(projectId: string, settings: ReportSettings): Promise<ApiResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/report-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error saving report settings:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  },
+
+  /**
+   * ✅ [ใหม่] อัปโหลดไฟล์ Logo ของ Project
+   */
+  async uploadProjectLogo(projectId: string, file: File): Promise<ApiResponse<{ logoUrl: string }>> {
+    try {
+      const formData = new FormData();
+      formData.append('logo', file); // 'logo' คือ fieldname ที่ Backend (busboy) รออยู่
+
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/upload-logo`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errorMsg = `HTTP ${response.status}`;
+        try { const errorData = await response.json(); errorMsg = errorData.error || errorMsg; }
+        catch (e) { /* Ignore if not JSON */ }
+        throw new Error(errorMsg);
+      }
+      return await response.json();
+
+    } catch (error) {
+      console.error('Error uploading project logo:', error);
+      return { success: false, error: (error as Error).message };
     }
   },
 
@@ -278,9 +348,9 @@ export const api = {
   async addTopic(
     projectId: string, 
     subCategoryId: string, 
-    mainCategoryName: string, // <-- ต้องการสำหรับ Slug
-    subCategoryName: string,  // <-- ต้องการสำหรับ Slug
-    newName: string
+    mainCategoryName: string,
+    subCategoryName: string,
+    newTopicNames: string[] // <-- [แก้ไข] รับ Array
   ): Promise<ApiResponse> {
     try {
       const response = await fetch(
@@ -289,7 +359,7 @@ export const api = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            newName: newName,
+            newTopicNames: newTopicNames, // <-- [แก้ไข] ส่ง Array
             subCategoryId: subCategoryId,
             mainCategoryName: mainCategoryName,
             subCategoryName: subCategoryName
@@ -299,7 +369,7 @@ export const api = {
       if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
       return await response.json();
     } catch (error) {
-      console.error('Error adding topic:', error);
+      console.error('Error adding bulk topics:', error);
       return { success: false, error: (error as Error).message };
     }
   },

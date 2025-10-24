@@ -66,6 +66,16 @@ async function migrateDataV2() {
     // 2. ประมวลผล Projects (Collection: projects)
     console.log('\n--- Processing Projects ---');
     const projectBatch = db.batch();
+    
+    // ✅ [ใหม่] กำหนดค่า Default Settings ที่นี่
+    const defaultReportSettings = {
+        layoutType: "default",
+        photosPerPage: 6, // <-- ค่าเริ่มต้น 6 รูป
+        customHeaderText: "",
+        customFooterText: "",
+        projectLogoUrl: ""
+    };
+
     for (const project of projectsData) {
       const projectId = project.id ? project.id.trim() : null;
       if (!projectId) {
@@ -73,10 +83,13 @@ async function migrateDataV2() {
         continue;
       }
       const projectRef = db.collection('projects').doc(projectId);
+
+      // ✅ [แก้ไข] เพิ่ม reportSettings เข้าไปตอน set ข้อมูล
       projectBatch.set(projectRef, {
         projectName: project.name || 'Unnamed Project',
         projectCode: project.code || '',
-        isActive: true
+        isActive: true,
+        reportSettings: defaultReportSettings // <-- เพิ่มบรรทัดนี้
       });
       console.log(`  -> Preparing Project: ${projectId} (${project.name})`);
     }

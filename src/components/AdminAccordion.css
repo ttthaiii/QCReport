@@ -186,3 +186,71 @@
   gap: 10px;
   margin-top: 20px;
 }
+
+/* * CSS ใหม่สำหรับ Report Settings Box
+ */
+
+.report-settings-box {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+}
+
+.report-settings-box h3,
+.report-settings-box h4 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #495057;
+}
+.report-settings-box h4 {
+    margin-bottom: 15px;
+}
+
+.setting-group {
+  margin-bottom: 15px;
+}
+
+.setting-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  font-size: 0.9em;
+  color: #343a40;
+}
+
+.setting-group select,
+.setting-group input[type="text"] {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  box-sizing: border-box; /* เพิ่ม */
+}
+
+/* Style for input placeholder text */
+.setting-group input[type="text"]::placeholder {
+  color: #adb5bd;
+  font-style: italic;
+}
+
+/* * CSS ใหม่สำหรับ Logo Preview และ Upload
+ */
+.logo-preview {
+  margin-top: 10px;
+  max-width: 200px;
+  max-height: 80px;
+  border: 1px solid #eee;
+  padding: 5px;
+  background-color: #fff;
+  display: inline-block; /* ให้แสดงข้างๆ URL input ถ้าจอพอ */
+  vertical-align: top;
+}
+.logo-preview img {
+  display: none; /* ซ่อนไว้ก่อน จนกว่าจะโหลดเสร็จ */
+  max-width: 100%;
+  max-height: 70px;
+  object-fit: contain;
+}
