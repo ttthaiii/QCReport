@@ -23,11 +23,10 @@ export interface MainCategory {
 export type ProjectConfig = MainCategory[];
 
 export interface ReportSettings {
-  layoutType: string; // "default" | "templateA" | ...
-  photosPerPage: number;
-  customHeaderText: string;
-  customFooterText: string;
-  projectLogoUrl: string; // <-- เพิ่ม
+  layoutType: string;
+  qcPhotosPerPage: 1 | 2 | 4 | 6;      // <-- [ใหม่]
+  dailyPhotosPerPage: 1 | 2 | 4 | 6;   // <-- [ใหม่]
+  projectLogoUrl: string;
 }
 
 export interface Project {
@@ -111,20 +110,22 @@ export const api = {
   },
 
   async getReportSettings(projectId: string): Promise<ApiResponse<ReportSettings>> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/report-settings`);
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching report settings:', error);
-      // คืนค่า Default ที่นี่ด้วย เผื่อ Backend ล้มเหลว
-      const defaultSettings: ReportSettings = {
-          layoutType: "default", photosPerPage: 6,
-          customHeaderText: "", customFooterText: "", projectLogoUrl: ""
-      };
-      return { success: false, error: (error as Error).message, data: defaultSettings };
-    }
-  },
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/report-settings`);
+      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching report settings:', error);
+      // [แก้ไข V11] คืนค่า Default ที่ถูกต้อง
+      const defaultSettings: ReportSettings = {
+          layoutType: "default", 
+            qcPhotosPerPage: 6, 
+            dailyPhotosPerPage: 2, 
+            projectLogoUrl: ""
+      };
+      return { success: false, error: (error as Error).message, data: defaultSettings };
+    }
+  },
 
   /**
    * ✅ [ใหม่] บันทึกค่าตั้งค่า Report ของ Project

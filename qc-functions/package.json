@@ -15,6 +15,7 @@
   "main": "lib/index.js",
   "dependencies": {
     "@sparticuz/chromium": "^116.0.0",
+    "axios": "^1.12.2",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "express": "^4.18.2",

@@ -1,4 +1,4 @@
-// Filename: qc-functions/src/index.ts (VERSION 7 - Final)
+// Filename: qc-functions/src/index.ts (VERSION 8 - Dynamic PDF Settings)
 
 import * as admin from "firebase-admin";
 import { getStorage } from "firebase-admin/storage";
@@ -9,18 +9,19 @@ import Busboy from 'busboy';
 import { FileInfo } from 'busboy';
 import { Readable } from 'stream';
 
-// ✅ Import functions from pdf-generator v7
+// ✅ [แก้ไข] Import ReportSettings (ต้องสร้าง Interface นี้ใน pdf-generator.ts ด้วย)
 import { 
   getLatestPhotos, 
   createFullLayout, 
   generatePDF, 
   generateDailyPDFWrapper,
   uploadPDFToStorage,
-  getUploadedTopicStatus, // <-- [ใหม่] Import
-  getDailyPhotosByDate
+  getUploadedTopicStatus,
+  getDailyPhotosByDate,
+  ReportSettings, // <-- [ใหม่] Import
+  DEFAULT_SETTINGS
 } from './services/pdf-generator';
 
-// ✅ Import Firestore and Storage functions
 import { PhotoData as FirestorePhotoData, logPhotoToFirestore } from "./api/firestore";
 import { uploadPhotoToStorage as uploadImageToStorage } from "./api/storage";
 
@@ -39,21 +40,13 @@ function slugify(text: string): string {
 
 if (!admin.apps.length) {
   if (IS_EMULATOR) {
-    // --- 🔧 [EMULATOR] ---
     console.log("🔧 Running in EMULATOR mode (with Service Account)");
-    
-    // 1. [แก้ไข] ระบุตำแหน่งไฟล์ Key ให้อยู่ในโฟลเดอร์ keys
-    // (!! อย่าลืมเปลี่ยน "YOUR-KEY-FILENAME.json" ให้เป็นชื่อไฟล์ Key จริงของคุณ !!)
     const serviceAccount = require("../keys/qcreport-54164-4d8f26cbb52f.json");
-
     admin.initializeApp({
-      // 2. ส่ง credential เข้าไปตรงๆ
       credential: admin.credential.cert(serviceAccount), 
       storageBucket: "qcreport-54164.appspot.com"
     });
-
   } else {
-    // --- 🚀 [PRODUCTION] ---
     console.log("🚀 Running in PRODUCTION mode");
     admin.initializeApp({
       storageBucket: "qcreport-54164.appspot.com"
@@ -69,12 +62,13 @@ app.use(express.json({ limit: "10mb" }));
 
 // --- API ROUTES ---
 
+// ... (คง Endpoint /health, /projects, /project-config, /projects/:projectId/report-settings ไว้เหมือนเดิม) ...
 // ✅ Health check endpoint
 app.get("/health", (req: Request, res: Response) => {
   res.json({ 
     status: "healthy",
     environment: IS_EMULATOR ? "emulator" : "production",
-    version: "7.0"
+    version: "8.0" // <-- [ใหม่] อัปเดตเวอร์ชัน
   });
 });
 
@@ -109,12 +103,8 @@ app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
 app.get("/project-config/:projectId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
-    
-    // 1. อ้างอิงไปยัง Collection หลักของ Config
     const projectConfigRef = db.collection("projectConfig").doc(projectId);
 
-    // 2. [ใหม่] Query ทั้ง 3 Collections พร้อมกัน (Parallel Fetch)
-    // (เราเพิ่ม .where("isArchived", "==", false) เพื่อรองรับการ "Soft Delete" ในอนาคต)
     const mainCategoriesPromise = projectConfigRef
       .collection("mainCategories")
       .where("isArchived", "==", false)
@@ -136,17 +126,13 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
       topicsPromise,
     ]);
 
-    // 3. [ใหม่] ประมวลผล Topics (ลูกสุด) ให้เป็น Map
-    // (Key: subCategoryId, Value: Topic[])
     const topicsMap = new Map<string, any[]>();
     topicSnap.forEach(doc => {
       const topicData = doc.data();
-      const subId = topicData.subCategoryId; // นี่คือ "Foreign Key"
-      
+      const subId = topicData.subCategoryId;
       if (!topicsMap.has(subId)) {
         topicsMap.set(subId, []);
       }
-      
       topicsMap.get(subId)!.push({
         id: doc.id,
         name: topicData.name,
@@ -154,33 +140,27 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
       });
     });
 
-    // 4. [ใหม่] ประมวลผล SubCategories และ "Join" Topics เข้ามา
-    // (Key: mainCategoryId, Value: SubCategory[])
     const subCategoriesMap = new Map<string, any[]>();
     subSnap.forEach(doc => {
       const subData = doc.data();
-      const mainId = subData.mainCategoryId; // นี่คือ "Foreign Key"
-      
+      const mainId = subData.mainCategoryId;
       if (!subCategoriesMap.has(mainId)) {
         subCategoriesMap.set(mainId, []);
       }
-      
       subCategoriesMap.get(mainId)!.push({
         id: doc.id,
         name: subData.name,
         dynamicFields: subData.dynamicFields || [],
-        topics: topicsMap.get(doc.id) || [], // ดึง Topics จาก Map ด้านบน
+        topics: topicsMap.get(doc.id) || [],
       });
     });
 
-    // 5. [ใหม่] ประมวลผล MainCategories และ "Join" SubCategories เข้ามา
     const finalConfig: any[] = [];
     mainSnap.forEach(doc => {
       finalConfig.push({
         id: doc.id,
         name: doc.data().name,
-        // (เราไม่ต้องส่ง isArchived ไปให้ Frontend ก็ได้)
-        subCategories: subCategoriesMap.get(doc.id) || [], // ดึง SubCategories จาก Map
+        subCategories: subCategoriesMap.get(doc.id) || [],
       });
     });
 
@@ -191,7 +171,6 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
       });
     }
     
-    // 6. ส่งข้อมูลโครงสร้างใหม่ (Array of Objects) กลับไป
     return res.json({ success: true, data: finalConfig });
 
   } catch (error) {
@@ -203,31 +182,23 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
   }
 });
 
-// ✅ [แก้ไข] Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
+// ✅ Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
 app.post("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
-    const newSettings = req.body; // <-- รับ Object settings ใหม่ทั้งหมด
+    const newSettings = req.body; 
 
-    // (*** คุณสามารถเพิ่มการ Validate ข้อมูล newSettings ที่นี่ได้ ***)
-    // ตัวอย่างเช่น ตรวจสอบว่า photosPerPage เป็นตัวเลขที่ถูกต้องหรือไม่
     if (typeof newSettings.photosPerPage !== 'number' || ![1, 2, 4, 6].includes(newSettings.photosPerPage)) {
          console.warn("Invalid photosPerPage value received:", newSettings.photosPerPage);
-         // อาจจะตั้งค่า Default ให้ หรือส่ง Error กลับไป
-         newSettings.photosPerPage = 6; // ตั้งค่า Default กลับไป
-         // หรือ return res.status(400).json({ success: false, error: "Invalid photosPerPage value." });
+         newSettings.photosPerPage = 6;
     }
-    // (เพิ่ม Validation อื่นๆ ตามต้องการ)
-
 
     const projectRef = db.collection("projects").doc(projectId);
 
-    // ใช้ merge: true เพื่ออัปเดตเฉพาะ field reportSettings
-    // และไม่เขียนทับ field อื่นๆ ของ Project (เช่น projectName)
     await projectRef.set({ reportSettings: newSettings }, { merge: true });
 
     console.log(`✅ Report settings updated for project: ${projectId}`);
-    return res.json({ success: true, data: newSettings }); // ส่ง settings ที่บันทึกแล้วกลับไป
+    return res.json({ success: true, data: newSettings });
 
   } catch (error) {
     console.error("Error updating report settings:", error);
@@ -238,59 +209,73 @@ app.post("/projects/:projectId/report-settings", async (req: Request, res: Respo
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับ Upload Logo โครงการ
-app.post("/projects/:projectId/upload-logo", (req: Request, res: Response) => {
+// ✅ Endpoint สำหรับ Upload Logo โครงการ
+app.post("/projects/:projectId/upload-logo", async (req: Request, res: Response): Promise<Response> => { // <-- ✅ ทำให้เป็น async และคืนค่า Promise<Response>
   const { projectId } = req.params;
+
+  if (!req.headers['content-type']?.startsWith('multipart/form-data')) {
+      // ✅ เพิ่ม return
+      return res.status(400).json({ success: false, error: 'Invalid Content-Type. Expected multipart/form-data.' });
+  }
 
   const busboy = Busboy({
       headers: req.headers,
       limits: { fileSize: 5 * 1024 * 1024 }
   });
 
-  // [แก้ไข] เปลี่ยน mimetype เป็น undefined ได้
-  let uploadData: { file: Readable | null, filename: string | null, mimetype: string | undefined } = // <-- แก้ไข Type
-    { file: null, filename: null, mimetype: undefined }; // <-- แก้ไขค่าเริ่มต้น
+  let uploadData: { file: Readable | null, filename: string | null, mimetype: string | undefined } =
+    { file: null, filename: null, mimetype: undefined };
   let hasError = false;
+  let fileProcessed = false;
 
-  // [แก้ไข] เพิ่ม Types ให้ Parameters
-  busboy.on('file', (fieldname: string, file: Readable, info: FileInfo) => {
-    if (hasError) {
-      file.resume();
-      return;
+  busboy.on('file', (fieldname: string, file: Readable, info: FileInfo): void => {
+    if (fieldname !== 'logo') {
+        console.warn(`Unexpected field name: ${fieldname}. Skipping file.`);
+        file.resume();
+        return; // <-- จบ callback นี้ แต่ไม่ได้จบ request
     }
+    if (hasError || fileProcessed) {
+      file.resume();
+      return; // <-- จบ callback นี้ แต่ไม่ได้จบ request
+    }
+    fileProcessed = true;
 
-    // [แก้ไข] ลบ encoding ที่ไม่ได้ใช้
-    const { filename, mimeType } = info; // <-- เอา encoding ออก
+    const { filename, mimeType } = info;
     console.log(`Receiving logo file: ${filename}, mimetype: ${mimeType}`);
 
     if (!mimeType.startsWith('image/')) {
       console.error('Invalid file type uploaded.');
       hasError = true;
-      req.unpipe(busboy);
       if (!res.headersSent) {
-          res.writeHead(400, { Connection: 'close', 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'Invalid file type. Only images are allowed.' }));
+           // ส่ง response แต่ไม่คืนค่า Response object จาก callback ที่ typed เป็น void
+           res.status(400).json({ success: false, error: 'Invalid file type. Only images are allowed.' });
+           return;
       }
-      return;
+      return; // <-- ถ้า headersSent แล้ว ก็ return เฉยๆ
     }
     uploadData = { file, filename, mimetype: mimeType };
   });
 
-  // [แก้ไข] เพิ่ม Type (any เพราะเราไม่ได้ใช้ val) และทำ fieldname เป็น optional
-  busboy.on('field', (_fieldname: string, val: any) => { // <-- เพิ่ม Type และ _
-     console.log(`Field [${_fieldname}]: value: ${val}`);
+  busboy.on('field', (_fieldname: string, val: any) => {
+     console.log(`Field [${_fieldname}]: value length: ${val?.length ?? 'undefined'}`);
   });
 
-  busboy.on('finish', async () => {
-    if (hasError || !uploadData.file || !uploadData.filename) {
-       if (!hasError && !res.headersSent) {
-         res.status(400).json({ success: false, error: 'No file uploaded.' });
+  busboy.on('finish', async (): Promise<void> => {
+    console.log('Busboy finish event triggered.');
+    if (hasError) {
+        console.log('Finish called, but error flag is set.');
+        // ถ้า hasError เป็น true หมายความว่า response ถูกส่งไปแล้วใน 'file' หรือ 'error' handler
+        return Promise.resolve(); // <-- Return resolved promise
+    }
+    if (!uploadData.file || !uploadData.filename) {
+       console.log('Finish called, but no valid file was processed.');
+       if (!res.headersSent) {
+         res.status(400).json({ success: false, error: 'No valid file uploaded or fieldname mismatch.' });
        }
        return;
      }
 
     const bucket = getStorage().bucket();
-    // [แก้ไข] ทำให้ fileExtension ชัวร์ว่าเป็น string
     const fileExtension = uploadData.filename.split('.').pop()?.toLowerCase() || 'png';
     const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
     const filePath = `logos/${projectId}/${uniqueFilename}`;
@@ -299,73 +284,92 @@ app.post("/projects/:projectId/upload-logo", (req: Request, res: Response) => {
     console.log(`Uploading logo to: ${filePath}`);
 
     const stream = fileUpload.createWriteStream({
-      // [แก้ไข] รวม metadata เป็น object เดียว
-      metadata: {
-        contentType: uploadData.mimetype, // <-- Type ถูกต้องแล้ว
-        cacheControl: 'public, max-age=3600',
-      },
+      metadata: { contentType: uploadData.mimetype, cacheControl: 'public, max-age=3600' },
       resumable: false,
-      // [แก้ไข] ลบ metadata ซ้ำซ้อน
-      // metadata: {
-      //   contentType: uploadData.mimetype,
-      //   cacheControl: 'public, max-age=3600',
-      // }
     });
 
-    uploadData.file.pipe(stream);
-
-    stream.on('finish', async () => {
-       try {
-         await fileUpload.makePublic();
-         const publicUrl = fileUpload.publicUrl();
-         console.log(`Logo uploaded successfully: ${publicUrl}`);
-
-         const projectRef = db.collection("projects").doc(projectId);
-         await projectRef.set({
-           reportSettings: {
-             projectLogoUrl: publicUrl
-           }
-         }, { merge: true });
-
-         if (!res.headersSent) {
-             res.json({ success: true, data: { logoUrl: publicUrl } });
-         }
-
-       } catch (err: any) { // [แก้ไข] เพิ่ม Type err
-         console.error('Error making file public or saving URL:', err);
-         if (!res.headersSent) {
-             res.status(500).json({ success: false, error: 'Error processing file after upload.'});
-         }
-       }
-     });
-
-    stream.on('error', (err: Error) => { // [แก้ไข] เพิ่ม Type err
-      console.error('Error uploading to Storage:', err);
-       if (!res.headersSent) {
-           res.status(500).json({ success: false, error: 'Storage upload error.' });
-       }
+    await new Promise<void>((resolve, reject) => {
+        // ✅ ตรวจสอบ null ก่อน pipe
+        if (!uploadData.file) {
+            return reject(new Error("uploadData.file is null before piping"));
+        }
+        uploadData.file.pipe(stream)
+            .on('finish', resolve)
+            .on('error', reject);
+    }).then(async () => {
+        try {
+            await fileUpload.makePublic();
+            const publicUrl = fileUpload.publicUrl();
+            console.log(`Logo uploaded successfully: ${publicUrl}`);
+            const projectRef = db.collection("projects").doc(projectId);
+            await projectRef.set({ reportSettings: { projectLogoUrl: publicUrl } }, { merge: true });
+            if (!res.headersSent) {
+                return res.json({ success: true, data: { logoUrl: publicUrl } });
+            }
+            return undefined;
+        } catch (err: any) {
+            console.error('Error making file public or saving URL:', err);
+            if (!res.headersSent) {
+                return res.status(500).json({ success: false, error: 'Error processing file after upload.'});
+            }
+            return undefined;
+        }
+    }).catch((err: Error) => {
+        console.error('Error uploading to Storage or during piping:', err);
+        if (!res.headersSent) {
+            return res.status(500).json({ success: false, error: `Storage upload error: ${err.message}` });
+        }
+        return Promise.resolve(res); // Ensure a response is always returned
     });
-  });
 
-  busboy.on('error', (err: Error) => { // [แก้ไข] เพิ่ม Type err
+  }); // <-- ปิด busboy.on('finish')
+
+  busboy.on('error', (err: Error) => {
       console.error('Busboy error:', err);
       hasError = true;
-      req.unpipe(busboy);
       if (!res.headersSent) {
-          res.writeHead(500, { Connection: 'close', 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'Error parsing upload request.' }));
+          res.status(400).json({ success: false, error: `Error parsing upload request: ${err.message}` });
       }
+      return Promise.resolve(res);
   });
 
-   req.on('error', (err: Error) => { // [แก้ไข] เพิ่ม Type err
-     console.error('Request pipe error:', err);
-     hasError = true;
+   req.pipe(busboy);
+
+   // ✅ [ใหม่ V11.2] เพิ่ม fallback เผื่อกรณีที่ไม่คาดคิด (ไม่ควรจะมาถึงตรงนี้)
+   // ตั้ง Timeout เล็กน้อยเพื่อให้ Busboy มีเวลาทำงาน
+   setTimeout(() => {
      if (!res.headersSent) {
-       res.status(500).json({ success: false, error: 'Request error during upload.' });
+       console.error("Timeout reached: No response sent by Busboy handlers.");
+       res.status(500).json({ success: false, error: "Processing timeout or unexpected state." });
      }
+   }, 30000); // 30 วินาที
+
+   // รอจนกว่าจะมีการส่ง response หรือ timeout เพื่อให้ฟังก์ชัน async คืนค่าเสมอ
+   await new Promise<void>((resolve) => {
+     const checkInterval = 200;
+     const maxWait = 30000;
+     let waited = 0;
+     const interval = setInterval(() => {
+       if (res.headersSent) {
+         clearInterval(interval);
+         return resolve();
+       }
+       waited += checkInterval;
+       if (waited >= maxWait) {
+         clearInterval(interval);
+         if (!res.headersSent) {
+           try {
+             res.status(500).json({ success: false, error: "Processing timeout or unexpected state." });
+           } catch (e) {
+             // ignore send errors
+           }
+         }
+         return resolve();
+       }
+     }, checkInterval);
    });
 
-   req.pipe(busboy);
+   return res;
 });
 
 // ✅ Upload photo with base64
@@ -436,16 +440,10 @@ app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Re
       });
     }
 
-    // Convert base64 to buffer
-    // 🔥 ตรวจสอบและทำความสะอาด base64
     let cleanBase64 = photo;
-    
-    // ลบ data URL prefix ถ้ามี (data:image/jpeg;base64,)
     if (cleanBase64.includes(',')) {
       cleanBase64 = cleanBase64.split(',')[1];
     }
-    
-    // ลบ whitespace
     cleanBase64 = cleanBase64.replace(/\s/g, '');
     
     console.log(`📏 Base64 length: ${cleanBase64.length} chars`);
@@ -453,12 +451,10 @@ app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Re
     const imageBuffer = Buffer.from(cleanBase64, "base64");
     console.log(`📊 Buffer size: ${imageBuffer.length} bytes`);
     
-    // 🔥 Validate image buffer
     if (imageBuffer.length < 100) {
       throw new Error('Invalid image data: buffer too small');
     }
     
-    // 🔥 Check JPEG magic number (FF D8 FF)
     if (imageBuffer[0] !== 0xFF || imageBuffer[1] !== 0xD8) {
       console.error('❌ Invalid JPEG header:', imageBuffer.slice(0, 10));
       throw new Error('Invalid image data: not a valid JPEG');
@@ -469,7 +465,6 @@ app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Re
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `${filenamePrefix}-${timestamp}.jpg`.replace(/\s/g, "_");
 
-    // Upload to Storage
     const storageCategoryPath = reportType === 'QC'
       ? category.replace(/\s*>\s*/g, "_")
       : 'daily-reports';
@@ -481,12 +476,10 @@ app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Re
       category: storageCategoryPath 
     });
     
-    // Update photo data
     photoData.filename = storageResult.filename;
     photoData.driveUrl = storageResult.publicUrl;
     photoData.filePath = storageResult.filePath;
 
-    // Log to Firestore
     const firestoreResult = await logPhotoToFirestore(photoData);
     
     return res.json({ 
@@ -505,19 +498,17 @@ app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Re
   }
 });
 
-// ✅ Generate PDF report (v7 - with base64 images)
+// ✅ [แก้ไข] Generate PDF report (v8 - with Dynamic Settings)
 app.post("/generate-report", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { 
       projectId, 
       projectName, 
-      reportType, // <-- [ใหม่] รับ reportType
-      // QC fields (นี่คือ "ชื่อ" ที่ส่งมาจาก Frontend)
+      reportType,
       mainCategory, 
       subCategory, 
       dynamicFields,
-      // Daily fields
-      date // <-- [ใหม่] รับ date
+      date
     } = req.body;
     
     if (!projectId || !reportType) {
@@ -526,11 +517,30 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
         error: "Missing projectId or reportType." 
       });
     }
+
+    // ===================================
+    //  [ใหม่] Fetch Report Settings
+    // ===================================
+    let reportSettings: ReportSettings = { ...DEFAULT_SETTINGS };
+    try {
+      const projectDoc = await db.collection("projects").doc(projectId).get();
+      if (projectDoc.exists && projectDoc.data()?.reportSettings) {
+        const settingsFromDB = projectDoc.data()?.reportSettings;
+        // Merge defaults with DB settings to ensure all keys exist
+        reportSettings = { ...DEFAULT_SETTINGS, ...settingsFromDB };
+        console.log(`✅ Loaded custom report settings for ${projectId}: ${reportSettings.photosPerPage} photos/page`);
+      } else {
+        console.log(`⚠️ No custom report settings found for ${projectId}, using defaults.`);
+      }
+    } catch (settingsError) {
+      console.error(`❌ Error fetching report settings:`, settingsError);
+      // Continue with defaults
+    }
     
     console.log(`📊 Generating ${reportType} report for ${projectName}`);
 
     // ===================================
-    //  QC REPORT LOGIC (แก้ไข V2 - อ่าน Flat)
+    //  QC REPORT LOGIC
     // ===================================
     if (reportType === 'QC') {
       if (!mainCategory || !subCategory) {
@@ -540,10 +550,8 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
         });
       }
 
-      // 1. [ใหม่] ค้นหา Topics จากโครงสร้าง Flat
       const projectConfigRef = db.collection("projectConfig").doc(projectId);
 
-      // 1a. ค้นหา MainCategory ID (จาก "ชื่อ")
       const mainCatSnap = await projectConfigRef
         .collection("mainCategories")
         .where("name", "==", mainCategory)
@@ -555,11 +563,10 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
       }
       const mainCatId = mainCatSnap.docs[0].id;
 
-      // 1b. ค้นหา SubCategory ID (จาก "ชื่อ" และ "mainCatId")
       const subCatSnap = await projectConfigRef
         .collection("subCategories")
         .where("name", "==", subCategory)
-        .where("mainCategoryId", "==", mainCatId) // กันชื่อซ้ำ
+        .where("mainCategoryId", "==", mainCatId)
         .limit(1)
         .get();
 
@@ -568,7 +575,6 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
       }
       const subCatId = subCatSnap.docs[0].id;
 
-      // 1c. ดึง Topics ทั้งหมดของ SubCategory นี้
       const topicsSnap = await projectConfigRef
         .collection("topics")
         .where("subCategoryId", "==", subCatId)
@@ -577,18 +583,15 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
         
       const allTopics: string[] = topicsSnap.docs.map(doc => doc.data().name as string);
       
-      // 1d. ตรวจสอบ (จุดที่เคยเกิด Error)
       if (allTopics.length === 0) {
         return res.status(404).json({ 
           success: false, 
-          error: "No topics found." // <-- Error เดิม
+          error: "No topics found."
         });
       }
       
       console.log(`✅ Found ${allTopics.length} total topics for the layout.`);
       
-      // 2. Get latest photos (QC)
-      // (ฟังก์ชันนี้ยังทำงานกับ "ชื่อ" Category ได้อยู่)
       const foundPhotos = await getLatestPhotos(
         projectId, 
         mainCategory, 
@@ -599,10 +602,8 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
       
       console.log(`📸 Found and downloaded ${foundPhotos.length} photos.`);
       
-      // 3. Create full layout (photos + placeholders)
       const fullLayoutPhotos = createFullLayout(allTopics, foundPhotos);
       
-      // 4. Generate PDF (QC)
       const reportData = { 
         projectId, 
         projectName: projectName || projectId, 
@@ -611,10 +612,10 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
         dynamicFields: dynamicFields || {} 
       };
       
-      const pdfBuffer = await generatePDF(reportData, fullLayoutPhotos); 
+      // ✅ [แก้ไข] ส่ง reportSettings เข้าไปด้วย
+      const pdfBuffer = await generatePDF(reportData, fullLayoutPhotos, reportSettings); 
       console.log(`✅ QC PDF generated: ${pdfBuffer.length} bytes`);
       
-      // 5. Upload PDF to Storage
       const uploadResult = await uploadPDFToStorage(pdfBuffer, reportData, 'QC');
       
       return res.json({
@@ -629,7 +630,7 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
       });
     
     // ===================================
-    //  DAILY REPORT LOGIC (อันนี้ถูกต้องอยู่แล้ว)
+    //  DAILY REPORT LOGIC
     // ===================================
     } else if (reportType === 'Daily') {
       if (!date) {
@@ -641,7 +642,6 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
 
       console.log(`📅 Fetching Daily photos for date: ${date}`);
 
-      // 1. Get daily photos
       const foundPhotos = await getDailyPhotosByDate(projectId, date);
       console.log(`📸 Found and downloaded ${foundPhotos.length} daily photos.`);
 
@@ -652,17 +652,16 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
         });
       }
       
-      // 2. Generate PDF
       const reportData = { 
         projectId, 
         projectName: projectName || projectId, 
         date
       };
       
-      const pdfBuffer = await generateDailyPDFWrapper(reportData, foundPhotos);
+      // ✅ [แก้ไข] ส่ง reportSettings เข้าไปด้วย
+      const pdfBuffer = await generateDailyPDFWrapper(reportData, foundPhotos, reportSettings);
       console.log(`✅ Daily PDF generated: ${pdfBuffer.length} bytes`);
 
-      // 3. Upload PDF to Storage
       const uploadResult = await uploadPDFToStorage(pdfBuffer, reportData, 'Daily');
 
       return res.json({
@@ -690,6 +689,7 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
   }
 });
 
+// ... (คง Endpoint /checklist-status, /photos/:projectId, และ /project-config/... CRUD ทั้งหมดไว้เหมือนเดิม) ...
 app.post("/checklist-status", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { 
@@ -714,7 +714,6 @@ app.post("/checklist-status", async (req: Request, res: Response): Promise<Respo
       dynamicFields
     );
     
-    // ส่งกลับเป็น JSON object ธรรมดา
     return res.json({ success: true, data: statusMap });
 
   } catch (error) {
@@ -726,7 +725,6 @@ app.post("/checklist-status", async (req: Request, res: Response): Promise<Respo
   }
 });
 
-// ✅ Get photos by project ID
 app.get("/photos/:projectId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
@@ -738,7 +736,6 @@ app.get("/photos/:projectId", async (req: Request, res: Response): Promise<Respo
       });
     }
     
-    // Query both QC and Daily photos
     const qcPhotosPromise = db
       .collection("qcPhotos")
       .where("projectId", "==", projectId)
@@ -784,7 +781,6 @@ app.get("/photos/:projectId", async (req: Request, res: Response): Promise<Respo
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับแก้ไขชื่อ Main Category
 app.post("/project-config/:projectId/main-category/:mainCatId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, mainCatId } = req.params;
@@ -797,14 +793,12 @@ app.post("/project-config/:projectId/main-category/:mainCatId", async (req: Requ
       });
     }
     
-    // อ้างอิงไปยัง Document ที่ต้องการ
     const docRef = db
       .collection("projectConfig")
       .doc(projectId)
       .collection("mainCategories")
       .doc(mainCatId);
       
-    // ทำการ Update เฉพาะ field 'name'
     await docRef.update({
       name: newName.trim()
     });
@@ -825,20 +819,16 @@ app.post("/project-config/:projectId/main-category/:mainCatId", async (req: Requ
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับ "ลบ" (Soft Delete) Main Category
 app.delete("/project-config/:projectId/main-category/:mainCatId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, mainCatId } = req.params;
 
-    // อ้างอิงไปยัง Document ที่ต้องการ
     const docRef = db
       .collection("projectConfig")
       .doc(projectId)
       .collection("mainCategories")
       .doc(mainCatId);
       
-    // ทำการ "Soft Delete" โดยการอัปเดต field 'isArchived'
-    // เราไม่ลบข้อมูลจริง เพื่อรักษาความสมบูรณ์ของรายงานเก่า
     await docRef.update({
       isArchived: true
     });
@@ -859,7 +849,6 @@ app.delete("/project-config/:projectId/main-category/:mainCatId", async (req: Re
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับ "เพิ่ม" Main Category
 app.post("/project-config/:projectId/main-categories", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
@@ -873,38 +862,32 @@ app.post("/project-config/:projectId/main-categories", async (req: Request, res:
     }
     
     const trimmedName = newName.trim();
-    
-    // 1. สร้าง ID ที่เสถียรจากชื่อ
     const newId = slugify(trimmedName);
     
-    // 2. อ้างอิงไปยัง Document ใหม่
     const docRef = db
       .collection("projectConfig")
       .doc(projectId)
       .collection("mainCategories")
-      .doc(newId); // <-- ใช้ ID ที่เราสร้างเอง
+      .doc(newId);
       
-    // 3. ตรวจสอบว่า ID นี้ซ้ำหรือไม่ (ป้องกันการสร้างทับ)
     const existingDoc = await docRef.get();
     if (existingDoc.exists) {
-        return res.status(409).json({ // 409 Conflict
+        return res.status(409).json({
             success: false,
             error: `หมวดหมู่ชื่อ '${trimmedName}' (ID: ${newId}) มีอยู่แล้ว`
         });
     }
       
-    // 4. สร้างข้อมูลใหม่
     const newData = {
         name: trimmedName,
         isArchived: false
-        // (คุณอาจจะเพิ่ม field 'order' หรือ 'createdAt' ที่นี่ก็ได้)
     };
     
-    await docRef.set(newData); // ใช้ .set() เพราะเราระบุ ID เอง
+    await docRef.set(newData);
     
     console.log(`✅ Config created: ${projectId}/${newId} -> ${trimmedName}`);
     
-    return res.status(201).json({ // 201 Created
+    return res.status(201).json({
       success: true, 
       data: { id: newId, ...newData } 
     });
@@ -931,9 +914,6 @@ app.post("/project-config/:projectId/sub-categories", async (req: Request, res: 
     }
 
     const trimmedName = newName.trim();
-    
-    // 1. สร้าง ID ที่เสถียร (เหมือนตอน Migration)
-    // เราใช้ mainCategoryName เพื่อให้ ID ไม่ซ้ำกันข้ามหมวด
     const newId = slugify(`${mainCategoryName}-${trimmedName}`); 
     
     const docRef = db
@@ -952,8 +932,8 @@ app.post("/project-config/:projectId/sub-categories", async (req: Request, res: 
       
     const newData = {
         name: trimmedName,
-        mainCategoryId: mainCategoryId, // <-- อ้างอิงกลับไปหา Level 1
-        dynamicFields: [], // <-- ค่าเริ่มต้น
+        mainCategoryId: mainCategoryId,
+        dynamicFields: [],
         isArchived: false
     };
     
@@ -968,7 +948,6 @@ app.post("/project-config/:projectId/sub-categories", async (req: Request, res: 
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับ "แก้ไข" Sub Category
 app.post("/project-config/:projectId/sub-category/:subCatId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
@@ -995,7 +974,6 @@ app.post("/project-config/:projectId/sub-category/:subCatId", async (req: Reques
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับ "ลบ" (Soft Delete) Sub Category
 app.delete("/project-config/:projectId/sub-category/:subCatId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
@@ -1006,12 +984,9 @@ app.delete("/project-config/:projectId/sub-category/:subCatId", async (req: Requ
       .collection("subCategories")
       .doc(subCatId);
       
-    // ทำ "Soft Delete"
     await docRef.update({ isArchived: true });
     
     console.log(`✅ SubConfig soft-deleted: ${projectId}/${subCatId}`);
-    
-    // (TODO ในอนาคต: เราควรจะต้อง Soft Delete "Topics" ที่อยู่ข้างใต้นี้ด้วย)
     
     return res.json({ success: true, data: { id: subCatId, status: 'archived' } });
 
@@ -1021,11 +996,9 @@ app.delete("/project-config/:projectId/sub-category/:subCatId", async (req: Requ
   }
 });
 
-// ✅ [ใหม่] Endpointสำหรับ "เพิ่ม" Topic (Level 3)
 app.post("/project-config/:projectId/topics", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
-    // 1. [แก้ไข] รับ 'newTopicNames' ที่เป็น Array
     const { newTopicNames, subCategoryId, mainCategoryName, subCategoryName } = req.body; 
 
     if (!Array.isArray(newTopicNames) || !subCategoryId || !mainCategoryName || !subCategoryName) {
@@ -1040,29 +1013,23 @@ app.post("/project-config/:projectId/topics", async (req: Request, res: Response
       .doc(projectId)
       .collection("topics");
       
-    // 2. [ใหม่] สร้าง Batch
     const batch = db.batch();
     const addedTopics: any[] = [];
     
-    // 3. [ใหม่] วนลูปประมวลผลทุกชื่อที่ส่งมา
     for (const name of newTopicNames) {
       const trimmedName = name.trim();
-      if (!trimmedName) continue; // ข้ามบรรทัดว่าง
+      if (!trimmedName) continue;
 
-      // 4. สร้าง ID ที่เสถียร (เหมือนเดิม)
       const newId = slugify(`${mainCategoryName}-${subCategoryName}-${trimmedName}`); 
       const docRef = topicsCollectionRef.doc(newId);
       
-      // 5. [ใหม่] เราจะใช้ .create() ใน Batch
-      // .create() จะล้มเหลวถ้า ID นั้นมีอยู่แล้ว (ป้องกันการเขียนทับ)
-      // (เราจะ catch error ทีหลังถ้า Batch ล้มเหลว)
       const newData = {
           name: trimmedName,
           subCategoryId: subCategoryId,
           isArchived: false
       };
       
-      batch.create(docRef, newData); // <-- ใช้ .create()
+      batch.create(docRef, newData);
       addedTopics.push({ id: newId, ...newData });
     }
     
@@ -1070,7 +1037,6 @@ app.post("/project-config/:projectId/topics", async (req: Request, res: Response
        return res.status(400).json({ success: false, error: "No valid topic names provided." });
     }
 
-    // 6. [ใหม่] Commit Batch
     await batch.commit();
     
     console.log(`✅ ${addedTopics.length} Topics created under: ${projectId}/${subCategoryId}`);
@@ -1078,8 +1044,7 @@ app.post("/project-config/:projectId/topics", async (req: Request, res: Response
 
   } catch (error) {
     console.error("Error creating bulk topics:", error);
-    // (Error นี้มักจะเกิดถ้ามีหัวข้อใดหัวข้อหนึ่งซ้ำ)
-    if ((error as any).code === 6) { // ALREADY_EXISTS
+    if ((error as any).code === 6) {
          return res.status(409).json({ 
             success: false, 
             error: "การสร้างล้มเหลว: มีบางหัวข้อ (หรือ ID) ที่คุณพยายามเพิ่มซ้ำกับของเดิมที่มีอยู่" 
@@ -1089,7 +1054,6 @@ app.post("/project-config/:projectId/topics", async (req: Request, res: Response
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับ "แก้ไข" Topic
 app.post("/project-config/:projectId/topic/:topicId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, topicId } = req.params;
@@ -1116,7 +1080,6 @@ app.post("/project-config/:projectId/topic/:topicId", async (req: Request, res: 
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับ "ลบ" (Soft Delete) Topic
 app.delete("/project-config/:projectId/topic/:topicId", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, topicId } = req.params;
@@ -1127,7 +1090,6 @@ app.delete("/project-config/:projectId/topic/:topicId", async (req: Request, res
       .collection("topics")
       .doc(topicId);
       
-    // ทำ "Soft Delete"
     await docRef.update({ isArchived: true });
     
     console.log(`✅ Topic soft-deleted: ${projectId}/${topicId}`);
@@ -1140,13 +1102,11 @@ app.delete("/project-config/:projectId/topic/:topicId", async (req: Request, res
   }
 });
 
-// ✅ [ใหม่] Endpoint สำหรับ "อัปเดต" Dynamic Fields (Level 4)
 app.post("/project-config/:projectId/sub-category/:subCatId/fields", async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
-    const { fields } = req.body; // <-- รับ Array ของ Fields ใหม่
+    const { fields } = req.body;
 
-    // 1. ตรวจสอบว่า fields เป็น Array จริงๆ
     if (!Array.isArray(fields)) {
       return res.status(400).json({ 
         success: false, 
@@ -1154,19 +1114,16 @@ app.post("/project-config/:projectId/sub-category/:subCatId/fields", async (req:
       });
     }
 
-    // 2. (Optional) กรองค่าว่างและค่าซ้ำ
     const cleanedFields = fields
       .map(f => typeof f === 'string' ? f.trim() : '')
       .filter((f, index, self) => f && self.indexOf(f) === index);
     
-    // 3. อ้างอิงไปยัง Sub Category
     const docRef = db
       .collection("projectConfig")
       .doc(projectId)
       .collection("subCategories")
       .doc(subCatId);
       
-    // 4. ทำการ Update field 'dynamicFields' ทั้ง array
     await docRef.update({
       dynamicFields: cleanedFields
     });
