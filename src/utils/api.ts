@@ -150,25 +150,67 @@ export const api = {
    */
   async uploadProjectLogo(projectId: string, file: File): Promise<ApiResponse<{ logoUrl: string }>> {
     try {
-      const formData = new FormData();
-      formData.append('logo', file); // 'logo' คือ fieldname ที่ Backend (busboy) รออยู่
+      // ตรวจสอบไฟล์
+      if (!file) {
+        throw new Error('No file provided');
+      }
 
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/upload-logo`, {
-        method: 'POST',
-        body: formData,
+      // ตรวจสอบ MIME type
+      if (!file.type.startsWith('image/')) {
+        throw new Error('File must be an image');
+      }
+
+      // ตรวจสอบขนาดไฟล์ (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        throw new Error('File size must be less than 5MB');
+      }
+
+      console.log('[API Client] Uploading logo:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
       });
 
+      // สร้าง FormData
+      const formData = new FormData();
+      formData.append('logo', file, file.name); // ✅ เพิ่ม filename
+
+      // ส่ง Request
+      const response = await fetch(
+        `${API_BASE_URL}/projects/${projectId}/upload-logo`,
+        {
+          method: 'POST',
+          body: formData,
+          // ⚠️ สำคัญ: ห้ามกำหนด Content-Type header เอง
+          // เพราะ Browser จะกำหนด boundary ให้อัตโนมัติ
+        }
+      );
+
+      // ตรวจสอบ Response
       if (!response.ok) {
         let errorMsg = `HTTP ${response.status}`;
-        try { const errorData = await response.json(); errorMsg = errorData.error || errorMsg; }
-        catch (e) { /* Ignore if not JSON */ }
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.error || errorMsg;
+        } catch (e) {
+          // ถ้า parse JSON ไม่ได้ ใช้ response text
+          const text = await response.text();
+          errorMsg = text || errorMsg;
+        }
         throw new Error(errorMsg);
       }
-      return await response.json();
+
+      const result = await response.json();
+      console.log('[API Client] Upload success:', result);
+      return result;
 
     } catch (error) {
-      console.error('Error uploading project logo:', error);
-      return { success: false, error: (error as Error).message };
+      console.error('[API Client] Upload error:', error);
+      return { 
+        success: false, 
+        error: (error as Error).message 
+      };
     }
   },
 

@@ -1,12 +1,12 @@
 // Filename: qc-functions/src/index.ts (VERSION 8 - Dynamic PDF Settings)
+console.log("--- EMULATOR IS RUNNING CODE VERSION 555 ---");
 
 import * as admin from "firebase-admin";
 import { getStorage } from 'firebase-admin/storage';
 import { onRequest } from "firebase-functions/v2/https";
 import express, { Request, Response } from "express";
 import cors from "cors";
-import Busboy, { FileInfo } from 'busboy';
-import { Readable } from 'stream';
+import multer from 'multer';
 
 // ✅ [แก้ไข] Import ReportSettings (ต้องสร้าง Interface นี้ใน pdf-generator.ts ด้วย)
 import { 
@@ -56,14 +56,17 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const app = express();
 
-app.use(cors({ origin: true }));
-app.use(express.json({ limit: "10mb" }));
+//app.use(cors({ origin: true }));
+const jsonParser = express.json({ limit: "10mb" });
+const corsHandler = cors({ origin: true });
+const multerStorage = multer.memoryStorage();
+const upload = multer({ storage: multerStorage, limits: { fileSize: 5 * 1024 * 1024 } });
 
 // --- API ROUTES ---
 
 // ... (คง Endpoint /health, /projects, /project-config, /projects/:projectId/report-settings ไว้เหมือนเดิม) ...
 // ✅ Health check endpoint
-app.get("/health", (req: Request, res: Response) => {
+app.get("/health", corsHandler, (req: Request, res: Response) => {
   res.json({ 
     status: "healthy",
     environment: IS_EMULATOR ? "emulator" : "production",
@@ -72,7 +75,7 @@ app.get("/health", (req: Request, res: Response) => {
 });
 
 // ✅ Get all active projects
-app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
+app.get("/projects", corsHandler, async (req: Request, res: Response): Promise<Response> => {
   try {
     const projectsSnapshot = await db
       .collection("projects")
@@ -99,7 +102,7 @@ app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
 });
 
 // ✅ Get project configuration
-app.get("/project-config/:projectId", async (req: Request, res: Response): Promise<Response> => {
+app.get("/project-config/:projectId", corsHandler, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const projectConfigRef = db.collection("projectConfig").doc(projectId);
@@ -182,7 +185,7 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
 });
 
 // ✅ [ใหม่ V11.3] Get Project Report Settings
-app.get("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
+app.get("/projects/:projectId/report-settings", corsHandler, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const projectRef = db.collection("projects").doc(projectId);
@@ -212,7 +215,7 @@ app.get("/projects/:projectId/report-settings", async (req: Request, res: Respon
 });
 
 // ✅ Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
-app.post("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
+app.post("/projects/:projectId/report-settings", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const newSettings = req.body; 
@@ -240,137 +243,62 @@ app.post("/projects/:projectId/report-settings", async (req: Request, res: Respo
 
 // ✅ Endpoint สำหรับ Upload Logo โครงการ
 // ✅ [แก้ไข V11.3] Endpoint สำหรับ Upload Logo โครงการ (แก้ไขปัญหา Busboy)
-app.post("/projects/:projectId/upload-logo", async (req: Request, res: Response): Promise<Response> => {
-  const { projectId } = req.params;
+app.post("/projects/:projectId/upload-logo", corsHandler, upload.single('logo'), async (req: Request, res: Response): Promise<Response> => {
+  try {
+    console.log("--- MULTER ROUTE HANDLER IS RUNNING! ---");
+    const { projectId } = req.params;
 
-  if (!req.headers['content-type']?.startsWith('multipart/form-data')) {
-    return res.status(400).json({ success: false, error: 'Invalid Content-Type. Expected multipart/form-data.' });
-  }
+    // 2. Multer จะจัดการไฟล์ให้เรา และเก็บไว้ใน req.file
+    const logoFile = req.file; 
 
-  // [ใหม่] ห่อหุ้ม Busboy ใน Promise
-  return new Promise<Response>((resolve, reject) => {
-    const busboy = Busboy({
-      headers: req.headers,
-      limits: { fileSize: 5 * 1024 * 1024 } // 5MB Limit
-    });
+    if (!logoFile) {
+      return res.status(400).json({ success: false, error: "No logo file was uploaded." });
+    }
 
+    // 3. เราได้ข้อมูลไฟล์มาครบถ้วน
+    const { buffer: fileBuffer, mimetype: mimeType, originalname: filename } = logoFile;
+    console.log(`[Multer] Receiving logo file: ${filename}, mimetype: ${mimeType}`);
+
+    if (!mimeType.startsWith('image/')) {
+      return res.status(400).json({ success: false, error: 'Invalid file type. Only images are allowed.' });
+    }
+
+    // 4. อัปโหลด Buffer ไปยัง Storage
     const bucket = getStorage().bucket();
-    let uploadPromise: Promise<void> | null = null;
-    let publicUrl = "";
+    const fileExtension = filename.split('.').pop()?.toLowerCase() || 'png';
+    const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
+    const filePath = `logos/${projectId}/${uniqueFilename}`;
+    const fileUpload = bucket.file(filePath);
 
-    busboy.on('file', (fieldname: string, file: Readable, info: FileInfo): void => {
-      // ตรวจสอบ Field name
-      if (fieldname !== 'logo') {
-        console.warn(`Unexpected field name: ${fieldname}. Skipping file.`);
-        file.resume();
-        return;
-      }
-      
-      const { filename, mimeType } = info;
-      console.log(`Receiving logo file: ${filename}, mimetype: ${mimeType}`);
+    console.log(`Uploading logo buffer to: ${filePath}`);
 
-      // ตรวจสอบ MimeType
-      if (!mimeType.startsWith('image/')) {
-        console.error('Invalid file type uploaded.');
-        file.resume(); 
-        // [แก้ไข] ส่ง Error ผ่าน reject ของ Promise หลัก
-        if (!res.headersSent) {
-          res.status(400).json({ success: false, error: 'Invalid file type. Only images are allowed.' });
-          resolve(res); // จบ Promise นี้ด้วย Response ที่ส่งไปแล้ว
-        }
-        return;
-      }
-
-      // สร้าง Path และ File Upload
-      const fileExtension = filename.split('.').pop()?.toLowerCase() || 'png';
-      const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
-      const filePath = `logos/${projectId}/${uniqueFilename}`;
-      const fileUpload = bucket.file(filePath);
-      
-      console.log(`Uploading logo to: ${filePath}`);
-
-      const stream = fileUpload.createWriteStream({
-        metadata: { contentType: mimeType, cacheControl: 'public, max-age=3600' },
-        resumable: false,
-      });
-
-      // [ใหม่] สร้าง Promise สำหรับการอัปโหลดไฟล์นี้
-      uploadPromise = new Promise((resolveUpload, rejectUpload) => {
-        file.pipe(stream)
-            .on('finish', () => {
-              console.log('File pipe finished.');
-              // เมื่ออัปโหลดเสร็จ ให้ Make Public และเก็บ URL
-              fileUpload.makePublic()
-                .then(() => {
-                  publicUrl = fileUpload.publicUrl();
-                  console.log(`Logo uploaded successfully: ${publicUrl}`);
-                  resolveUpload();
-                })
-                .catch(rejectUpload);
-            })
-            .on('error', rejectUpload);
-      });
-    }); // ปิด busboy.on('file')
-
-    busboy.on('error', (err: Error) => {
-      console.error('Busboy error:', err);
-      if (!res.headersSent) {
-        res.status(400).json({ success: false, error: `Error parsing upload request: ${err.message}` });
-        resolve(res); // จบ Promise
-      }
+    // 5. ใช้ .save() กับ Buffer แทนการใช้ Stream
+    await fileUpload.save(fileBuffer, {
+      metadata: { contentType: mimeType, cacheControl: 'public, max-age=3600' },
+      public: true, // ทำให้ไฟล์ Public ไปเลย
     });
 
-    busboy.on('finish', async () => {
-      console.log('Busboy finish event triggered.');
-      
-      try {
-        // [ใหม่] รอให้การอัปโหลดไฟล์ (ถ้ามี) เสร็จสิ้น
-        if (uploadPromise) {
-          await uploadPromise;
-        } else {
-          // กรณีที่ไม่มีไฟล์ 'logo' ถูกส่งมา
-          if (!res.headersSent) {
-             console.log('Finish called, but no valid file was processed.');
-             res.status(400).json({ success: false, error: 'No valid file uploaded or fieldname mismatch.' });
-             resolve(res);
-          }
-          return;
-        }
+    const publicUrl = fileUpload.publicUrl();
+    console.log(`Logo uploaded successfully: ${publicUrl}`);
 
-        // ถ้าอัปโหลดสำเร็จ (publicUrl ต้องมีค่า)
-        if (publicUrl) {
-          // บันทึก URL ลง Firestore
-          const projectRef = db.collection("projects").doc(projectId);
-          await projectRef.set({ reportSettings: { projectLogoUrl: publicUrl } }, { merge: true });
+    // 6. บันทึก URL ลง Firestore
+    const projectRef = db.collection("projects").doc(projectId);
+    await projectRef.set({ reportSettings: { projectLogoUrl: publicUrl } }, { merge: true });
 
-          // [ใหม่] ส่ง Response สำเร็จกลับไป
-          if (!res.headersSent) {
-            res.json({ success: true, data: { logoUrl: publicUrl } });
-            resolve(res);
-          }
-        } else if (!res.headersSent) {
-          // กรณีแปลกๆ ที่ uploadPromise สำเร็จ แต่ publicUrl ไม่มีค่า
-           res.status(500).json({ success: false, error: 'Upload finished but no URL was generated.' });
-           resolve(res);
-        }
-        
-      } catch (err: any) {
-        console.error('Error during Storage upload or Firestore save:', err);
-        if (!res.headersSent) {
-          res.status(500).json({ success: false, error: `Error processing file after upload: ${err.message}` });
-          resolve(res);
-        }
-      }
-    }); // ปิด busboy.on('finish')
+    // 7. ส่ง Response สำเร็จ
+    return res.json({ success: true, data: { logoUrl: publicUrl } });
 
-    // เริ่มกระบวนการ
-    req.pipe(busboy);
-
-  }); // ปิด new Promise
+  } catch (err: any) {
+    console.error('Error during Multer upload or Storage save:', err);
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ success: false, error: `Multer error: ${err.message}`});
+    }
+    return res.status(500).json({ success: false, error: `Error processing file: ${err.message}` });
+  }
 });
 
 // ✅ Upload photo with base64
-app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Response> => {
+app.post("/upload-photo-base64", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { 
       photo, 
@@ -496,7 +424,7 @@ app.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Re
 });
 
 // ✅ [แก้ไข] Generate PDF report (v8 - with Dynamic Settings)
-app.post("/generate-report", async (req: Request, res: Response): Promise<Response> => {
+app.post("/generate-report", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { 
       projectId, 
@@ -697,7 +625,7 @@ app.post("/generate-report", async (req: Request, res: Response): Promise<Respon
 });
 
 // ... (คง Endpoint /checklist-status, /photos/:projectId, และ /project-config/... CRUD ทั้งหมดไว้เหมือนเดิม) ...
-app.post("/checklist-status", async (req: Request, res: Response): Promise<Response> => {
+app.post("/checklist-status", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { 
       projectId, 
@@ -732,7 +660,7 @@ app.post("/checklist-status", async (req: Request, res: Response): Promise<Respo
   }
 });
 
-app.get("/photos/:projectId", async (req: Request, res: Response): Promise<Response> => {
+app.get("/photos/:projectId", corsHandler, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     
@@ -788,7 +716,7 @@ app.get("/photos/:projectId", async (req: Request, res: Response): Promise<Respo
   }
 });
 
-app.post("/project-config/:projectId/main-category/:mainCatId", async (req: Request, res: Response): Promise<Response> => {
+app.post("/project-config/:projectId/main-category/:mainCatId", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, mainCatId } = req.params;
     const { newName } = req.body;
@@ -826,7 +754,7 @@ app.post("/project-config/:projectId/main-category/:mainCatId", async (req: Requ
   }
 });
 
-app.delete("/project-config/:projectId/main-category/:mainCatId", async (req: Request, res: Response): Promise<Response> => {
+app.delete("/project-config/:projectId/main-category/:mainCatId", corsHandler, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, mainCatId } = req.params;
 
@@ -856,7 +784,7 @@ app.delete("/project-config/:projectId/main-category/:mainCatId", async (req: Re
   }
 });
 
-app.post("/project-config/:projectId/main-categories", async (req: Request, res: Response): Promise<Response> => {
+app.post("/project-config/:projectId/main-categories", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const { newName } = req.body;
@@ -908,7 +836,7 @@ app.post("/project-config/:projectId/main-categories", async (req: Request, res:
   }
 });
 
-app.post("/project-config/:projectId/sub-categories", async (req: Request, res: Response): Promise<Response> => {
+app.post("/project-config/:projectId/sub-categories", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const { newName, mainCategoryId, mainCategoryName } = req.body;
@@ -955,7 +883,7 @@ app.post("/project-config/:projectId/sub-categories", async (req: Request, res: 
   }
 });
 
-app.post("/project-config/:projectId/sub-category/:subCatId", async (req: Request, res: Response): Promise<Response> => {
+app.post("/project-config/:projectId/sub-category/:subCatId", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
     const { newName } = req.body;
@@ -981,7 +909,7 @@ app.post("/project-config/:projectId/sub-category/:subCatId", async (req: Reques
   }
 });
 
-app.delete("/project-config/:projectId/sub-category/:subCatId", async (req: Request, res: Response): Promise<Response> => {
+app.delete("/project-config/:projectId/sub-category/:subCatId", corsHandler, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
 
@@ -1003,7 +931,7 @@ app.delete("/project-config/:projectId/sub-category/:subCatId", async (req: Requ
   }
 });
 
-app.post("/project-config/:projectId/topics", async (req: Request, res: Response): Promise<Response> => {
+app.post("/project-config/:projectId/topics", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const { newTopicNames, subCategoryId, mainCategoryName, subCategoryName } = req.body; 
@@ -1061,7 +989,7 @@ app.post("/project-config/:projectId/topics", async (req: Request, res: Response
   }
 });
 
-app.post("/project-config/:projectId/topic/:topicId", async (req: Request, res: Response): Promise<Response> => {
+app.post("/project-config/:projectId/topic/:topicId", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, topicId } = req.params;
     const { newName } = req.body;
@@ -1087,7 +1015,7 @@ app.post("/project-config/:projectId/topic/:topicId", async (req: Request, res: 
   }
 });
 
-app.delete("/project-config/:projectId/topic/:topicId", async (req: Request, res: Response): Promise<Response> => {
+app.delete("/project-config/:projectId/topic/:topicId", corsHandler, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, topicId } = req.params;
 
@@ -1109,7 +1037,7 @@ app.delete("/project-config/:projectId/topic/:topicId", async (req: Request, res
   }
 });
 
-app.post("/project-config/:projectId/sub-category/:subCatId/fields", async (req: Request, res: Response): Promise<Response> => {
+app.post("/project-config/:projectId/sub-category/:subCatId/fields", corsHandler, jsonParser, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
     const { fields } = req.body;

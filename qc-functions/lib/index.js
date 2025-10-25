@@ -1,5 +1,4 @@
 "use strict";
-// Filename: qc-functions/src/index.ts (VERSION 8 - Dynamic PDF Settings)
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -38,12 +37,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.api = void 0;
+// Filename: qc-functions/src/index.ts (VERSION 8 - Dynamic PDF Settings)
+console.log("--- EMULATOR IS RUNNING CODE VERSION 555 ---");
 const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
 const https_1 = require("firebase-functions/v2/https");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const busboy_1 = __importDefault(require("busboy"));
+const multer_1 = __importDefault(require("multer"));
 // ✅ [แก้ไข] Import ReportSettings (ต้องสร้าง Interface นี้ใน pdf-generator.ts ด้วย)
 const pdf_generator_1 = require("./services/pdf-generator");
 const firestore_1 = require("./api/firestore");
@@ -78,12 +79,15 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 const app = (0, express_1.default)();
-app.use((0, cors_1.default)({ origin: true }));
-app.use(express_1.default.json({ limit: "10mb" }));
+//app.use(cors({ origin: true }));
+const jsonParser = express_1.default.json({ limit: "10mb" });
+const corsHandler = (0, cors_1.default)({ origin: true });
+const multerStorage = multer_1.default.memoryStorage();
+const upload = (0, multer_1.default)({ storage: multerStorage, limits: { fileSize: 5 * 1024 * 1024 } });
 // --- API ROUTES ---
 // ... (คง Endpoint /health, /projects, /project-config, /projects/:projectId/report-settings ไว้เหมือนเดิม) ...
 // ✅ Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", corsHandler, (req, res) => {
     res.json({
         status: "healthy",
         environment: IS_EMULATOR ? "emulator" : "production",
@@ -91,7 +95,7 @@ app.get("/health", (req, res) => {
     });
 });
 // ✅ Get all active projects
-app.get("/projects", async (req, res) => {
+app.get("/projects", corsHandler, async (req, res) => {
     try {
         const projectsSnapshot = await db
             .collection("projects")
@@ -112,7 +116,7 @@ app.get("/projects", async (req, res) => {
     }
 });
 // ✅ Get project configuration
-app.get("/project-config/:projectId", async (req, res) => {
+app.get("/project-config/:projectId", corsHandler, async (req, res) => {
     try {
         const { projectId } = req.params;
         const projectConfigRef = db.collection("projectConfig").doc(projectId);
@@ -185,7 +189,7 @@ app.get("/project-config/:projectId", async (req, res) => {
     }
 });
 // ✅ [ใหม่ V11.3] Get Project Report Settings
-app.get("/projects/:projectId/report-settings", async (req, res) => {
+app.get("/projects/:projectId/report-settings", corsHandler, async (req, res) => {
     try {
         const { projectId } = req.params;
         const projectRef = db.collection("projects").doc(projectId);
@@ -210,7 +214,7 @@ app.get("/projects/:projectId/report-settings", async (req, res) => {
     }
 });
 // ✅ Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
-app.post("/projects/:projectId/report-settings", async (req, res) => {
+app.post("/projects/:projectId/report-settings", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId } = req.params;
         const newSettings = req.body;
@@ -233,123 +237,52 @@ app.post("/projects/:projectId/report-settings", async (req, res) => {
 });
 // ✅ Endpoint สำหรับ Upload Logo โครงการ
 // ✅ [แก้ไข V11.3] Endpoint สำหรับ Upload Logo โครงการ (แก้ไขปัญหา Busboy)
-app.post("/projects/:projectId/upload-logo", async (req, res) => {
+app.post("/projects/:projectId/upload-logo", corsHandler, upload.single('logo'), async (req, res) => {
     var _a;
-    const { projectId } = req.params;
-    if (!((_a = req.headers['content-type']) === null || _a === void 0 ? void 0 : _a.startsWith('multipart/form-data'))) {
-        return res.status(400).json({ success: false, error: 'Invalid Content-Type. Expected multipart/form-data.' });
-    }
-    // [ใหม่] ห่อหุ้ม Busboy ใน Promise
-    return new Promise((resolve, reject) => {
-        const busboy = (0, busboy_1.default)({
-            headers: req.headers,
-            limits: { fileSize: 5 * 1024 * 1024 } // 5MB Limit
-        });
+    try {
+        console.log("--- MULTER ROUTE HANDLER IS RUNNING! ---");
+        const { projectId } = req.params;
+        // 2. Multer จะจัดการไฟล์ให้เรา และเก็บไว้ใน req.file
+        const logoFile = req.file;
+        if (!logoFile) {
+            return res.status(400).json({ success: false, error: "No logo file was uploaded." });
+        }
+        // 3. เราได้ข้อมูลไฟล์มาครบถ้วน
+        const { buffer: fileBuffer, mimetype: mimeType, originalname: filename } = logoFile;
+        console.log(`[Multer] Receiving logo file: ${filename}, mimetype: ${mimeType}`);
+        if (!mimeType.startsWith('image/')) {
+            return res.status(400).json({ success: false, error: 'Invalid file type. Only images are allowed.' });
+        }
+        // 4. อัปโหลด Buffer ไปยัง Storage
         const bucket = (0, storage_1.getStorage)().bucket();
-        let uploadPromise = null;
-        let publicUrl = "";
-        busboy.on('file', (fieldname, file, info) => {
-            var _a;
-            // ตรวจสอบ Field name
-            if (fieldname !== 'logo') {
-                console.warn(`Unexpected field name: ${fieldname}. Skipping file.`);
-                file.resume();
-                return;
-            }
-            const { filename, mimeType } = info;
-            console.log(`Receiving logo file: ${filename}, mimetype: ${mimeType}`);
-            // ตรวจสอบ MimeType
-            if (!mimeType.startsWith('image/')) {
-                console.error('Invalid file type uploaded.');
-                file.resume();
-                // [แก้ไข] ส่ง Error ผ่าน reject ของ Promise หลัก
-                if (!res.headersSent) {
-                    res.status(400).json({ success: false, error: 'Invalid file type. Only images are allowed.' });
-                    resolve(res); // จบ Promise นี้ด้วย Response ที่ส่งไปแล้ว
-                }
-                return;
-            }
-            // สร้าง Path และ File Upload
-            const fileExtension = ((_a = filename.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || 'png';
-            const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
-            const filePath = `logos/${projectId}/${uniqueFilename}`;
-            const fileUpload = bucket.file(filePath);
-            console.log(`Uploading logo to: ${filePath}`);
-            const stream = fileUpload.createWriteStream({
-                metadata: { contentType: mimeType, cacheControl: 'public, max-age=3600' },
-                resumable: false,
-            });
-            // [ใหม่] สร้าง Promise สำหรับการอัปโหลดไฟล์นี้
-            uploadPromise = new Promise((resolveUpload, rejectUpload) => {
-                file.pipe(stream)
-                    .on('finish', () => {
-                    console.log('File pipe finished.');
-                    // เมื่ออัปโหลดเสร็จ ให้ Make Public และเก็บ URL
-                    fileUpload.makePublic()
-                        .then(() => {
-                        publicUrl = fileUpload.publicUrl();
-                        console.log(`Logo uploaded successfully: ${publicUrl}`);
-                        resolveUpload();
-                    })
-                        .catch(rejectUpload);
-                })
-                    .on('error', rejectUpload);
-            });
-        }); // ปิด busboy.on('file')
-        busboy.on('error', (err) => {
-            console.error('Busboy error:', err);
-            if (!res.headersSent) {
-                res.status(400).json({ success: false, error: `Error parsing upload request: ${err.message}` });
-                resolve(res); // จบ Promise
-            }
+        const fileExtension = ((_a = filename.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || 'png';
+        const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
+        const filePath = `logos/${projectId}/${uniqueFilename}`;
+        const fileUpload = bucket.file(filePath);
+        console.log(`Uploading logo buffer to: ${filePath}`);
+        // 5. ใช้ .save() กับ Buffer แทนการใช้ Stream
+        await fileUpload.save(fileBuffer, {
+            metadata: { contentType: mimeType, cacheControl: 'public, max-age=3600' },
+            public: true, // ทำให้ไฟล์ Public ไปเลย
         });
-        busboy.on('finish', async () => {
-            console.log('Busboy finish event triggered.');
-            try {
-                // [ใหม่] รอให้การอัปโหลดไฟล์ (ถ้ามี) เสร็จสิ้น
-                if (uploadPromise) {
-                    await uploadPromise;
-                }
-                else {
-                    // กรณีที่ไม่มีไฟล์ 'logo' ถูกส่งมา
-                    if (!res.headersSent) {
-                        console.log('Finish called, but no valid file was processed.');
-                        res.status(400).json({ success: false, error: 'No valid file uploaded or fieldname mismatch.' });
-                        resolve(res);
-                    }
-                    return;
-                }
-                // ถ้าอัปโหลดสำเร็จ (publicUrl ต้องมีค่า)
-                if (publicUrl) {
-                    // บันทึก URL ลง Firestore
-                    const projectRef = db.collection("projects").doc(projectId);
-                    await projectRef.set({ reportSettings: { projectLogoUrl: publicUrl } }, { merge: true });
-                    // [ใหม่] ส่ง Response สำเร็จกลับไป
-                    if (!res.headersSent) {
-                        res.json({ success: true, data: { logoUrl: publicUrl } });
-                        resolve(res);
-                    }
-                }
-                else if (!res.headersSent) {
-                    // กรณีแปลกๆ ที่ uploadPromise สำเร็จ แต่ publicUrl ไม่มีค่า
-                    res.status(500).json({ success: false, error: 'Upload finished but no URL was generated.' });
-                    resolve(res);
-                }
-            }
-            catch (err) {
-                console.error('Error during Storage upload or Firestore save:', err);
-                if (!res.headersSent) {
-                    res.status(500).json({ success: false, error: `Error processing file after upload: ${err.message}` });
-                    resolve(res);
-                }
-            }
-        }); // ปิด busboy.on('finish')
-        // เริ่มกระบวนการ
-        req.pipe(busboy);
-    }); // ปิด new Promise
+        const publicUrl = fileUpload.publicUrl();
+        console.log(`Logo uploaded successfully: ${publicUrl}`);
+        // 6. บันทึก URL ลง Firestore
+        const projectRef = db.collection("projects").doc(projectId);
+        await projectRef.set({ reportSettings: { projectLogoUrl: publicUrl } }, { merge: true });
+        // 7. ส่ง Response สำเร็จ
+        return res.json({ success: true, data: { logoUrl: publicUrl } });
+    }
+    catch (err) {
+        console.error('Error during Multer upload or Storage save:', err);
+        if (err instanceof multer_1.default.MulterError) {
+            return res.status(400).json({ success: false, error: `Multer error: ${err.message}` });
+        }
+        return res.status(500).json({ success: false, error: `Error processing file: ${err.message}` });
+    }
 });
 // ✅ Upload photo with base64
-app.post("/upload-photo-base64", async (req, res) => {
+app.post("/upload-photo-base64", corsHandler, jsonParser, async (req, res) => {
     try {
         const { photo, projectId, reportType, category, topic, description, location, dynamicFields } = req.body;
         if (!photo || !projectId || !reportType) {
@@ -447,7 +380,7 @@ app.post("/upload-photo-base64", async (req, res) => {
     }
 });
 // ✅ [แก้ไข] Generate PDF report (v8 - with Dynamic Settings)
-app.post("/generate-report", async (req, res) => {
+app.post("/generate-report", corsHandler, jsonParser, async (req, res) => {
     var _a, _b;
     try {
         const { projectId, projectName, reportType, mainCategory, subCategory, dynamicFields, date } = req.body;
@@ -603,7 +536,7 @@ app.post("/generate-report", async (req, res) => {
     }
 });
 // ... (คง Endpoint /checklist-status, /photos/:projectId, และ /project-config/... CRUD ทั้งหมดไว้เหมือนเดิม) ...
-app.post("/checklist-status", async (req, res) => {
+app.post("/checklist-status", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId, mainCategory, subCategory, dynamicFields } = req.body;
         if (!projectId || !mainCategory || !subCategory || !dynamicFields) {
@@ -624,7 +557,7 @@ app.post("/checklist-status", async (req, res) => {
         });
     }
 });
-app.get("/photos/:projectId", async (req, res) => {
+app.get("/photos/:projectId", corsHandler, async (req, res) => {
     try {
         const { projectId } = req.params;
         if (!projectId) {
@@ -664,7 +597,7 @@ app.get("/photos/:projectId", async (req, res) => {
         });
     }
 });
-app.post("/project-config/:projectId/main-category/:mainCatId", async (req, res) => {
+app.post("/project-config/:projectId/main-category/:mainCatId", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId, mainCatId } = req.params;
         const { newName } = req.body;
@@ -696,7 +629,7 @@ app.post("/project-config/:projectId/main-category/:mainCatId", async (req, res)
         });
     }
 });
-app.delete("/project-config/:projectId/main-category/:mainCatId", async (req, res) => {
+app.delete("/project-config/:projectId/main-category/:mainCatId", corsHandler, async (req, res) => {
     try {
         const { projectId, mainCatId } = req.params;
         const docRef = db
@@ -721,7 +654,7 @@ app.delete("/project-config/:projectId/main-category/:mainCatId", async (req, re
         });
     }
 });
-app.post("/project-config/:projectId/main-categories", async (req, res) => {
+app.post("/project-config/:projectId/main-categories", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newName } = req.body;
@@ -764,7 +697,7 @@ app.post("/project-config/:projectId/main-categories", async (req, res) => {
         });
     }
 });
-app.post("/project-config/:projectId/sub-categories", async (req, res) => {
+app.post("/project-config/:projectId/sub-categories", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newName, mainCategoryId, mainCategoryName } = req.body;
@@ -803,7 +736,7 @@ app.post("/project-config/:projectId/sub-categories", async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/sub-category/:subCatId", async (req, res) => {
+app.post("/project-config/:projectId/sub-category/:subCatId", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const { newName } = req.body;
@@ -824,7 +757,7 @@ app.post("/project-config/:projectId/sub-category/:subCatId", async (req, res) =
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.delete("/project-config/:projectId/sub-category/:subCatId", async (req, res) => {
+app.delete("/project-config/:projectId/sub-category/:subCatId", corsHandler, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const docRef = db
@@ -841,7 +774,7 @@ app.delete("/project-config/:projectId/sub-category/:subCatId", async (req, res)
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/topics", async (req, res) => {
+app.post("/project-config/:projectId/topics", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newTopicNames, subCategoryId, mainCategoryName, subCategoryName } = req.body;
@@ -889,7 +822,7 @@ app.post("/project-config/:projectId/topics", async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/topic/:topicId", async (req, res) => {
+app.post("/project-config/:projectId/topic/:topicId", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId, topicId } = req.params;
         const { newName } = req.body;
@@ -910,7 +843,7 @@ app.post("/project-config/:projectId/topic/:topicId", async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.delete("/project-config/:projectId/topic/:topicId", async (req, res) => {
+app.delete("/project-config/:projectId/topic/:topicId", corsHandler, async (req, res) => {
     try {
         const { projectId, topicId } = req.params;
         const docRef = db
@@ -927,7 +860,7 @@ app.delete("/project-config/:projectId/topic/:topicId", async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/sub-category/:subCatId/fields", async (req, res) => {
+app.post("/project-config/:projectId/sub-category/:subCatId/fields", corsHandler, jsonParser, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const { fields } = req.body;
