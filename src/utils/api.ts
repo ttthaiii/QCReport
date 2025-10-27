@@ -148,55 +148,29 @@ export const api = {
   /**
    * ✅ [ใหม่] อัปโหลดไฟล์ Logo ของ Project
    */
-  async uploadProjectLogo(projectId: string, file: File): Promise<ApiResponse<{ logoUrl: string }>> {
+  async uploadProjectLogo(projectId: string, logoBase64: string): Promise<ApiResponse<{ logoUrl: string }>> {
     try {
-      // ตรวจสอบไฟล์
-      if (!file) {
-        throw new Error('No file provided');
-      }
+      console.log('[API Client] Uploading logo (Base64)...');
 
-      // ตรวจสอบ MIME type
-      if (!file.type.startsWith('image/')) {
-        throw new Error('File must be an image');
-      }
-
-      // ตรวจสอบขนาดไฟล์ (max 5MB)
-      const maxSize = 5 * 1024 * 1024; // 5MB
-      if (file.size > maxSize) {
-        throw new Error('File size must be less than 5MB');
-      }
-
-      console.log('[API Client] Uploading logo:', {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      });
-
-      // สร้าง FormData
-      const formData = new FormData();
-      formData.append('logo', file, file.name); // ✅ เพิ่ม filename
-
-      // ส่ง Request
+      // 1. ส่ง Request เป็น JSON
       const response = await fetch(
         `${API_BASE_URL}/projects/${projectId}/upload-logo`,
         {
           method: 'POST',
-          body: formData,
-          // ⚠️ สำคัญ: ห้ามกำหนด Content-Type header เอง
-          // เพราะ Browser จะกำหนด boundary ให้อัตโนมัติ
+          headers: { 'Content-Type': 'application/json' }, // <-- ✅ เปลี่ยนเป็น JSON
+          body: JSON.stringify({ logoBase64: logoBase64 }), // <-- ✅ ส่ง Base64
         }
       );
 
-      // ตรวจสอบ Response
+      // (โค้ดจัดการ Error ที่เราแก้ไปแล้ว ใช้งานได้เลย)
       if (!response.ok) {
         let errorMsg = `HTTP ${response.status}`;
+        const errorText = await response.text();
         try {
-          const errorData = await response.json();
+          const errorData = JSON.parse(errorText);
           errorMsg = errorData.error || errorMsg;
         } catch (e) {
-          // ถ้า parse JSON ไม่ได้ ใช้ response text
-          const text = await response.text();
-          errorMsg = text || errorMsg;
+          errorMsg = errorText.substring(0, 200) || errorMsg;
         }
         throw new Error(errorMsg);
       }

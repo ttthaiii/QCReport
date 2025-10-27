@@ -286,7 +286,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
   // ✅ [คืนค่า V3] (Logic เดิม)
   const handleLogoFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (event.target) event.target.value = "";
+    if (event.target) event.target.value = ""; // เคลียร์ input
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
@@ -296,21 +296,37 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
         alert("Error: กรุณาเลือกไฟล์รูปภาพเท่านั้น"); return;
     }
 
-    setIsUploadingLogo(true);
-    try {
-      // (ใช้ api.ts V11)
-      const response = await api.uploadProjectLogo(projectId, file);
-      if (response.success && response.data?.logoUrl) {
-        handleSettingChange('projectLogoUrl', response.data.logoUrl);
-        alert('✅ อัปโหลด Logo สำเร็จ! (อย่าลืมกดบันทึก Settings)');
-      } else {
-        throw new Error(response.error || 'การอัปโหลด Logo ล้มเหลว');
+    // 1. สร้าง FileReader
+    const reader = new FileReader();
+
+    // 2. เมื่ออ่านไฟล์เสร็จ
+    reader.onload = async (e) => {
+      const base64String = e.target?.result as string;
+      if (!base64String) {
+        alert("Error: ไม่สามารถอ่านไฟล์ได้");
+        return;
       }
-    } catch (error) {
-      alert("Error: " + (error as Error).message);
-    }
-    setIsUploadingLogo(false);
-  };  
+
+      setIsUploadingLogo(true);
+      try {
+        // 3. ส่ง Base64 string ไปที่ API (ไม่ใช่ File object)
+        const response = await api.uploadProjectLogo(projectId, base64String);
+        
+        if (response.success && response.data?.logoUrl) {
+          handleSettingChange('projectLogoUrl', response.data.logoUrl);
+          alert('✅ อัปโหลด Logo สำเร็จ! (อย่าลืมกดบันทึก Settings)');
+        } else {
+          throw new Error(response.error || 'การอัปโหลด Logo ล้มเหลว');
+        }
+      } catch (error) {
+        alert("Error: " + (error as Error).message);
+      }
+      setIsUploadingLogo(false);
+    };
+
+    // 4. สั่งให้เริ่มอ่านไฟล์
+    reader.readAsDataURL(file);
+  };
   
   // ✅ [คืนค่า V3] (Logic เดิม)
   const handleSaveReportSettings = async () => {

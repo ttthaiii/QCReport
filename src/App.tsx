@@ -168,20 +168,20 @@ function App() {
       </main>
 
       {/* 3. Bottom Tab Navigation (เมนูด้านล่าง) */}
-      <nav className="bottom-nav">
+      <nav className="bottom-nav">
         <button
           className={`nav-button ${view === 'camera' ? 'active' : ''}`}
           onClick={() => setView('camera')}
         >
           <span className="icon">{ICONS.CAMERA}</span>
-          ถ่ายรูป
+          <span>ถ่ายรูป</span> {/* <-- [เพิ่ม <span>] */}
         </button>
         <button
           className={`nav-button ${view === 'reports' ? 'active' : ''}`}
           onClick={() => setView('reports')}
         >
           <span className="icon">{ICONS.REPORTS}</span>
-          รายงาน
+          <span>รายงาน</span> {/* <-- [เพิ่ม <span>] */}
         </button>
         {/* 8. [เพิ่ม] ปุ่มสำหรับ Admin */}
         <button
@@ -189,10 +189,9 @@ function App() {
           onClick={() => setView('admin')}
         >
           <span className="icon">{ICONS.ADMIN}</span>
-          จัดการ
+          <span>จัดการ</span> {/* <-- [เพิ่ม <span>] */}
         </button>
       </nav>
-
     </div>
   );
 }

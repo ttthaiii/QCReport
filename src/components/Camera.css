@@ -141,6 +141,19 @@
   font-size: 0.95rem;
   color: var(--text-color);
   padding-right: 10px;
+  /* [แก้ไข] 1. เพิ่ม transition และ cursor เริ่มต้น */
+  cursor: default;
+  transition: color 0.2s;
+}
+
+.topic-list-item-name.viewable {
+  cursor: pointer;
+  font-weight: 500;
+  color: #0056b3; /* สีน้ำเงินเข้ม */
+  text-decoration: underline; /* ขีดเส้นใต้ */
+}
+.topic-list-item-name.viewable:hover {
+  color: #007bff; /* สีฟ้า */
 }
 
 .topic-list-item-button {
@@ -232,13 +245,93 @@
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  width: 100%;
-  margin-top: 15px;
   box-shadow: 0 4px 10px rgba(39, 174, 96, 0.3);
 }
+
 .upload-all-button:disabled {
   background-color: #bdc3c7;
   box-shadow: none;
+}
+
+.topic-list-item-button.attach {
+  background-color: #e0e0e0;
+  color: #333;
+  font-size: 1.1rem;
+  margin-left: 8px; /* เพิ่มระยะห่างจากปุ่มถ่ายรูป */
+}
+
+.watermark-toggle {
+  margin-top: 15px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #f9f9f9;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #eee;
+}
+.watermark-toggle input[type="checkbox"] {
+  margin-right: 10px;
+  /* ทำให้ Checkbox ใหญ่ขึ้นเล็กน้อยสำหรับมือถือ */
+  width: 18px;
+  height: 18px;
+  transform: scale(1.1);
+}
+.watermark-toggle label {
+  font-size: 0.9rem;
+  color: #333;
+  cursor: pointer;
+}
+
+
+.preview-modal-overlay {
+  position: fixed; /* แสดงทับเต็มจอ */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.85); /* พื้นหลังสีดำโปร่งแสง */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050; /* ให้อยู่เหนือสุด */
+  padding: 15px; /* เว้นขอบสำหรับจอมือถือ */
+}
+
+.preview-modal-content {
+  position: relative;
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  max-width: 100%;
+  max-height: 90%;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+}
+
+.preview-modal-content img {
+  display: block;
+  max-width: 100%;
+  max-height: 80vh; /* ให้รูปสูงไม่เกิน 80% ของจอ */
+  object-fit: contain; /* ให้รูปพอดี ไม่ล้น */
+  border-radius: 4px;
+}
+
+.preview-modal-close {
+  position: absolute;
+  top: -15px; /* วางปุ่มปิดไว้มุมขวาบน (อยู่นอกกรอบรูป) */
+  right: -15px;
+  background: white;
+  color: black;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 1.5rem;
+  font-weight: bold;
+  line-height: 28px; /* จัดกากบาทให้อยู่กลาง */
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
 }
 
 /* --- Camera View (หน้ากล้อง) --- */
@@ -303,4 +396,11 @@
     cursor: pointer;
     min-width: 90px;
     text-align: center;
+}
+
+.button-grid-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 20px; /* ระยะห่างจาก Checkbox */
 }

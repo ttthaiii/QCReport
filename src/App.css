@@ -118,7 +118,7 @@
 }
 
 .nav-button {
-  flex: 1; 
+  flex: 1;
   background: none;
   border: none;
   color: var(--nav-icon-color);

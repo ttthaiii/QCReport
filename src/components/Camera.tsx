@@ -30,6 +30,11 @@ interface PersistentJob {
   totalTopics: number;
 }
 
+interface PhotoQueueItem {
+  base64: string;
+  addWatermark: boolean;
+}
+
 const RECENT_JOBS_KEY = 'qc-recent-jobs';
 const getRecentJobs = (projectId: string): PersistentJob[] => {
   try {
@@ -86,11 +91,11 @@ type WizardStep =
   | 'uploading';
 
 const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => {
-  // ... (States ส่วนใหญ่เหมือนเดิม) ...
   const [step, setStep] = useState<WizardStep>('type');
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState<boolean>(false);
-  const [photoQueue, setPhotoQueue] = useState<Map<string, string>>(new Map()); 
+  const [photoQueue, setPhotoQueue] = useState<Map<string, PhotoQueueItem>>(new Map());
   const [currentTopic, setCurrentTopic] = useState<string>(''); 
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
@@ -102,7 +107,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [dailyDescriptions, setDailyDescriptions] = useState<Map<string, string>>(new Map());
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
-
+  const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(true);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   // --- [แก้ไข] 2. Logic การดึงข้อมูล (Refactored for ID-based Array) ---
   const mainCategories: MainCategory[] = useMemo(() => qcTopics || [], [qcTopics]);
   
@@ -206,22 +212,37 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     });
   };
 
-  const handleNativeFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
+  const handleNativeFileSelected = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    isNewCapture: boolean // true = ถ่าย, false = แนบ
+  ) => {
     const file = event.target.files?.[0];
     if (event.target) event.target.value = "";
     if (!file) return;
     setIsProcessingPhoto(true);
+    
     try {
       const photoBase64 = await processNativePhoto(file);
+      
+      // Logic การตัดสินใจว่าจะใส่ลายน้ำหรือไม่
+      // 1. ถ้าถ่ายใหม่ (isNewCapture=true) -> บังคับใส่ลายน้ำ
+      // 2. ถ้าแนบไฟล์ (isNewCapture=false) -> ดูจากค่า Checkbox
+      const shouldAddWatermark = isNewCapture || addWatermarkToAttached;
+      
+      const newQueueItem: PhotoQueueItem = {
+        base64: photoBase64,
+        addWatermark: shouldAddWatermark
+      };
+      
       const newQueue = new Map(photoQueue);
+      
       if (reportType === 'QC' && currentTopic) {
-          newQueue.set(currentTopic, photoBase64);
+          newQueue.set(currentTopic, newQueueItem); // <-- ใส่ Item object
           setPhotoQueue(newQueue);
           setCurrentTopic('');
       } else if (reportType === 'Daily' && step === 'camera') {
           const timestampKey = `daily_${Date.now()}`;
-          newQueue.set(timestampKey, photoBase64);
+          newQueue.set(timestampKey, newQueueItem); // <-- ใส่ Item object
           setPhotoQueue(newQueue);
       }
     } catch (error) {
@@ -233,7 +254,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   };
 
   const handleUploadAll = async () => {
-    // ... (ตรรกะการดึง Location ไม่ต้องแก้) ...
     if (photoQueue.size === 0) return;
     setIsUploading(true); setUploadStatus(`กำลังอัปโหลด 0/${photoQueue.size}...`); setStep('uploading');
     let locationString = 'ไม่สามารถระบุตำแหน่งได้';
@@ -255,26 +275,43 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     // ... (ตรรกะการวนลูป Upload ไม่ต้องแก้) ...
     let successCount = 0; const totalPhotosInQueue = photoQueue.size; const topicsJustUploaded = new Map<string, boolean>();
     try {
-      const photosToUpload = Array.from(photoQueue.entries());
-      for (const [key, photoBase64] of photosToUpload) {
-        if (!photoBase64) continue;
-        setUploadStatus(`กำลังเพิ่มลายน้ำรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
-        const timestamp = new Date().toISOString();
-        const watermarkOptions: WatermarkOptions = { location: locationString, timestamp: timestamp };
-        const watermarkedPhoto = await addWatermark(photoBase64, watermarkOptions);
+      const photosToUpload = Array.from(photoQueue.entries()); // <-- ได้ Array ของ [key, PhotoQueueItem]
+      
+      for (const [key, photoItem] of photosToUpload) {
+        if (!photoItem || !photoItem.base64) continue;
+        
+        let photoToUpload = photoItem.base64; // รูปตั้งต้น (อาจจะไม่ใส่ลายน้ำ)
+        
+        // --- ตรวจสอบว่าต้องใส่ลายน้ำหรือไม่ ---
+        if (photoItem.addWatermark) {
+          setUploadStatus(`กำลังเพิ่มลายน้ำรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
+          const timestamp = new Date().toISOString();
+          const watermarkOptions: WatermarkOptions = { location: locationString, timestamp: timestamp };
+          photoToUpload = await addWatermark(photoItem.base64, watermarkOptions); // ได้รูปใหม่ที่มีลายน้ำ
+        } else {
+          // ไม่ต้องใส่ลายน้ำ
+          setUploadStatus(`กำลังเตรียมรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
+        }
+        // ------------------------------------
+
         setUploadStatus(`กำลังอัปโหลดรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
+        
         let descriptionForUpload = '';
         if (reportType === 'Daily') {
           descriptionForUpload = dailyDescriptions.get(key) || '';
         }
+        
         const uploadData: UploadPhotoData = {
-          projectId, projectName: projectName || 'N/A', reportType, photoBase64: watermarkedPhoto, timestamp, 
+          projectId, projectName: projectName || 'N/A', reportType, 
+          photoBase64: photoToUpload, // <-- [แก้ไข] ใช้รูปที่ผ่านการตรวจสอบแล้ว
+          timestamp: new Date().toISOString(), // <-- [แก้ไข] timestamp ควรเป็นเวลาปัจจุบันเสมอ
           location: locationString,
           ...(reportType === 'QC'
             ? { mainCategory: selectedMainCategory, subCategory: selectedSubCategory, topic: key, dynamicFields }
             : { description: descriptionForUpload, dynamicFields: {} }
           ),
         };
+        
         const response = await api.uploadPhoto(uploadData);
         if (!response.success) throw new Error(`อัปโหลดล้มเหลวที่รูป: ${reportType === 'QC' ? key : `Daily Photo ${successCount + 1}`} (${response.error})`);
         if (reportType === 'QC') {
@@ -311,6 +348,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setDailyDescriptions(new Map());
     setSelectedMainCategory(''); setSelectedSubCategory(''); setDynamicFields({});
     setUploadedStatus(new Map()); setStep('type'); setRecentJobs(getRecentJobs(projectId));
+    setAddWatermarkToAttached(true); // [ใหม่] 7. Reset Checkbox
   };
 
   const handleDynamicFieldChange = (fieldName: string, value: string) => {
@@ -354,9 +392,13 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setStep('topicList');
   };
   
-  const handleStartPhotoForTopic = (topic: string) => {
+  const handleStartPhotoForTopic = (topic: string, type: 'capture' | 'attach') => {
     setCurrentTopic(topic);
-    cameraInputRef.current?.click();
+    if (type === 'capture') {
+      cameraInputRef.current?.click();
+    } else {
+      attachInputRef.current?.click();
+    }
   };
 
   const handleDailyDescriptionChange = (photoKey: string, text: string) => {
@@ -417,32 +459,64 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     return null;
   };
 
-  const renderDailyReviewItem = ([key, photoBase64]: [string, string]) => (
-    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
+  const renderDailyReviewItem = ([key, photoItem]: [string, PhotoQueueItem]) => (
     <div key={key} className="daily-review-item">
-      <img src={photoBase64} alt={`Daily ${key}`} className="daily-review-thumbnail" />
-      <textarea
-        value={dailyDescriptions.get(key) || ''}
-        onChange={(e) => handleDailyDescriptionChange(key, e.target.value)}
-        placeholder="เพิ่มคำบรรยาย (Optional)..."
-        rows={3}
-        className="daily-review-textarea"
-      />
+      <img src={photoItem.base64} alt={`Daily ${key}`} className="daily-review-thumbnail" />
+      
+      {/* [ใหม่] เพิ่ม wrapper เพื่อจัด layout */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <textarea
+          value={dailyDescriptions.get(key) || ''}
+          onChange={(e) => handleDailyDescriptionChange(key, e.target.value)}
+          placeholder="เพิ่มคำบรรยาย (Optional)..."
+          rows={3}
+          className="daily-review-textarea"
+        />
+        {/* [ใหม่] แสดงสถานะลายน้ำ */}
+        <small style={{ color: '#555', paddingLeft: '5px' }}>
+          {photoItem.addWatermark ? '✅ จะเพิ่มลายน้ำ' : '❌ ไม่เพิ่มลายน้ำ'}
+        </small>
+      </div>
+
       <button onClick={() => handleDeleteDailyPhoto(key)} className="daily-review-delete-button">🗑️</button>
     </div>
   );
+  const renderPreviewModal = () => {
+      if (!previewImageUrl) return null;
+
+      return (
+        // กดที่พื้นหลังสีดำเพื่อปิด
+        <div className="preview-modal-overlay" onClick={() => setPreviewImageUrl(null)}>
+          <div className="preview-modal-content" onClick={(e) => e.stopPropagation()}>
+            <img src={previewImageUrl} alt="Preview" />
+            <button className="preview-modal-close" onClick={() => setPreviewImageUrl(null)}>
+              &times;
+            </button>
+          </div>
+        </div>
+      );
+    };
 
   return (
     <div className="wizard-container">
-      {/* ... (Input Ref, Global Loading ไม่ต้องแก้) ... */}
+      {/* [แก้ไข] 10. เพิ่ม Input สำหรับ "แนบไฟล์" (ไม่มี capture) */}
       <input
         ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         style={{ display: 'none' }}
-        onChange={handleNativeFileSelected}
+        onChange={(e) => handleNativeFileSelected(e, true)} // true = ถ่ายใหม่
       />
+      <input
+        ref={attachInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => handleNativeFileSelected(e, false)} // false = แนบ
+      />
+      {renderPreviewModal()} 
+
       {isProcessingPhoto && (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -567,50 +641,85 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             <div className="loading-container" style={{height: '50vh'}}>กำลังตรวจสอบสถานะ...</div>
           ) : (
             <>
-              <div className="topic-list">
-                {/* [แก้ไข] 10. .map() จาก Array (Topic[]) และใช้ topic.name */}
+            <div className="topic-list">
                 {topics.map((topic: Topic) => {
-                  const topicName = topic.name; // <-- ใช้ .name เป็น Key
+                  const topicName = topic.name; 
                   const isQueued = photoQueue.has(topicName);
                   const isUploaded = uploadedStatus.has(topicName);
+                  const queueItem = photoQueue.get(topicName);
 
                   const statusIcon = isUploaded ? '✅' : (isQueued ? '🔄' : '⚪️');
-                  const buttonIcon = (isUploaded || isQueued) ? '🔄' : '📷';
-                  const buttonClass = (isQueued || isUploaded) ? 'retake' : '';
-                  const statusLabel = isUploaded ? '(อัปโหลดแล้ว)' : (isQueued ? '(ในคิว)' : '');
+                  const statusLabel = isUploaded ? '(อัปโหลดแล้ว)' : '';
 
                   return (
-                    <div key={topic.id} className="topic-list-item"> {/* <-- ใช้ topic.id ที่เสถียรเป็น key */}
+                    <div key={topic.id} className="topic-list-item"> 
                       <span className="topic-list-item-status">
                         {statusIcon}
                       </span>
-                      <span className="topic-list-item-name">
+                      
+                      {/* [แก้ไข] 1. ทำให้ชื่อหัวข้อกดดูรูปได้ */}
+                      <span 
+                        className={`topic-list-item-name ${isQueued ? 'viewable' : ''}`}
+                        onClick={() => isQueued && queueItem ? setPreviewImageUrl(queueItem.base64) : undefined}
+                        title={isQueued ? 'กดเพื่อดูรูป' : topicName}
+                      >
                         {topicName} <span style={{color: '#888', fontSize: '0.8em'}}>{statusLabel}</span>
                       </span>
+                      
+                      {/* 3. ปุ่มถ่ายรูป/แนบรูป (เหมือนเดิม) */}
                       <button
-                        className={`topic-list-item-button ${buttonClass}`}
-                        onClick={() => handleStartPhotoForTopic(topicName)}
+                        className={`topic-list-item-button ${(isQueued || isUploaded) ? 'retake' : ''}`}
+                        onClick={() => handleStartPhotoForTopic(topicName, 'capture')}
+                        title="ถ่ายรูป (บังคับลายน้ำ)"
                       >
-                        {buttonIcon}
+                        {(isQueued || isUploaded) ? '🔄' : '📷'}
+                      </button>
+                      
+                      <button
+                        className="topic-list-item-button attach"
+                        onClick={() => handleStartPhotoForTopic(topicName, 'attach')}
+                        title="แนบรูป"
+                      >
+                        📎
                       </button>
                     </div>
                   );
                 })}
               </div>
 
-              <button
-                className="upload-all-button"
-                disabled={photoQueue.size === 0 || isUploading}
-                onClick={handleUploadAll}
-              >
-                📤 อัปโหลด ({photoQueue.size}) รูปที่เลือก
-              </button>
+              {/* [ใหม่] 13. เพิ่ม Checkbox ควบคุมลายน้ำ */}
+              <div className="watermark-toggle">
+                <input 
+                  type="checkbox" 
+                  id="wm-toggle-qc" 
+                  checked={addWatermarkToAttached}
+                  onChange={(e) => setAddWatermarkToAttached(e.target.checked)}
+                />
+                <label htmlFor="wm-toggle-qc">
+                  เพิ่มลายน้ำ (Timestamp/Location) ให้กับ "รูปที่แนบ"
+                </label>
+              </div>
+
+              <div className="button-grid-container">
+                <button
+                  className="wizard-button secondary"
+                  onClick={goBack}
+                  style={{ width: '100%' }} // ทำให้ปุ่มเต็มคอลัมน์
+                >
+                  ย้อนกลับ
+                </button>
+                
+                <button
+                  className="upload-all-button"
+                  disabled={photoQueue.size === 0 || isUploading}
+                  onClick={handleUploadAll}
+                  style={{ width: '100%' }} // ทำให้ปุ่มเต็มคอลัมน์
+                >
+                  📤 อัปโหลด ({photoQueue.size})
+                </button>
+              </div>
             </>
           )}
-
-          <div className="wizard-nav">
-            <button className="wizard-button secondary" onClick={goBack}>ย้อนกลับ</button>
-          </div>
         </div>
       )}
 
@@ -645,7 +754,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             กดปุ่ม "ถ่ายรูป" เพื่อเปิดกล้อง<br/>
             รูปที่ถ่ายจะถูกเพิ่มเข้าคิวอัตโนมัติ
           </p>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
+            {/* 1. ปุ่มถ่ายรูป */}
             <button 
               className="wizard-button"
               style={{ padding: '20px 40px', fontSize: '1.5rem', height: 'auto', lineHeight: '1.5' }}
@@ -653,8 +763,32 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             >
               <span style={{ fontSize: '2.5rem' }}>📷</span>
               <br/>
-              ถ่ายรูป
+              ถ่ายรูป (บังคับลายน้ำ)
             </button>
+            
+            {/* 2. ปุ่มแนบรูป */}
+            <button 
+              className="wizard-button secondary" // <-- ใช้ .secondary
+              style={{ padding: '20px 40px', fontSize: '1.5rem', height: 'auto', lineHeight: '1.5' }}
+              onClick={() => attachInputRef.current?.click()}
+            >
+              <span style={{ fontSize: '2.5rem' }}>📎</span>
+              <br/>
+              แนบรูป
+            </button>
+          </div>
+
+          {/* [ใหม่] 15. เพิ่ม Checkbox ควบคุมลายน้ำ (Daily) */}
+          <div className="watermark-toggle" style={{ marginTop: '20px', textAlign: 'center' }}>
+            <input 
+              type="checkbox" 
+              id="wm-toggle-daily" 
+              checked={addWatermarkToAttached}
+              onChange={(e) => setAddWatermarkToAttached(e.target.checked)}
+            />
+            <label htmlFor="wm-toggle-daily">
+              เพิ่มลายน้ำให้กับ "รูปที่แนบ"
+            </label>
           </div>
           <p style={{ textAlign: 'center', color: '#666', marginTop: '30px' }}>
             มี {photoQueue.size} รูปในคิว

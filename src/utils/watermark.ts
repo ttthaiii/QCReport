@@ -82,7 +82,7 @@ export async function addWatermark(
       // Draw text (เหมือนเดิม)
       ctx.fillStyle = 'white';
       ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-      ctx.textAlign = 'left';
+      ctx.textAlign = 'right';
       ctx.shadowColor = 'rgba(0, 0, 0, 1)';
       ctx.shadowBlur = 3; 
       
@@ -90,7 +90,8 @@ export async function addWatermark(
       // (บรรทัดแรก (Timestamp) จะอยู่ล่างสุด และบรรทัดต่อๆ ไป (Location) จะอยู่เหนือขึ้นไป)
       lines.forEach((line, index) => {
         const y = canvas.height - padding - ( (lines.length - 1 - index) * lineHeight );
-        ctx.fillText(line, padding, y);
+        
+        ctx.fillText(line, canvas.width - padding, y); 
       });
 
       const watermarkedImage = canvas.toDataURL('image/jpeg', 0.9);
