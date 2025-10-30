@@ -106,6 +106,41 @@ app.use((0, cors_1.default)({ origin: true }));
 //app.use(cors({ origin: true }));
 const jsonParser = express_1.default.json({ limit: "10mb" });
 // --- API ROUTES ---
+const checkAuth = async (req, res, next) => {
+    // 1.1 ตรวจสอบว่ามี Header 'Authorization' (ตั๋ว) ส่งมาไหม
+    if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer ')) {
+        console.warn("Auth Error: No token provided.");
+        return res.status(403).json({ success: false, error: 'Unauthorized: No token provided.' });
+    }
+    const idToken = req.headers.authorization.split('Bearer ')[1];
+    try {
+        // 1.2 ตรวจสอบว่า Token ถูกต้องหรือไม่
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+        // 1.3 [สำคัญ] ดึงข้อมูล Role/Status จาก Firestore
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (!userDoc.exists) {
+            console.warn(`Auth Error: User doc not found for UID: ${uid}`);
+            return res.status(403).json({ success: false, error: 'User profile not found.' });
+        }
+        const userProfile = userDoc.data();
+        if ((userProfile === null || userProfile === void 0 ? void 0 : userProfile.status) !== 'approved') {
+            console.warn(`Auth Error: User ${userProfile === null || userProfile === void 0 ? void 0 : userProfile.email} is not approved (status: ${userProfile === null || userProfile === void 0 ? void 0 : userProfile.status}).`);
+            // ส่ง 401 (Unauthorized) แทน 403 (Forbidden) 
+            // เพื่อให้ Frontend รู้ว่าต้องแสดงหน้า "รออนุมัติ"
+            return res.status(401).json({ success: false, error: 'Account not approved.' });
+        }
+        // 1.4 แนบข้อมูล User (รวมถึง Role) ไปกับ Request
+        //     เพื่อให้ API หลัก (เช่น /generate-report) รู้ว่าใครขอมา
+        req.user = Object.assign({ uid }, userProfile);
+        // 1.5 ไปยังขั้นตอนต่อไป (API หลัก)
+        return next();
+    }
+    catch (error) {
+        console.error("Auth Error: Invalid token.", error);
+        return res.status(403).json({ success: false, error: 'Unauthorized: Invalid token.' });
+    }
+};
 // ... (คง Endpoint /health, /projects, /project-config, /projects/:projectId/report-settings ไว้เหมือนเดิม) ...
 // ✅ Health check endpoint
 app.get("/health", (req, res) => {
@@ -136,8 +171,15 @@ app.get("/projects", async (req, res) => {
         });
     }
 });
+app.use(checkAuth);
 // ✅ Get project configuration
 app.get("/project-config/:projectId", async (req, res) => {
+    const user = req.user;
+    const { projectId } = req.params;
+    // [ใหม่] ตรวจสอบสิทธิ์: User ทั่วไปสามารถดูได้เฉพาะ Config โครงการตัวเอง (ยกเว้น God)
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied to this project config.' });
+    }
     try {
         const { projectId } = req.params;
         const projectConfigRef = db.collection("projectConfig").doc(projectId);
@@ -211,6 +253,11 @@ app.get("/project-config/:projectId", async (req, res) => {
 });
 // ✅ [ใหม่ V11.3] Get Project Report Settings
 app.get("/projects/:projectId/report-settings", async (req, res) => {
+    const user = req.user;
+    const { projectId } = req.params;
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied to settings.' });
+    }
     try {
         const { projectId } = req.params;
         const projectRef = db.collection("projects").doc(projectId);
@@ -236,6 +283,14 @@ app.get("/projects/:projectId/report-settings", async (req, res) => {
 });
 // ✅ Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
 app.post("/projects/:projectId/report-settings", jsonParser, async (req, res) => {
+    const user = req.user;
+    const { projectId } = req.params;
+    if (user.role === 'user') { // User ทั่วไปห้ามแก้ไข
+        return res.status(403).json({ success: false, error: 'Only Admins can change settings.' });
+    }
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
     try {
         const { projectId } = req.params;
         const newSettings = req.body;
@@ -259,10 +314,18 @@ app.post("/projects/:projectId/report-settings", jsonParser, async (req, res) =>
 // ✅ Endpoint สำหรับ Upload Logo โครงการ
 // ✅ [แก้ไข V11.3] Endpoint สำหรับ Upload Logo โครงการ (แก้ไขปัญหา Busboy)
 app.post("/projects/:projectId/upload-logo", jsonParser, async (req, res) => {
+    // [ใหม่] ตรวจสอบสิทธิ์ (เฉพาะ Admin/God)
+    const user = req.user;
+    const { projectId } = req.params;
+    if (user.role === 'user') {
+        return res.status(403).json({ success: false, error: 'Only Admins can upload logo.' });
+    }
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
     try {
         console.log("--- BASE64 LOGO HANDLER IS RUNNING! ---");
-        const { projectId } = req.params;
-        const { logoBase64 } = req.body; // <-- 1. อ่าน Base64 จาก body
+        const { logoBase64 } = req.body;
         if (!logoBase64) {
             return res.status(400).json({ success: false, error: "No logoBase64 was uploaded." });
         }
@@ -306,6 +369,16 @@ app.post("/projects/:projectId/upload-logo", jsonParser, async (req, res) => {
 });
 // ✅ Upload photo with base64
 app.post("/upload-photo-base64", jsonParser, async (req, res) => {
+    const user = req.user;
+    const { projectId } = req.body;
+    // 1. ตรวจสอบสถานะ "approved"
+    if (user.status !== 'approved') {
+        return res.status(403).json({ success: false, error: 'Account not approved.' });
+    }
+    // 2. ตรวจสอบว่าอัปโหลดเข้า Project ตัวเองหรือไม่ (ยกเว้น God)
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Project mismatch. Cannot upload to this project.' });
+    }
     try {
         const { photo, projectId, reportType, category, topic, description, location, dynamicFields } = req.body;
         if (!photo || !projectId || !reportType) {
@@ -405,6 +478,16 @@ app.post("/upload-photo-base64", jsonParser, async (req, res) => {
 // ✅ [แก้ไข] Generate PDF report (v8 - with Dynamic Settings)
 app.post("/generate-report", jsonParser, async (req, res) => {
     var _a, _b;
+    const user = req.user;
+    const { projectId } = req.body;
+    // 1. ตรวจสอบสถานะ "approved"
+    if (user.status !== 'approved') {
+        return res.status(403).json({ success: false, error: 'Account not approved.' });
+    }
+    // 2. ตรวจสอบว่าสร้าง Report ของ Project ตัวเองหรือไม่ (ยกเว้น God)
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Project mismatch. Cannot generate report.' });
+    }
     try {
         const { projectId, projectName, reportType, mainCategory, subCategory, dynamicFields, date } = req.body;
         // ... (ส่วนการตรวจสอบ projectId, reportType, และ Fetch Report Settings เหมือนเดิม) ...
@@ -548,6 +631,12 @@ app.post("/generate-report", jsonParser, async (req, res) => {
 });
 // ... (คง Endpoint /checklist-status, /photos/:projectId, และ /project-config/... CRUD ทั้งหมดไว้เหมือนเดิม) ...
 app.post("/checklist-status", jsonParser, async (req, res) => {
+    // [ใหม่] (Optional) ตรวจสอบสิทธิ์
+    const user = req.user;
+    const { projectId } = req.body;
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
     try {
         const { projectId, mainCategory, subCategory, dynamicFields } = req.body;
         if (!projectId || !mainCategory || !subCategory || !dynamicFields) {
@@ -569,6 +658,12 @@ app.post("/checklist-status", jsonParser, async (req, res) => {
     }
 });
 app.get("/photos/:projectId", async (req, res) => {
+    // [ใหม่] (Optional) ตรวจสอบสิทธิ์
+    const user = req.user;
+    const { projectId } = req.params;
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
     try {
         const { projectId } = req.params;
         if (!projectId) {
@@ -608,7 +703,18 @@ app.get("/photos/:projectId", async (req, res) => {
         });
     }
 });
-app.post("/project-config/:projectId/main-category/:mainCatId", jsonParser, async (req, res) => {
+const checkAdminOrGod = (req, res, next) => {
+    const user = req.user;
+    const { projectId } = req.params;
+    if (user.role === 'user') {
+        return res.status(403).json({ success: false, error: 'Only Admins or God can modify config.' });
+    }
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Admin access denied for this project.' });
+    }
+    return next();
+};
+app.post("/project-config/:projectId/main-category/:mainCatId", jsonParser, checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, mainCatId } = req.params;
         const { newName } = req.body;
@@ -640,7 +746,7 @@ app.post("/project-config/:projectId/main-category/:mainCatId", jsonParser, asyn
         });
     }
 });
-app.delete("/project-config/:projectId/main-category/:mainCatId", async (req, res) => {
+app.delete("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, mainCatId } = req.params;
         const docRef = db
@@ -665,7 +771,7 @@ app.delete("/project-config/:projectId/main-category/:mainCatId", async (req, re
         });
     }
 });
-app.post("/project-config/:projectId/main-categories", jsonParser, async (req, res) => {
+app.post("/project-config/:projectId/main-categories", jsonParser, checkAdminOrGod, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newName } = req.body;
@@ -708,7 +814,7 @@ app.post("/project-config/:projectId/main-categories", jsonParser, async (req, r
         });
     }
 });
-app.post("/project-config/:projectId/sub-categories", jsonParser, async (req, res) => {
+app.post("/project-config/:projectId/sub-categories", jsonParser, checkAdminOrGod, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newName, mainCategoryId, mainCategoryName } = req.body;
@@ -747,7 +853,7 @@ app.post("/project-config/:projectId/sub-categories", jsonParser, async (req, re
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/sub-category/:subCatId", jsonParser, async (req, res) => {
+app.post("/project-config/:projectId/sub-category/:subCatId", jsonParser, checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const { newName } = req.body;
@@ -768,7 +874,7 @@ app.post("/project-config/:projectId/sub-category/:subCatId", jsonParser, async 
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.delete("/project-config/:projectId/sub-category/:subCatId", async (req, res) => {
+app.delete("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const docRef = db
@@ -785,7 +891,7 @@ app.delete("/project-config/:projectId/sub-category/:subCatId", async (req, res)
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/topics", jsonParser, async (req, res) => {
+app.post("/project-config/:projectId/topics", jsonParser, checkAdminOrGod, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newTopicNames, subCategoryId, mainCategoryName, subCategoryName } = req.body;
@@ -833,7 +939,7 @@ app.post("/project-config/:projectId/topics", jsonParser, async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/topic/:topicId", jsonParser, async (req, res) => {
+app.post("/project-config/:projectId/topic/:topicId", jsonParser, checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, topicId } = req.params;
         const { newName } = req.body;
@@ -854,7 +960,7 @@ app.post("/project-config/:projectId/topic/:topicId", jsonParser, async (req, re
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.delete("/project-config/:projectId/topic/:topicId", async (req, res) => {
+app.delete("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, topicId } = req.params;
         const docRef = db
@@ -871,7 +977,7 @@ app.delete("/project-config/:projectId/topic/:topicId", async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/sub-category/:subCatId/fields", jsonParser, async (req, res) => {
+app.post("/project-config/:projectId/sub-category/:subCatId/fields", jsonParser, checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const { fields } = req.body;
@@ -907,6 +1013,12 @@ app.post("/project-config/:projectId/sub-category/:subCatId/fields", jsonParser,
     }
 });
 app.get("/projects/:projectId/shared-jobs", async (req, res) => {
+    // [ใหม่] (Optional) ตรวจสอบสิทธิ์
+    const user = req.user;
+    const { projectId } = req.params;
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
     try {
         const { projectId } = req.params;
         const jobsSnapshot = await db
@@ -979,6 +1091,12 @@ async function checkHasNewPhotos(projectId, reportData, reportCreatedAt) {
     }
 }
 app.get("/projects/:projectId/generated-reports", async (req, res) => {
+    // [ใหม่] (Optional) ตรวจสอบสิทธิ์
+    const user = req.user;
+    const { projectId } = req.params;
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
     try {
         const { projectId } = req.params;
         const _a = req.query, { reportType, mainCategory, subCategory, date } = _a, 
@@ -1079,6 +1197,12 @@ app.get("/projects/:projectId/generated-reports", async (req, res) => {
 });
 // 2. POST /projects/:projectId/shared-jobs - สร้างหรืออัปเดตงาน
 app.post("/projects/:projectId/shared-jobs", jsonParser, async (req, res) => {
+    // [ใหม่] (Optional) ตรวจสอบสิทธิ์
+    const user = req.user;
+    const { projectId } = req.params;
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
     try {
         const { projectId } = req.params;
         // ตอนนี้ TypeScript รู้จัก 'SharedJob' แล้ว
@@ -1104,6 +1228,55 @@ app.post("/projects/:projectId/shared-jobs", jsonParser, async (req, res) => {
             success: false,
             error: error.message,
         });
+    }
+});
+app.get("/admin/pending-users", async (req, res) => {
+    const user = req.user;
+    // เฉพาะ Admin หรือ God เท่านั้น
+    if (user.role === 'user') {
+        return res.status(403).json({ success: false, error: 'Forbidden.' });
+    }
+    try {
+        let query = db.collection('users').where('status', '==', 'pending');
+        // ถ้าเป็น Admin (ไม่ใช่ God) ให้เห็นแค่โครงการตัวเอง
+        if (user.role === 'admin') {
+            query = query.where('assignedProjectId', '==', user.assignedProjectId);
+        }
+        const snapshot = await query.get();
+        const users = snapshot.docs.map(doc => doc.data());
+        return res.json({ success: true, data: users });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// API สำหรับ Admin: อนุมัติ User
+app.post("/admin/approve-user/:uidToApprove", async (req, res) => {
+    var _a;
+    const user = req.user;
+    const { uidToApprove } = req.params;
+    if (user.role === 'user') {
+        return res.status(403).json({ success: false, error: 'Forbidden.' });
+    }
+    try {
+        const userToApproveRef = db.collection('users').doc(uidToApprove);
+        const doc = await userToApproveRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+        // (God อนุมัติได้ทุกคน, Admin อนุมัติได้แค่คนในโครงการตัวเอง)
+        if (user.role === 'admin' && ((_a = doc.data()) === null || _a === void 0 ? void 0 : _a.assignedProjectId) !== user.assignedProjectId) {
+            return res.status(403).json({ success: false, error: 'Cannot approve users outside your project.' });
+        }
+        await userToApproveRef.update({
+            status: 'approved',
+            approvedBy: user.uid,
+            approvedAt: firestore_1.FieldValue.serverTimestamp()
+        });
+        return res.json({ success: true, data: { status: 'approved' } });
+    }
+    catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
     }
 });
 // ✅ Export Cloud Function

@@ -1,6 +1,9 @@
-// Filename: src/utils/api.ts
+// Filename: src/utils/api.ts (REFACTORED for Auth Token)
 
-// --- Type definitions ---
+// [ใหม่] 1. Import auth จาก firebase.js
+import { auth } from '../firebase'; 
+
+// --- Type definitions (จากไฟล์เดิมของคุณ) ---
 export interface Topic {
   id: string;
   name: string;
@@ -24,8 +27,8 @@ export type ProjectConfig = MainCategory[];
 
 export interface ReportSettings {
   layoutType: string;
-  qcPhotosPerPage: 1 | 2 | 4 | 6;      // <-- [ใหม่]
-  dailyPhotosPerPage: 1 | 2 | 4 | 6;   // <-- [ใหม่]
+  qcPhotosPerPage: 1 | 2 | 4 | 6;
+  dailyPhotosPerPage: 1 | 2 | 4 | 6;
   projectLogoUrl: string;
 }
 
@@ -33,7 +36,7 @@ export interface Project {
   id: string;
   projectName: string;
   isActive?: boolean;
-  reportSettings?: ReportSettings; // <-- เพิ่ม Optional field
+  reportSettings?: ReportSettings;
 }
 
 export interface UploadPhotoData {
@@ -53,677 +56,303 @@ export interface UploadPhotoData {
   jobId?: string;
 }
 
-/**
- * ✅ 1. แก้ไข: ประกาศ Interface Photo ที่นี่
- * เพื่อให้ไฟล์อื่น เช่น PhotoGallery.tsx สามารถ import ไปใช้ได้
- */
-export interface Photo {
-  id: string;
-  driveUrl: string;
-  filename: string;
-  reportType: 'QC' | 'Daily';
-  topic?: string;
-  description?: string;
-  createdAt: string; // ISO String
-  location?: string;
-}
 
 export interface SharedJob {
-  id: string; // ID ของ Job (เช่น mainId_subId_fields)
-  label: string; // ชื่อที่แสดงผล (เช่น "โครงสร้าง / กำแพงลิฟต์ / k/k/k")
+  id: string;
+  label: string;
   reportType: 'QC' | 'Daily';
   mainCategory: string;
   subCategory: string;
   dynamicFields: Record<string, string>;
-  
-  // สถานะ
   completedTopics: number;
   totalTopics: number;
-  status: 'pending' | 'completed'; // เพิ่มสถานะ
-  
-  // การเรียงลำดับ
-  lastUpdatedAt: string; // ISO Timestamp
+  status: 'pending' | 'completed';
+  lastUpdatedAt: string;
 }
 
-export interface GeneratedReportInfo {
-  reportId: string;
+// [แก้ไข] 2. ขยาย Type 'Photo' ให้มี Field ที่ PhotoGallery.tsx ต้องการ
+export interface Photo {
+  id: string;
+  driveUrl: string;
+  // (Fields ที่ Error ใน PhotoGallery.tsx)
+  createdAt: string; // (หรือ Date)
   reportType: 'QC' | 'Daily';
-  createdAt: string; // ISO Timestamp string
+  topic?: string;
+  description?: string;
   filename: string;
-  publicUrl: string;
-  storagePath: string;
-  
-  // Filter fields (อาจจะมีบางอันเป็น null/undefined)
-  mainCategory?: string;
-  subCategory?: string;
-  dynamicFields?: Record<string, string>;
-  reportDate?: string; // YYYY-MM-DD
-
-  // Display fields
-  photosFound: number;
-  totalTopics?: number; // Only for QC
-
-  // [ใหม่] สถานะว่ามีรูปใหม่รอสร้างรายงานหรือไม่
-  hasNewPhotos?: boolean; 
+  location?: string;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-
-// --- API configuration ---
-const API_BASE_URL = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:5001/qcreport-54164/asia-southeast1/api'
-  : 'https://asia-southeast1-qcreport-54164.cloudfunctions.net/api';
-
-async function getGeneratedReports(
-  projectId: string,
-  filterCriteria: {
-    reportType: 'QC' | 'Daily';
-    mainCategory?: string;
-    subCategory?: string;
-    dynamicFields?: Record<string, string>;
-    date?: string; // YYYY-MM-DD
-  }
-): Promise<ApiResponse<GeneratedReportInfo[]>> {
-  try {
-    // สร้าง Query Parameters จาก Filter
-    const params = new URLSearchParams();
-    params.append('reportType', filterCriteria.reportType);
-    if (filterCriteria.reportType === 'QC') {
-      if (filterCriteria.mainCategory) params.append('mainCategory', filterCriteria.mainCategory);
-      if (filterCriteria.subCategory) params.append('subCategory', filterCriteria.subCategory);
-      if (filterCriteria.dynamicFields) {
-        // แปลง dynamicFields object เป็น string เพื่อส่ง (Backend ต้องรู้วิธีอ่านกลับ)
-        // ตัวอย่าง: field1=value1&field2=value2
-        Object.entries(filterCriteria.dynamicFields).forEach(([key, value]) => {
-          if (value) params.append(`dynamicFields[${key}]`, value);
-        });
-      }
-    } else if (filterCriteria.reportType === 'Daily') {
-      if (filterCriteria.date) params.append('date', filterCriteria.date);
-    }
-
-    // เรียก Backend endpoint ใหม่ (ที่เราจะสร้าง)
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/generated-reports?${params.toString()}`);
-    
-    if (!response.ok) {
-       // พยายามอ่าน Error message จาก JSON response ถ้ามี
-       let errorMsg = `HTTP Error ${response.status}`;
-       try {
-           const errorData = await response.json();
-           errorMsg = errorData.error || errorMsg;
-       } catch (e) { /* ไม่ต้องทำอะไรถ้า response ไม่ใช่ JSON */ }
-       throw new Error(errorMsg);
-    }
-    
-    const data = await response.json();
-    return data; // ควรจะเป็น { success: true, data: GeneratedReportInfo[] }
-
-  } catch (error) {
-    console.error('Error fetching generated reports:', error);
-    return { 
-      success: false, 
-      error: (error as Error).message, 
-      data: [] // คืนค่า array ว่างเมื่อเกิด Error
-    };
-  }
+export interface GeneratedReportInfo {
+  reportId: string;
+  reportType: 'QC' | 'Daily';
+  createdAt: string;
+  filename: string;
+  publicUrl: string;
+  storagePath: string;
+  mainCategory?: string;
+  subCategory?: string;
+  dynamicFields?: Record<string, string>;
+  reportDate?: string;
+  photosFound: number;
+  totalTopics?: number;
+  hasNewPhotos?: boolean;
 }
 
-// --- API service ---
-export const api = {
-  // Get all active projects
-  async getProjects(): Promise<ApiResponse<Project[]>> {
+const DEFAULT_REPORT_SETTINGS: ReportSettings = {
+  layoutType: 'default',
+  qcPhotosPerPage: 6,
+  dailyPhotosPerPage: 2, // (คุณอาจจะอยากเปลี่ยนเป็น 6 เหมือนใน Config)
+  projectLogoUrl: '',
+};
+// --- จบ Type definitions ---
+
+
+// [ใหม่] 2. กำหนด API_BASE_URL
+// (อ้างอิงจาก firebase.json และ qc-functions/src/index.ts)
+const IS_DEV = process.env.NODE_ENV === 'development';
+const API_BASE_URL = IS_DEV 
+  ? 'http://localhost:5000/api'
+  : '/api';
+
+
+// [ใหม่] 3. สร้าง Wrapper 'fetch' ที่ปลอดภัย (ตัวหุ้ม)
+const fetchWithAuth = async (path: string, options: RequestInit = {}) => {
+  const user = auth.currentUser;
+  
+  // 3.1 สร้าง Headers
+  const headers = new Headers(options.headers || {});
+
+  // 3.2 ถ้ามี User, ดึง Token และแนบไปใน Header
+  if (user) {
+    const token = await user.getIdToken(); // ดึง Token ล่าสุด
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  // 3.3 ถ้าเป็นการส่งข้อมูล (POST) และยังไม่มี Content-Type ให้ตั้งเป็น JSON
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  // 3.4 เรียก fetch จริง โดยใช้ path + options ที่อัปเดตแล้ว
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: headers // (Headers ที่มี Token)
+  });
+
+  // 3.5 จัดการ Error (เหมือนที่คุณทำ)
+  if (!response.ok) {
+    let errorMsg = `HTTP Error ${response.status}`;
     try {
-      const response = await fetch(`${API_BASE_URL}/projects`);
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-      return { 
-        success: false, 
-        error: 'ไม่สามารถโหลดข้อมูลโครงการได้' 
-      };
-    }
-  },
-
-  // Get project configuration (QC topics)
-  async getProjectConfig(projectId: string): Promise<ApiResponse<ProjectConfig>> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/project-config/${projectId}`);
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error fetching project config:', error);
-      return { 
-        success: false, 
-        error: 'ไม่สามารถโหลดข้อมูลตั้งค่าโครงการได้' 
-      };
-    }
-  },
-
-  async getReportSettings(projectId: string): Promise<ApiResponse<ReportSettings>> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/report-settings`);
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching report settings:', error);
-      // [แก้ไข V11] คืนค่า Default ที่ถูกต้อง
-      const defaultSettings: ReportSettings = {
-          layoutType: "default", 
-            qcPhotosPerPage: 6, 
-            dailyPhotosPerPage: 2, 
-            projectLogoUrl: ""
-      };
-      return { success: false, error: (error as Error).message, data: defaultSettings };
-    }
-  },
-
-  /**
-   * ✅ [ใหม่] บันทึกค่าตั้งค่า Report ของ Project
-   */
-  async saveReportSettings(projectId: string, settings: ReportSettings): Promise<ApiResponse> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/report-settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error saving report settings:', error);
-      return { success: false, error: (error as Error).message };
-    }
-  },
-
-  /**
-   * ✅ [ใหม่] อัปโหลดไฟล์ Logo ของ Project
-   */
-  async uploadProjectLogo(projectId: string, logoBase64: string): Promise<ApiResponse<{ logoUrl: string }>> {
-    try {
-      console.log('[API Client] Uploading logo (Base64)...');
-
-      // 1. ส่ง Request เป็น JSON
-      const response = await fetch(
-        `${API_BASE_URL}/projects/${projectId}/upload-logo`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }, // <-- ✅ เปลี่ยนเป็น JSON
-          body: JSON.stringify({ logoBase64: logoBase64 }), // <-- ✅ ส่ง Base64
-        }
-      );
-
-      // (โค้ดจัดการ Error ที่เราแก้ไปแล้ว ใช้งานได้เลย)
-      if (!response.ok) {
-        let errorMsg = `HTTP ${response.status}`;
-        const errorText = await response.text();
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMsg = errorData.error || errorMsg;
-        } catch (e) {
-          errorMsg = errorText.substring(0, 200) || errorMsg;
-        }
-        throw new Error(errorMsg);
-      }
-
-      const result = await response.json();
-      console.log('[API Client] Upload success:', result);
-      return result;
-
-    } catch (error) {
-      console.error('[API Client] Upload error:', error);
-      return { 
-        success: false, 
-        error: (error as Error).message 
-      };
-    }
-  },
-
-  async updateMainCategoryName(
-    projectId: string, 
-    mainCatId: string, 
-    newName: string
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/main-category/${mainCatId}`, 
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ newName: newName }), // ส่งชื่อใหม่ไปใน body
-        }
-      );
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error updating main category name:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'ไม่สามารถอัปเดตชื่อได้' 
-      };
-    }
-  },
-
-  async deleteMainCategory(
-    projectId: string, 
-    mainCatId: string
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/main-category/${mainCatId}`, 
-        {
-          method: 'DELETE', // ใช้วิธี DELETE
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
-      );
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error deleting main category name:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'ไม่สามารถลบหมวดหมู่ได้' 
-      };
-    }
-  },
-
-  async addMainCategory(
-    projectId: string, 
-    newName: string
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/main-categories`, 
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ newName: newName }), // ส่งชื่อใหม่ไปใน body
-        }
-      );
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error adding main category name:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'ไม่สามารถเพิ่มหมวดหมู่ได้' 
-      };
-    }
-  },
-
-  async addSubCategory(
-    projectId: string, 
-    mainCategoryId: string, 
-    mainCategoryName: string, 
-    newName: string
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/sub-categories`, 
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            newName: newName,
-            mainCategoryId: mainCategoryId, // <-- ส่ง ID ของ Level 1
-            mainCategoryName: mainCategoryName // <-- ส่ง Name ของ Level 1 (เพื่อสร้าง Slug)
-          }),
-        }
-      );
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error adding sub category:', error);
-      return { success: false, error: (error as Error).message };
-    }
-  },
-
-  /**
-   * ✅ [ใหม่] ฟังก์ชันสำหรับ "แก้ไข" Sub Category
-   */
-  async updateSubCategoryName(
-    projectId: string, 
-    subCatId: string, 
-    newName: string
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/sub-category/${subCatId}`, 
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newName: newName }),
-        }
-      );
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error updating sub category name:', error);
-      return { success: false, error: (error as Error).message };
-    }
-  },
-
-  /**
-   * ✅ [ใหม่] ฟังก์ชันสำหรับ "ลบ" Sub Category
-   */
-  async deleteSubCategory(
-    projectId: string, 
-    subCatId: string
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/sub-category/${subCatId}`, 
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error deleting sub category:', error);
-      return { success: false, error: (error as Error).message };
-    }
-  },
-
-  /**
-   * ✅ [ใหม่] ฟังก์ชันสำหรับ "เพิ่ม" Topic (Level 3)
-   */
-  async addTopic(
-    projectId: string, 
-    subCategoryId: string, 
-    mainCategoryName: string,
-    subCategoryName: string,
-    newTopicNames: string[] // <-- [แก้ไข] รับ Array
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/topics`, 
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            newTopicNames: newTopicNames, // <-- [แก้ไข] ส่ง Array
-            subCategoryId: subCategoryId,
-            mainCategoryName: mainCategoryName,
-            subCategoryName: subCategoryName
-          }),
-        }
-      );
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error adding bulk topics:', error);
-      return { success: false, error: (error as Error).message };
-    }
-  },
-
-  /**
-   * ✅ [ใหม่] ฟังก์ชันสำหรับ "แก้ไข" Topic
-   */
-  async updateTopicName(
-    projectId: string, 
-    topicId: string, 
-    newName: string
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/topic/${topicId}`, 
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newName: newName }),
-        }
-      );
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error updating topic name:', error);
-      return { success: false, error: (error as Error).message };
-    }
-  },
-
-  /**
-   * ✅ [ใหม่] ฟังก์ชันสำหรับ "ลบ" Topic
-   */
-  async deleteTopic(
-    projectId: string, 
-    topicId: string
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/topic/${topicId}`, 
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error deleting topic:', error);
-      return { success: false, error: (error as Error).message };
-    }
-  },
-
-  /**
-   * ✅ [ใหม่] ฟังก์ชันสำหรับ "อัปเดต" Dynamic Fields (Level 4)
-   */
-  async updateDynamicFields(
-    projectId: string, 
-    subCatId: string, 
-    fields: string[] // <-- ส่ง Array
-  ): Promise<ApiResponse> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/project-config/${projectId}/sub-category/${subCatId}/fields`, 
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fields: fields }), // <-- ส่ง Array
-        }
-      );
-      if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error updating dynamic fields:', error);
-      return { success: false, error: (error as Error).message };
-    }
-  },
-
-  /**
-   * ✅ เพิ่มฟังก์ชันใหม่นี้เข้าไป
-   * ดึงรูปภาพทั้งหมด (ทั้ง QC และ Daily) จากโปรเจกต์ที่ระบุ
-   */
-  async getPhotosByProject(projectId: string): Promise<ApiResponse<Photo[]>> {
-    try {
-      if (!projectId) {
-        throw new Error('Project ID is required');
-      }
-      
-      // ✅ 2. แก้ไข: ใช้ตัวแปร API_BASE_URL ที่ถูกต้อง
-      const response = await fetch(`${API_BASE_URL}/photos/${projectId}`);
-      
-      if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
+        errorMsg = errorData.error || errorMsg;
+    } catch (e) { /* Ignore if not JSON */ }
+    throw new Error(errorMsg);
+  }
+  
+  // 3.6 คืนค่าเป็น JSON
+  return response.json(); 
+};
 
-      // ✅ 3. แก้ไข: ตอนนี้ TypeScript รู้จัก 'Photo' แล้ว
-      const result: ApiResponse<Photo[]> = await response.json();
-      return result;
 
-    } catch (error) {
-      console.error('Error fetching photos by project:', error);
-      return { success: false, error: (error as Error).message, data: [] };
-    }
-  },
+// [แก้ไข] 4. อัปเดต 'api' object ทั้งหมดให้ใช้ 'fetchWithAuth'
+export const api = {
 
-  // Upload photo with metadata
-  async uploadPhoto(photoData: UploadPhotoData): Promise<ApiResponse> {
+  // --- Projects & Config (สำหรับหน้าเลือกโครงการ และ Admin) ---
+  getProjects: async (): Promise<ApiResponse<Project[]>> => {
     try {
-      const { photoBase64, mainCategory, subCategory, ...restData } = photoData;
-      
-      const category = mainCategory && subCategory 
-        ? `${mainCategory} > ${subCategory}`
-        : mainCategory || '';
-      
-      const response = await fetch(`${API_BASE_URL}/upload-photo-base64`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          photo: photoBase64,
-          category: category,
-          ...restData
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error uploading photo:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'ไม่สามารถอัปโหลดรูปภาพได้' 
-      };
+      const data = await fetchWithAuth('/projects', { method: 'GET' });
+      return data; // (API ของคุณคืน { success: true, data: [...] })
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
   },
 
-  // Generate report
-  async generateReport(reportData: {
+  getProjectConfig: async (projectId: string): Promise<ApiResponse<ProjectConfig>> => {
+    try {
+      const data = await fetchWithAuth(`/project-config/${projectId}`, { method: 'GET' });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // --- Photo Upload (สำหรับหน้า Camera) ---
+  uploadPhoto: async (data: UploadPhotoData): Promise<ApiResponse<any>> => {
+    try {
+      const responseData = await fetchWithAuth('/upload-photo-base64', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      return responseData;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // --- Reports (สำหรับหน้า Reports) ---
+  generateReport: async (reportData: any): Promise<ApiResponse<any>> => {
+    try {
+      const data = await fetchWithAuth('/generate-report', {
+        method: 'POST',
+        body: JSON.stringify(reportData)
+      });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+getChecklistStatus: async (payload: {
     projectId: string;
-    projectName: string;
-    reportType: 'QC' | 'Daily'; // <-- [ใหม่]
-    mainCategory?: string;       // <-- [ใหม่] optional
-    subCategory?: string;        // <-- [ใหม่] optional
-    date?: string;               // <-- [ใหม่]
-    dynamicFields?: { [key: string]: string };
-  }): Promise<ApiResponse> { // <-- [แก้ไข] Type ของ reportData
-    try {
-      const response = await fetch(`${API_BASE_URL}/generate-report`, {
+    mainCategory: string;
+    subCategory: string;
+    dynamicFields: Record<string, string>;
+  }): Promise<ApiResponse<Record<string, boolean>>> => {
+     try {
+      const data = await fetchWithAuth('/checklist-status', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(reportData), // <-- ส่ง reportData ไปตรงๆ
+        body: JSON.stringify(payload) // ส่งเป็น object เดียว
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
       return data;
-    } catch (error) {
-      console.error('Error generating report:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'ไม่สามารถสร้างรายงานได้' 
-      };
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
+  },
+
+  // --- Report Settings (สำหรับหน้า Admin) ---
+  getReportSettings: async (projectId: string): Promise<ApiResponse<ReportSettings>> => {
+    try {
+      const data = await fetchWithAuth(`/projects/${projectId}/report-settings`, { method: 'GET' });
+      return data;
+    } catch (error: any)
+ {
+      return { success: false, error: error.message, data: DEFAULT_REPORT_SETTINGS };
+    }
+  },
+
+  saveReportSettings: async (projectId: string, settings: ReportSettings): Promise<ApiResponse<any>> => {
+    try {
+      const data = await fetchWithAuth(`/projects/${projectId}/report-settings`, {
+        method: 'POST',
+        body: JSON.stringify(settings)
+      });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  uploadProjectLogo: async (projectId: string, logoBase64: string): Promise<ApiResponse<{ logoUrl: string }>> => {
+    try {
+      const data = await fetchWithAuth(`/projects/${projectId}/upload-logo`, {
+        method: 'POST',
+        body: JSON.stringify({ logoBase64 })
+      });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // --- Config CRUD (สำหรับหน้า Admin) ---
+  addMainCategory: async (projectId: string, newName: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/main-categories`, {
+        method: 'POST',
+        body: JSON.stringify({ newName })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
   },
   
-  getChecklistStatus: async (
-      projectId: string,
-      mainCategory: string,
-      subCategory: string,
-      dynamicFields: Record<string, string>
-    ): Promise<{ success: boolean; data?: Record<string, boolean>; error?: string }> => {
+  updateMainCategoryName: async (projectId: string, mainCatId: string, newName: string): Promise<ApiResponse<any>> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/checklist-status`, { // <-- ✨ แก้ไข
+      return await fetchWithAuth(`/project-config/${projectId}/main-category/${mainCatId}`, {
         method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            projectId,
-            mainCategory,
-            subCategory,
-            dynamicFields,
-          }),
-        });
-        const result = await response.json();
-        return result;
-      } catch (err) {
-        return { success: false, error: (err as Error).message };
-      }
-    },
+        body: JSON.stringify({ newName })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
 
-    async getSharedJobs(projectId: string): Promise<ApiResponse<SharedJob[]>> {
-        try {
-          const response = await fetch(`${API_BASE_URL}/projects/${projectId}/shared-jobs`);
-          if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-          return await response.json();
-        } catch (error) {
-          console.error('Error fetching shared jobs:', error);
-          return { success: false, error: (error as Error).message, data: [] };
-        }
-      },
+  deleteMainCategory: async (projectId: string, mainCatId: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/main-category/${mainCatId}`, {
+        method: 'DELETE'
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
 
-      async saveSharedJob(projectId: string, jobData: SharedJob): Promise<ApiResponse> {
-          try {
-            const response = await fetch(`${API_BASE_URL}/projects/${projectId}/shared-jobs`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(jobData),
-            });
-            if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
-            return await response.json();
-          } catch (error) {
-            console.error('Error saving shared job:', error);
-            return { success: false, error: (error as Error).message };
-          }
-        },
+  addSubCategory: async (projectId: string, mainCategoryId: string, mainCategoryName: string, newName: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/sub-categories`, {
+        method: 'POST',
+        body: JSON.stringify({ newName, mainCategoryId, mainCategoryName })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
 
-    async getGeneratedReports(
-      projectId: string,
-      filterCriteria: {
-        reportType: 'QC' | 'Daily';
-        mainCategory?: string;
-        subCategory?: string;
-        dynamicFields?: Record<string, string>;
-        date?: string; // YYYY-MM-DD
-      }
-    ): Promise<ApiResponse<GeneratedReportInfo[]>> {
+  updateSubCategoryName: async (projectId: string, subCatId: string, newName: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}`, {
+        method: 'POST',
+        body: JSON.stringify({ newName })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  deleteSubCategory: async (projectId: string, subCatId: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}`, {
+        method: 'DELETE'
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  addTopic: async (projectId: string, subCategoryId: string, mainCategoryName: string, subCategoryName: string, newTopicNames: string[]): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/topics`, {
+        method: 'POST',
+        body: JSON.stringify({ newTopicNames, subCategoryId, mainCategoryName, subCategoryName })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  updateTopicName: async (projectId: string, topicId: string, newName: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/topic/${topicId}`, {
+        method: 'POST',
+        body: JSON.stringify({ newName })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  deleteTopic: async (projectId: string, topicId: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/topic/${topicId}`, {
+        method: 'DELETE'
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+  
+  updateDynamicFields: async (projectId: string, subCatId: string, fields: string[]): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}/fields`, {
+        method: 'POST',
+        body: JSON.stringify({ fields })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  // --- Generated Reports (หน้า Reports) ---
+  // (นี่คือฟังก์ชันจากไฟล์เดิมของคุณ ที่แก้ไขแล้ว)
+  getGeneratedReports: async (projectId: string, filterCriteria: any): Promise<ApiResponse<GeneratedReportInfo[]>> => {
       try {
-        // สร้าง Query Parameters จาก Filter
         const params = new URLSearchParams();
         params.append('reportType', filterCriteria.reportType);
         if (filterCriteria.reportType === 'QC') {
@@ -731,26 +360,19 @@ export const api = {
           if (filterCriteria.subCategory) params.append('subCategory', filterCriteria.subCategory);
           if (filterCriteria.dynamicFields) {
             Object.entries(filterCriteria.dynamicFields).forEach(([key, value]) => {
-              if (value) params.append(`dynamicFields[${key}]`, value);
+              if (value) params.append(`dynamicFields[${key}]`, value as string);
             });
           }
         } else if (filterCriteria.reportType === 'Daily') {
           if (filterCriteria.date) params.append('date', filterCriteria.date);
         }
 
-        // เรียก Backend endpoint ใหม่
-        const response = await fetch(`${API_BASE_URL}/projects/${projectId}/generated-reports?${params.toString()}`);
+        // [แก้ไข] เรียกใช้ fetchWithAuth
+        const data = await fetchWithAuth(`/projects/${projectId}/generated-reports?${params.toString()}`, {
+          method: 'GET'
+        });
 
-        if (!response.ok) {
-          let errorMsg = `HTTP Error ${response.status}`;
-          try {
-              const errorData = await response.json();
-              errorMsg = errorData.error || errorMsg;
-          } catch (e) { /* Ignore if not JSON */ }
-          throw new Error(errorMsg);
-        }
-
-        const data = await response.json();
+        // (Error handling และ .json() ถูกย้ายไปใน fetchWithAuth แล้ว)
         return data;
 
       } catch (error) {
@@ -761,5 +383,34 @@ export const api = {
           data: []
         };
       }
-    },      
+    },
+
+    getSharedJobs: async (projectId: string): Promise<ApiResponse<SharedJob[]>> => {
+      try {
+        const data = await fetchWithAuth(`/projects/${projectId}/shared-jobs`, { method: 'GET' });
+        return data;
+      } catch (error: any) {
+        return { success: false, error: error.message, data: [] };
+      }
+    },
+    
+    saveSharedJob: async (projectId: string, jobData: SharedJob): Promise<ApiResponse<any>> => {
+      try {
+        return await fetchWithAuth(`/projects/${projectId}/shared-jobs`, {
+          method: 'POST',
+          body: JSON.stringify(jobData)
+        });
+      } catch (error: any) { return { success: false, error: error.message }; }
+    },
+
+    // [ใหม่] 6. เพิ่มฟังก์ชัน 'getPhotosByProject' ที่หายไป
+    getPhotosByProject: async (projectId: string): Promise<ApiResponse<Photo[]>> => {
+      try {
+        // (Endpoint นี้อ้างอิงจาก index.ts ของคุณ `app.get("/photos/:projectId", ...)` )
+        const data = await fetchWithAuth(`/photos/${projectId}`, { method: 'GET' });
+        return data;
+      } catch (error: any) {
+        return { success: false, error: error.message, data: [] };
+      }
+    },
 };
