@@ -1,16 +1,28 @@
-/* Filename: src/index.css (FINAL FIX) */
+/* Filename: src/index.css (REFACTORED) */
 
+/* * STEP 1: 
+ * รวมตัวแปรสี (CSS Variables) ทั้งหมดมาไว้ที่นี่ที่เดียว
+ * (นำมาจาก src/App.css และ src/index.css)
+ */
 :root {
-  --primary-color: #007bff;
-  --primary-hover: #0056b3;
-  --background-color: #f4f7f9; /* สีขาว/เทาอ่อน ของ Body */
-  --text-color: #333;
-  --header-bg: #ffffff;
+  /* 1. Theme Variables (จาก App.css) */
+  --primary-color: #D95B00;
+  --header-bg: #5D4037;
+  --background-color: #FAF9F6; /* สีครีม ของ App */
+  --text-color: #3E2723;
+  --header-text: #FFFFFF;
+  --nav-icon-color: #A1887F;
+  --nav-icon-active: #FFFFFF;
+
+  /* 2. Utility Variables (จาก index.css) */
+  --primary-hover: #b34a00; /* (ปรับสี hover ให้เข้ากับสี primary ใหม่) */
   --border-color: #dee2e6;
   --error-color: #dc3545;
 }
 
-/* 1. html และ body ตั้งค่าพื้นฐาน */
+/* * STEP 2: 
+ * สไตล์พื้นฐานของ HTML (จาก index.css)
+ */
 body, html {
   margin: 0;
   padding: 0;
@@ -21,7 +33,9 @@ body, html {
   overscroll-behavior: none; 
 }
 
-/* 2. FIX: กำหนดให้ #root เป็นตัวควบคุมความสูงแบบ Dynamic (dvh) */
+/* * STEP 3: 
+ * สไตล์ของ #root (จาก index.css)
+ */
 #root {
   height: 100dvh; /* ใช้ dvh ที่นี่ */
   width: 100%;
@@ -31,13 +45,15 @@ body, html {
   box-sizing: border-box;
 }
 
+/* * STEP 4: 
+ * Utility Classes ที่ใช้ร่วมกัน (จาก index.css)
+ */
 .container {
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
 }
 
-/* สไตล์กลางสำหรับ Loading/Error (ใช้ร่วมกัน) */
 .loading-container, .error-container {
   display: flex;
   flex-direction: column;
@@ -50,4 +66,16 @@ body, html {
 
 .error-container h1 {
   color: var(--error-color);
+}
+
+/* * STEP 5: 
+ * [ใหม่] ย้ายสไตล์ของ 3rd Party (datepicker) มาจาก App.css
+ */
+.daily-datepicker {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  box-sizing: border-box;
 }

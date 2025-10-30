@@ -1,4 +1,4 @@
-// Filename: src/components/AdminConfig.tsx (V11 - Separate UI + V3 Logic)
+// Filename: src/components/AdminConfig.tsx (REFACTORED for CSS Modules)
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
@@ -7,9 +7,10 @@ import {
   MainCategory, 
   SubCategory, 
   Topic,
-  ReportSettings // <-- [V11] Import Interface ใหม่
+  ReportSettings 
 } from '../utils/api';
-import './AdminAccordion.css'; 
+// [แก้ไข] 1. เปลี่ยนวิธี Import CSS
+import styles from './AdminConfig.module.css'; 
 
 interface AdminConfigProps {
   projectId: string;
@@ -24,7 +25,6 @@ type ActiveForm =
   | 'topic'
   | null;
 
-// ✅ [ใหม่ V11] สร้าง Default Settings ที่ถูกต้อง
 const DEFAULT_REPORT_SETTINGS: ReportSettings = {
   layoutType: 'default',
   qcPhotosPerPage: 6,
@@ -39,6 +39,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
   onConfigUpdated
 }) => {
   
+  // (State ทั้งหมดเหมือนเดิม)
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [newName, setNewName] = useState("");
   const [activeForm, setActiveForm] = useState<ActiveForm>(null);
@@ -47,27 +48,20 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
   const [tempFields, setTempFields] = useState<string[]>([]);
   const [newFieldName, setNewFieldName] = useState("");
   const [isSavingFields, setIsSavingFields] = useState(false);  
-
   const [reportSettings, setReportSettings] = useState<ReportSettings | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSavingReportSettings, setIsSavingReportSettings] = useState(false);
-
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
-  // ✅ [แก้ไข V11] Load Report Settings (ปรับปรุงการ Merge)
+  // (useEffect และ Helper Functions ทั้งหมดเหมือนเดิม)
   useEffect(() => {
     const loadSettings = async () => {
       if (!projectId) return;
       setIsLoadingSettings(true);
       const response = await api.getReportSettings(projectId);
-      
-      // (ใช้ Data ที่ได้ หรือ Default จาก api.ts)
       const settingsData = response.data || DEFAULT_REPORT_SETTINGS;
-      
-      // [ใหม่] Merge ค่าที่ดึงได้ ทับ ค่า Default
       setReportSettings({ ...DEFAULT_REPORT_SETTINGS, ...settingsData });
-        
       if(!response.success) {
          console.error("Failed to load report settings:", response.error);
       }
@@ -76,48 +70,36 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     loadSettings();
   }, [projectId]);
 
-  // ========== 1. Helper Functions (V3) ==========
-
   const toggleExpand = (id: string) => {
     setExpandedItems(prev => ({ ...prev, [id]: !prev[id] }));
   };
-
   const showAddForm = (type: ActiveForm) => {
     setActiveForm(type); setNewName(""); setIsAdding(false);
   };
-  
   const cancelAddForm = () => {
     setActiveForm(null); setNewName(""); setIsAdding(false);
   };
-
   const openFieldsModal = (subCat: SubCategory) => {
     setEditingSubCat(subCat);
     setTempFields(subCat.dynamicFields || []);
     setNewFieldName(""); setIsSavingFields(false);
   };
-  
   const closeFieldsModal = () => {
     setEditingSubCat(null);
   };
-
   const handleAddField = () => {
     if (newFieldName.trim() && !tempFields.includes(newFieldName.trim())) {
       setTempFields([...tempFields, newFieldName.trim()]);
       setNewFieldName("");
     }
   };
-  
   const handleRemoveField = (fieldToRemove: string) => {
     setTempFields(tempFields.filter(f => f !== fieldToRemove));
   };
-  
-  // ✅ [คืนค่า V3]
   const handleSaveChanges = async () => {
     if (!editingSubCat) return;
-    
     setIsSavingFields(true);
     try {
-      // (ใช้ api.ts V11)
       const response = await api.updateDynamicFields(
         projectId, 
         editingSubCat.id, 
@@ -134,15 +116,11 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     }
     setIsSavingFields(false);
   };  
-
-  // [แก้ไข V11]
   const handleSettingChange = (field: keyof ReportSettings, value: any) => {
     setReportSettings(prev => prev ? { ...prev, [field]: value } : null);
   };
-
-  // ========== 2. API Handlers (V3) ==========
-
-  // ✅ [คืนค่า V3]
+  
+  // (API Handlers ทั้งหมดเหมือนเดิม)
   const handleAddMain = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || isAdding) return;
@@ -156,8 +134,6 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     } catch (error) { alert("Error: " + (error as Error).message); }
     setIsAdding(false);
   };
-
-  // ✅ [คืนค่า V3]
   const handleEditMain = async (id: string, oldName: string) => {
     const name = prompt(`แก้ไขชื่อสำหรับ "${oldName}":`, oldName);
     if (name && name.trim() && name !== oldName) {
@@ -168,8 +144,6 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       } catch (error) { alert("Error: " + (error as Error).message); }
     }
   };
-
-  // ✅ [คืนค่า V3]
   const handleDeleteMain = async (id: string, name: string) => {
     if (window.confirm(`แน่ใจว่าต้องการลบ "${name}"?`)) {
       try {
@@ -179,18 +153,13 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       } catch (error) { alert("Error: " + (error as Error).message); }
     }
   };
-
-  // ✅ [คืนค่า V3]
   const handleAddSub = async (e: React.FormEvent, mainCat: MainCategory) => {
     e.preventDefault();
     if (!newName.trim() || isAdding) return;
     setIsAdding(true);
     try {
       const response = await api.addSubCategory(
-        projectId,
-        mainCat.id,
-        mainCat.name,
-        newName.trim()
+        projectId, mainCat.id, mainCat.name, newName.trim()
       );
       if (response.success) {
         onConfigUpdated();
@@ -199,8 +168,6 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     } catch (error) { alert("Error: " + (error as Error).message); }
     setIsAdding(false);
   };
-
-  // ✅ [คืนค่า V3]
   const handleEditSub = async (id: string, oldName: string) => {
     const name = prompt(`แก้ไขชื่อสำหรับ "${oldName}":`, oldName);
     if (name && name.trim() && name !== oldName) {
@@ -211,8 +178,6 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       } catch (error) { alert("Error: " + (error as Error).message); }
     }
   };
-
-  // ✅ [คืนค่า V3]
   const handleDeleteSub = async (id: string, name: string) => {
     if (window.confirm(`แน่ใจว่าต้องการลบ "${name}"?`)) {
       try {
@@ -222,32 +187,22 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       } catch (error) { alert("Error: " + (error as Error).message); }
     }
   };
-  
-  // ✅ [คืนค่า V3]
   const handleAddTopic = async (e: React.FormEvent, mainCat: MainCategory, subCat: SubCategory) => {
     e.preventDefault();
     if (!newName.trim() || isAdding) return;
-    
     const topicNames = newName.split('\n')
       .map(line => line.trim())
       .map(line => line.replace(/^(?:\d+\.|\-|\•)\s*/, '').trim())
       .filter(line => line.length > 0);   
-      
     if (topicNames.length === 0) {
       alert("ไม่พบชื่อหัวข้อที่ถูกต้อง กรุณาป้อนหัวข้อ (1 หัวข้อต่อ 1 บรรทัด)");
       return;
     }
-      
     setIsAdding(true);
     try {
       const response = await api.addTopic(
-        projectId,
-        subCat.id,
-        mainCat.name,
-        subCat.name,
-        topicNames
+        projectId, subCat.id, mainCat.name, subCat.name, topicNames
       );
-      
       if (response.success) {
         onConfigUpdated();
         cancelAddForm();
@@ -259,8 +214,6 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     }
     setIsAdding(false);
   };
-  
-  // ✅ [คืนค่า V3]
   const handleEditTopic = async (id: string, oldName: string) => {
     const name = prompt(`แก้ไขชื่อสำหรับ "${oldName}":`, oldName);
     if (name && name.trim() && name !== oldName) {
@@ -271,8 +224,6 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       } catch (error) { alert("Error: " + (error as Error).message); }
     }
   };
-
-  // ✅ [คืนค่า V3]
   const handleDeleteTopic = async (id: string, name: string) => {
     if (window.confirm(`แน่ใจว่าต้องการลบ "${name}"?`)) {
       try {
@@ -282,36 +233,26 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       } catch (error) { alert("Error: " + (error as Error).message); }
     }
   };
-
-  // ✅ [คืนค่า V3] (Logic เดิม)
   const handleLogoFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (event.target) event.target.value = ""; // เคลียร์ input
+    if (event.target) event.target.value = ""; 
     if (!file) return;
-
     if (file.size > 5 * 1024 * 1024) {
         alert("Error: ขนาดไฟล์ Logo ต้องไม่เกิน 5MB"); return;
     }
     if (!file.type.startsWith('image/')) {
         alert("Error: กรุณาเลือกไฟล์รูปภาพเท่านั้น"); return;
     }
-
-    // 1. สร้าง FileReader
     const reader = new FileReader();
-
-    // 2. เมื่ออ่านไฟล์เสร็จ
     reader.onload = async (e) => {
       const base64String = e.target?.result as string;
       if (!base64String) {
         alert("Error: ไม่สามารถอ่านไฟล์ได้");
         return;
       }
-
       setIsUploadingLogo(true);
       try {
-        // 3. ส่ง Base64 string ไปที่ API (ไม่ใช่ File object)
         const response = await api.uploadProjectLogo(projectId, base64String);
-        
         if (response.success && response.data?.logoUrl) {
           handleSettingChange('projectLogoUrl', response.data.logoUrl);
           alert('✅ อัปโหลด Logo สำเร็จ! (อย่าลืมกดบันทึก Settings)');
@@ -323,12 +264,8 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       }
       setIsUploadingLogo(false);
     };
-
-    // 4. สั่งให้เริ่มอ่านไฟล์
     reader.readAsDataURL(file);
   };
-  
-  // ✅ [คืนค่า V3] (Logic เดิม)
   const handleSaveReportSettings = async () => {
     if (!reportSettings) return;
     setIsSavingReportSettings(true);
@@ -344,38 +281,38 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     }
     setIsSavingReportSettings(false);
   };
+  
+  // --- Render Functions (มีการแก้ไข className) ---
 
-  // ========== 3. Render Functions (V3) ==========
-
-  // ✅ [คืนค่า V3]
+  // [แก้ไข] 2. เปลี่ยน className ทั้งหมด
   const renderFieldsModal = () => {
     if (!editingSubCat) return null;
     return (
-      <div className="admin-modal-overlay" onClick={closeFieldsModal}>
-        <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className={styles.adminModalOverlay} onClick={closeFieldsModal}>
+        <div className={styles.adminModalContent} onClick={(e) => e.stopPropagation()}>
           <h3>
             จัดการ Fields (Level 4) <br/>
             <small>📂 {editingSubCat.name}</small>
           </h3>
           <p>Fields เหล่านี้จะถูกใช้ในทุกหัวข้อ (Topics) ภายใต้หมวดงานนี้</p>
-          <div className="admin-fields-list">
-            {tempFields.length === 0 && <span className="empty-fields"><i>- ยังไม่มี Dynamic Fields -</i></span>}
+          <div className={styles.adminFieldsList}>
+            {tempFields.length === 0 && <span className={styles.emptyFields}><i>- ยังไม่มี Dynamic Fields -</i></span>}
             {tempFields.map((field) => (
-              <div key={field} className="admin-field-item">
+              <div key={field} className={styles.adminFieldItem}>
                 <span>{field}</span>
-                <button className="admin-button delete" onClick={() => handleRemoveField(field)}>ลบ</button>
+                <button className={`${styles.adminButton} ${styles.delete}`} onClick={() => handleRemoveField(field)}>ลบ</button>
               </div>
             ))}
           </div>
-          <hr className="admin-divider" />
-          <div className="admin-add-form" style={{marginTop: 0}}>
+          <hr className={styles.adminDivider} />
+          <div className={styles.adminAddForm} style={{marginTop: 0}}>
             <input type="text" placeholder="ป้อนชื่อ Field ใหม่ (เช่น ชั้น, Zone, ...)" value={newFieldName} onChange={(e) => setNewFieldName(e.target.value)} />
-            <button className="admin-button" onClick={handleAddField}>➕ เพิ่ม</button>
+            <button className={styles.adminButton} onClick={handleAddField}>➕ เพิ่ม</button>
           </div>
-          <hr className="admin-divider" />
-          <div className="admin-modal-actions">
-            <button className="admin-button secondary" onClick={closeFieldsModal} disabled={isSavingFields}>ยกเลิก</button>
-            <button className="admin-button submit" onClick={handleSaveChanges} disabled={isSavingFields}>
+          <hr className={styles.adminDivider} />
+          <div className={styles.adminModalActions}>
+            <button className={`${styles.adminButton} ${styles.secondary}`} onClick={closeFieldsModal} disabled={isSavingFields}>ยกเลิก</button>
+            <button className={`${styles.adminButton} ${styles.submit}`} onClick={handleSaveChanges} disabled={isSavingFields}>
               {isSavingFields ? 'กำลังบันทึก...' : '💾 บันทึกการเปลี่ยนแปลง'}
             </button>
           </div>
@@ -384,7 +321,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     );
   };  
 
-  // ✅ [คืนค่า V3]
+  // [แก้ไข] 3. เปลี่ยน className ทั้งหมด
   const renderAddForm = (
     type: ActiveForm, 
     onSubmit: (e: React.FormEvent) => void, 
@@ -404,32 +341,32 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       />
     );
     return (
-      <form onSubmit={onSubmit} className="admin-add-form">
+      <form onSubmit={onSubmit} className={styles.adminAddForm}>
         {inputElement}
-        <button type="submit" className="admin-button submit" disabled={isAdding}>
+        <button type="submit" className={`${styles.adminButton} ${styles.submit}`} disabled={isAdding}>
           {isAdding ? '...' : (isTopicForm ? 'บันทึกทั้งหมด' : 'บันทึก')}
         </button>
-        <button type="button" className="admin-button secondary" onClick={cancelAddForm}>
+        <button type="button" className={`${styles.adminButton} ${styles.secondary}`} onClick={cancelAddForm}>
           ยกเลิก
         </button>
       </form>
     );
   };
 
-  // ========== Main Render ==========
+  // ========== Main Render (มีการแก้ไข className) ==========
   return (
-    <div className="report-container">
+    // [แก้ไข] 4. เปลี่ยน className ทั้งหมด
+    <div className={styles.reportContainer}>
       <h1>⚙️ จัดการ Config (Accordion)</h1>
-      <p className="project-name-display">โครงการ: {projectName}</p>
+      <p className={styles.projectNameDisplay}>โครงการ: {projectName}</p>
 
-      {/* ✅ [แก้ไข V11] UI ส่วน Settings */}
-      <div className="report-settings-box">
+      <div className={styles.reportSettingsBox}>
         <h3>📊 ตั้งค่ารูปแบบรายงาน</h3>
         {isLoadingSettings ? (
           <p><i>กำลังโหลดการตั้งค่า...</i></p>
         ) : reportSettings ? (
           <>
-            <div className="setting-group">
+            <div className={styles.settingGroup}>
               <label htmlFor={`layoutType-${projectId}`}>รูปแบบ Template:</label>
               <select
                 id={`layoutType-${projectId}`}
@@ -442,11 +379,10 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
 
             {reportSettings.layoutType === 'default' && (
               <>
-                {/* ✅ [ใหม่ V11] แยก Dropdown */}
-                <hr className="admin-divider" style={{ margin: '20px 0' }}/>
+                <hr className={styles.adminDivider} style={{ margin: '20px 0' }}/>
                 
                 <h4>ตั้งค่า QC Report (แบบตาราง)</h4>
-                <div className="setting-group">
+                <div className={styles.settingGroup}>
                   <label htmlFor={`qcPhotosPerPage-${projectId}`}>จำนวนรูป QC ต่อหน้า:</label>
                   <select
                     id={`qcPhotosPerPage-${projectId}`}
@@ -460,10 +396,10 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
                   </select>
                 </div>
                 
-                <hr className="admin-divider" style={{ margin: '20px 0' }}/>
+                <hr className={styles.adminDivider} style={{ margin: '20px 0' }}/>
                 
                 <h4>ตั้งค่า Daily Report (แบบตาราง)</h4>
-                <div className="setting-group">
+                <div className={styles.settingGroup}>
                   <label htmlFor={`dailyPhotosPerPage-${projectId}`}>จำนวนรูป Daily ต่อหน้า:</label>
                   <select
                     id={`dailyPhotosPerPage-${projectId}`}
@@ -479,10 +415,9 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
               </>
             )}
 
-            {/* --- ส่วนจัดการ Logo (เหมือนเดิม V3) --- */}
-            <hr className="admin-divider" style={{ margin: '25px 0' }}/>
+            <hr className={styles.adminDivider} style={{ margin: '25px 0' }}/>
             <h4>🖼️ Logo โครงการ</h4>
-            <div className="setting-group">
+            <div className={styles.settingGroup}>
               <label htmlFor={`logoUrl-${projectId}`}>URL ของ Logo (ถ้ามี):</label>
               <input
                 id={`logoUrl-${projectId}`}
@@ -492,12 +427,12 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
                 placeholder="วาง URL ของรูป Logo ที่นี่ หรือ อัปโหลดด้านล่าง"
               />
               {reportSettings.projectLogoUrl && (
-                <div className="logo-preview">
+                <div className={styles.logoPreview}>
                   <img src={reportSettings.projectLogoUrl} alt="Project Logo Preview" onError={(e) => (e.currentTarget.style.display = 'none')} onLoad={(e) => (e.currentTarget.style.display = 'block')} />
                 </div>
               )}
             </div>
-            <div className="setting-group">
+            <div className={styles.settingGroup}>
                 <input
                     type="file"
                     accept="image/*"
@@ -506,7 +441,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
                     onChange={handleLogoFileSelected}
                 />
                 <button
-                    className={`admin-button ${isUploadingLogo ? 'secondary' : ''}`}
+                    className={`${styles.adminButton} ${isUploadingLogo ? styles.secondary : ''}`}
                     onClick={() => logoInputRef.current?.click()}
                     disabled={isUploadingLogo}
                     style={{ minWidth: '150px'}}
@@ -518,10 +453,9 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
                  </span>
             </div>
             
-            {/* --- ปุ่มบันทึก (เหมือนเดิม V3) --- */}
             <div style={{ textAlign: 'right', marginTop: '30px' }}>
               <button
-                className="admin-button submit"
+                className={`${styles.adminButton} ${styles.submit}`}
                 onClick={handleSaveReportSettings}
                 disabled={isSavingReportSettings || isUploadingLogo}
               >
@@ -534,48 +468,48 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
         )}
       </div>
 
-      {/* --- Accordion (V3) --- */}
+      {/* --- Accordion --- */}
       {renderFieldsModal()}
-      <div className="admin-accordion">
+      <div className={styles.adminAccordion}>
         
         {projectConfig?.map((mainCat) => (
-          <div key={mainCat.id} className="admin-item level1">
-            <div className="admin-item-header">
-              <span className="admin-item-name" onClick={() => toggleExpand(mainCat.id)}>
+          <div key={mainCat.id} className={`${styles.adminItem} ${styles.level1}`}>
+            <div className={styles.adminItemHeader}>
+              <span className={styles.adminItemName} onClick={() => toggleExpand(mainCat.id)}>
                 {expandedItems[mainCat.id] ? '📂' : '📁'} {mainCat.name}
               </span>
-              <div className="admin-item-actions">
-                <button className="admin-button edit" onClick={() => handleEditMain(mainCat.id, mainCat.name)}>✏️ แก้ไข</button>
-                <button className="admin-button delete" onClick={() => handleDeleteMain(mainCat.id, mainCat.name)}>🗑️ ลบ</button>
+              <div className={styles.adminItemActions}>
+                <button className={`${styles.adminButton} ${styles.edit}`} onClick={() => handleEditMain(mainCat.id, mainCat.name)}>✏️ แก้ไข</button>
+                <button className={`${styles.adminButton} ${styles.delete}`} onClick={() => handleDeleteMain(mainCat.id, mainCat.name)}>🗑️ ลบ</button>
               </div>
             </div>
             
             {expandedItems[mainCat.id] && (
-              <div className="admin-item-content">
+              <div className={styles.adminItemContent}>
                 
                 {mainCat.subCategories.map((subCat) => (
-                  <div key={subCat.id} className="admin-item level2">
-                    <div className="admin-item-header">
-                      <span className="admin-item-name" onClick={() => toggleExpand(subCat.id)}>
+                  <div key={subCat.id} className={`${styles.adminItem} ${styles.level2}`}>
+                    <div className={styles.adminItemHeader}>
+                      <span className={styles.adminItemName} onClick={() => toggleExpand(subCat.id)}>
                         {expandedItems[subCat.id] ? '📄' : '📄'} {subCat.name}
                       </span>
-                      <div className="admin-item-actions">
-                        <button className="admin-button manage" onClick={() => openFieldsModal(subCat)}>➡️ Fields</button>
-                        <button className="admin-button edit" onClick={() => handleEditSub(subCat.id, subCat.name)}>✏️ แก้ไข</button>
-                        <button className="admin-button delete" onClick={() => handleDeleteSub(subCat.id, subCat.name)}>🗑️ ลบ</button>
+                      <div className={styles.adminItemActions}>
+                        <button className={`${styles.adminButton} ${styles.manage}`} onClick={() => openFieldsModal(subCat)}>➡️ Fields</button>
+                        <button className={`${styles.adminButton} ${styles.edit}`} onClick={() => handleEditSub(subCat.id, subCat.name)}>✏️ แก้ไข</button>
+                        <button className={`${styles.adminButton} ${styles.delete}`} onClick={() => handleDeleteSub(subCat.id, subCat.name)}>🗑️ ลบ</button>
                       </div>
                     </div>
                     
                     {expandedItems[subCat.id] && (
-                      <div className="admin-item-content">
+                      <div className={styles.adminItemContent}>
                         
                         {subCat.topics.map((topic) => (
-                          <div key={topic.id} className="admin-item level3">
-                            <div className="admin-item-header">
-                              <span className="admin-item-name">• {topic.name}</span>
-                              <div className="admin-item-actions">
-                                <button className="admin-button edit" onClick={() => handleEditTopic(topic.id, topic.name)}>✏️ แก้ไข</button>
-                                <button className="admin-button delete" onClick={() => handleDeleteTopic(topic.id, topic.name)}>🗑️ ลบ</button>
+                          <div key={topic.id} className={`${styles.adminItem} ${styles.level3}`}>
+                            <div className={styles.adminItemHeader}>
+                              <span className={styles.adminItemName}>• {topic.name}</span>
+                              <div className={styles.adminItemActions}>
+                                <button className={`${styles.adminButton} ${styles.edit}`} onClick={() => handleEditTopic(topic.id, topic.name)}>✏️ แก้ไข</button>
+                                <button className={`${styles.adminButton} ${styles.delete}`} onClick={() => handleDeleteTopic(topic.id, topic.name)}>🗑️ ลบ</button>
                               </div>
                             </div>
                           </div>
@@ -584,7 +518,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
                         {activeForm === 'topic' ? (
                           renderAddForm('topic', (e) => handleAddTopic(e, mainCat, subCat), 'วางรายการหัวข้อ (1 หัวข้อ ต่อ 1 บรรทัด)...')
                         ) : (
-                          <button className="admin-button add-new" onClick={() => showAddForm('topic')}>➕ เพิ่มหัวข้อใหม่</button>
+                          <button className={`${styles.adminButton} ${styles.addNew}`} onClick={() => showAddForm('topic')}>➕ เพิ่มหัวข้อใหม่</button>
                         )}
                       </div>
                     )}
@@ -595,7 +529,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
                   renderAddForm('sub', (e) => handleAddSub(e, mainCat), 'ป้อนชื่อหมวดงานย่อยใหม่...')
                 ) : (
                   activeForm === null && !mainCat.subCategories.some(subCat => expandedItems[subCat.id]) && (
-                    <button className="admin-button add-new" onClick={() => showAddForm('sub')}>➕ เพิ่มหมวดงานย่อยใหม่</button>
+                    <button className={`${styles.adminButton} ${styles.addNew}`} onClick={() => showAddForm('sub')}>➕ เพิ่มหมวดงานย่อยใหม่</button>
                   )
                 )}
               </div>
@@ -603,11 +537,11 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
           </div>
         ))}
         
-        <hr className="admin-divider" />
+        <hr className={styles.adminDivider} />
         {activeForm === 'main' ? (
           renderAddForm('main', handleAddMain, 'ป้อนชื่อหมวดงานหลักใหม่...')
         ) : (
-          <button className="admin-button add-new" onClick={() => showAddForm('main')}>➕ เพิ่มหมวดงานหลักใหม่</button>
+          <button className={`${styles.adminButton} ${styles.addNew}`} onClick={() => showAddForm('main')}>➕ เพิ่มหมวดงานหลักใหม่</button>
         )}
       </div>
 

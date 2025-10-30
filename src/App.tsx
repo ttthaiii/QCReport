@@ -1,18 +1,17 @@
-// Filename: src/App.tsx (REPLACED)
+// Filename: src/App.tsx (REFACTORED for Wider Sidebar)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, Project, ProjectConfig } from './utils/api';
 import Camera from './components/Camera';
 import Reports from './components/Reports';
 import AdminConfig from './components/AdminConfig';
-import './App.css'; // เราจะใช้ CSS ที่อัปเดตใหม่
+import styles from './App.module.css'; 
 
-// ใช้ Emoji ธรรมดาเป็นไอคอนแทนการติดตั้ง lib เพิ่ม
 const ICONS = {
-  PROJECTS: '🏗️',
-  CAMERA: '📷',
-  REPORTS: '📊',
-  ADMIN: '⚙️' // เพิ่มไอคอน Admin
+  PROJECTS: '🏗️',
+  CAMERA: '📷',
+  REPORTS: '📊',
+  ADMIN: '⚙️'
 };
 type View = 'projects' | 'camera' | 'reports' | 'admin';
 
@@ -22,9 +21,6 @@ function App() {
   const [projectConfig, setProjectConfig] = useState<ProjectConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // View เริ่มต้นสำหรับ User ที่เข้ามา (ถ้ามี Project ค้างไว้)
-  // เราจะสมมติว่าเริ่มที่ 'projects' ก่อนเสมอเพื่อง่ายต่อการเลือก
   const [view, setView] = useState<View>('projects');
 
   const fetchProjects = useCallback(async () => {
@@ -43,7 +39,7 @@ function App() {
   }, []);
 
   const fetchProjectConfig = useCallback(async () => {
-    if (!selectedProject) return; // ถ้าไม่มีโปรเจกต์ ก็ไม่ต้องทำอะไร
+    if (!selectedProject) return;
     setIsLoading(true);
     setError(null);
     const response = await api.getProjectConfig(selectedProject.id);
@@ -53,14 +49,12 @@ function App() {
       setError(response.error || 'เกิดข้อผิดพลาดในการโหลด Config โครงการ');
     }
     setIsLoading(false);
-  }, [selectedProject]); // <-- เหลือแค่ selectedProject
+  }, [selectedProject]);
 
-  // โหลดรายชื่อโครงการตอนเปิดแอปครั้งแรก
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
 
-  // เมื่อมีการเลือกโครงการ ให้โหลด Config
   useEffect(() => {
     if (selectedProject) {
       fetchProjectConfig();
@@ -68,17 +62,14 @@ function App() {
   }, [selectedProject, fetchProjectConfig]);
 
   useEffect(() => {
-    // ถ้า projectConfig มีข้อมูล (เพิ่งโหลดเสร็จ)
-    // และ view ยังเป็น 'projects' (ยังอยู่ที่หน้าเลือก)
     if (projectConfig && view === 'projects') {
-      // ให้เปลี่ยนไปหน้า 'camera' อัตโนมัติ
       setView('camera');
     }
   }, [projectConfig, view]);
 
   const handleSelectProject = (project: Project) => {
     setSelectedProject(project);
-    setProjectConfig(null); // ล้าง Config เก่า
+    setProjectConfig(null);
   };
 
   const handleBackToProjects = () => {
@@ -86,8 +77,6 @@ function App() {
     setProjectConfig(null);
     setView('projects');
   };
-
-  // --- Render Logic ---
 
   if (isLoading && !selectedProject) {
     return <div className="loading-container">กำลังโหลดโครงการ...</div>;
@@ -102,15 +91,14 @@ function App() {
     );
   }
 
-  // View 1: หน้าเลือกโครงการ (Default View)
   if (!selectedProject) {
     return (
-      <div className="project-list-container">
+      <div className={styles.projectListContainer}>
         <h1>เลือกโครงการ</h1>
         {projects.map((project) => (
           <div
             key={project.id}
-            className="project-card"
+            className={styles.projectCard}
             onClick={() => handleSelectProject(project)}
           >
             {project.projectName}
@@ -120,80 +108,91 @@ function App() {
     );
   }
 
-  // View 2: หน้าแอปหลัก (หลังจากเลือกโครงการแล้ว)
   return (
-    <div className="App">
-      {/* 1. Top Header (ส่วนหัว) */}
-      <header className="app-header">
-        <button className="app-header-back-button" onClick={handleBackToProjects} title="เปลี่ยนโครงการ"> {/* <-- เพิ่ม title */}
-          🏗️ 
+    <div className={styles.App}>
+      {/* 1. Top Header (Mobile) / หรือ Header หลักของ Desktop */}
+      {/* (เราจะซ่อน Header นี้เมื่อเป็น Sidebar layout) */}
+      <header className={styles.appHeader}>
+        <button className={styles.appHeaderBackButton} onClick={handleBackToProjects} title="เปลี่ยนโครงการ">
+          🏗️
         </button>
-        <div className="app-header-title" title={selectedProject.projectName}>
+        <div className={styles.appHeaderTitle} title={selectedProject.projectName}>
           {selectedProject.projectName}
         </div>
         <div style={{ width: '40px' }}></div> {/* Spacer */}
       </header>
 
-      {/* 2. Content Area (ส่วนเนื้อหา) */}
-      <main className={view === 'camera' ? 'content-area-full' : 'content-area'}>
-        {isLoading && <div className="loading-container">กำลังโหลด Config...</div>}
-        
-        {view === 'camera' && projectConfig && (
-          <Camera
-            // [แก้ไข] ส่ง projectConfig ไปใน prop ที่ถูกต้อง (ตามไฟล์ Camera.tsx ของคุณ)
-            qcTopics={projectConfig} 
-            projectId={selectedProject.id}
-            projectName={selectedProject.projectName}
-          />
-        )}
-        
-        {view === 'reports' && projectConfig && (
-          <Reports
-            projectId={selectedProject.id}
-            projectName={selectedProject.projectName}
-            projectConfig={projectConfig}
-          />
-        )}
+      {/* 2. Sidebar (Desktop/Tablet) หรือ Bottom Nav (Mobile) */}
+      <nav className={styles.bottomNav}>
+        {/* --- [ใหม่] ส่วนหัวของ Sidebar (แสดงเฉพาะจอใหญ่) --- */}
+        <div className={styles.sidebarHeader}>
+          <div className={styles.sidebarProjectName} title={selectedProject.projectName}>
+            {selectedProject.projectName}
+          </div>
+          {/* (อาจจะเพิ่ม User Info ตรงนี้ได้ ถ้าต้องการ) */}
+          <button className={styles.sidebarBackButton} onClick={handleBackToProjects} title="เปลี่ยนโครงการ">
+            (เปลี่ยน)
+          </button>
+        </div>
+        {/* --- จบ ส่วนหัวของ Sidebar --- */}
 
-        {/* 7. [เพิ่ม] หน้าสำหรับ Admin Config */}
+        {/* --- เมนู Navigation (เหมือนเดิม) --- */}
+        <button
+          className={`${styles.navButton} ${view === 'camera' ? styles.active : ''}`}
+          onClick={() => setView('camera')}
+        >
+          <span className={styles.icon}>{ICONS.CAMERA}</span>
+          <span>ถ่ายรูป</span>
+        </button>
+
+        <button
+          className={`${styles.navButton} ${view === 'reports' ? styles.active : ''}`}
+          onClick={() => setView('reports')}
+        >
+          <span className={styles.icon}>{ICONS.REPORTS}</span>
+          <span>รายงาน</span>
+        </button>
+
+        <button
+          className={`${styles.navButton} ${view === 'admin' ? styles.active : ''}`}
+          onClick={() => setView('admin')}
+        >
+          <span className={styles.icon}>{ICONS.ADMIN}</span>
+          <span>จัดการ</span>
+        </button>
+      </nav>
+
+      {/* 3. Content Area */}
+      <main className={view === 'camera' ? styles.contentAreaFull : styles.contentArea}>
+        {isLoading && <div className="loading-container">กำลังโหลด Config...</div>}
+
+        {view === 'camera' && projectConfig && (
+          <Camera
+            qcTopics={projectConfig}
+            projectId={selectedProject.id}
+            projectName={selectedProject.projectName}
+          />
+        )}
+
+        {view === 'reports' && projectConfig && (
+          <Reports
+            projectId={selectedProject.id}
+            projectName={selectedProject.projectName}
+            projectConfig={projectConfig}
+          />
+        )}
+
         {view === 'admin' && projectConfig && (
           <AdminConfig
             projectId={selectedProject.id}
             projectName={selectedProject.projectName}
             projectConfig={projectConfig}
-            // ส่งฟังก์ชัน fetchProjectConfig ลงไปเพื่อให้หน้า Admin สั่งโหลด Config ใหม่ได้
-            onConfigUpdated={() => fetchProjectConfig()} 
+            onConfigUpdated={() => fetchProjectConfig()}
           />
         )}
-      </main>
-
-      {/* 3. Bottom Tab Navigation (เมนูด้านล่าง) */}
-      <nav className="bottom-nav">
-        <button
-          className={`nav-button ${view === 'camera' ? 'active' : ''}`}
-          onClick={() => setView('camera')}
-        >
-          <span className="icon">{ICONS.CAMERA}</span>
-          <span>ถ่ายรูป</span> {/* <-- [เพิ่ม <span>] */}
-        </button>
-        <button
-          className={`nav-button ${view === 'reports' ? 'active' : ''}`}
-          onClick={() => setView('reports')}
-        >
-          <span className="icon">{ICONS.REPORTS}</span>
-          <span>รายงาน</span> {/* <-- [เพิ่ม <span>] */}
-        </button>
-        {/* 8. [เพิ่ม] ปุ่มสำหรับ Admin */}
-        <button
-          className={`nav-button ${view === 'admin' ? 'active' : ''}`}
-          onClick={() => setView('admin')}
-        >
-          <span className="icon">{ICONS.ADMIN}</span>
-          <span>จัดการ</span> {/* <-- [เพิ่ม <span>] */}
-        </button>
-      </nav>
-    </div>
-  );
+      </main>
+    </div>
+  );
 }
 
 export default App;

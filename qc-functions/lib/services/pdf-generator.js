@@ -52,7 +52,7 @@ const axios_1 = __importDefault(require("axios"));
 exports.DEFAULT_SETTINGS = {
     layoutType: 'default',
     qcPhotosPerPage: 6,
-    dailyPhotosPerPage: 2,
+    dailyPhotosPerPage: 6, // [แก้ไข] เปลี่ยนจาก 2 เป็น 6
     photosPerPage: 6,
     projectLogoUrl: '',
 };
@@ -77,32 +77,36 @@ async function loadImagesFromStorage(photos) {
     const bucket = admin.storage().bucket();
     if (!photos || photos.length === 0)
         return photos;
-    console.log(`📥 Loading ${photos.length} images...`);
-    const photosWithImages = [];
-    for (let i = 0; i < photos.length; i++) {
-        const photo = photos[i];
+    console.log(`📥 Loading ${photos.length} images (Parallel Mode)...`);
+    // ✅ [ใหม่] ใช้ Promise.all เพื่อดาวน์โหลดรูปภาพพร้อมกัน (เร็วขึ้น)
+    const downloadPromises = photos.map(async (photo) => {
         if (photo.isPlaceholder) {
-            photosWithImages.push(Object.assign(Object.assign({}, photo), { imageBase64: null }));
-            continue;
+            return Object.assign(Object.assign({}, photo), { imageBase64: null });
         }
         const storagePath = photo.storageUrl;
         if (!storagePath) {
-            photosWithImages.push(Object.assign(Object.assign({}, photo), { imageBase64: null }));
-            continue;
+            return Object.assign(Object.assign({}, photo), { imageBase64: null });
         }
         try {
             const file = bucket.file(storagePath);
-            const [buffer] = await file.download();
+            // ✅ [สำคัญ] 1. Pre-check Metadata
+            // การเรียก .getMetadata() จะบังคับให้ GCS หาไฟล์เวอร์ชันล่าสุด
+            // และทำลาย Cache ที่ค้างอยู่ (ที่เป็นปัญหา 2-5 นาที)
             const [metadata] = await file.getMetadata();
             const mimeType = metadata.contentType || 'image/jpeg';
+            // ✅ 2. Download (เมื่อมั่นใจว่าไฟล์พร้อมแล้ว)
+            const [buffer] = await file.download();
             const base64 = buffer.toString('base64');
-            photosWithImages.push(Object.assign(Object.assign({}, photo), { imageBase64: `data:${mimeType};base64,${base64}` }));
+            return Object.assign(Object.assign({}, photo), { imageBase64: `data:${mimeType};base64,${base64}` });
         }
         catch (error) {
-            console.error(`❌ Failed to load image for "${photo.topic}" from ${storagePath}:`, error);
-            photosWithImages.push(Object.assign(Object.assign({}, photo), { imageBase64: null }));
+            console.error(`❌ Failed to load image (Cache/Propagation Issue?) for "${photo.topic}" from ${storagePath}:`, error.message);
+            // ถ้าล้มเหลว (เช่น ไฟล์ไม่มีจริง) ให้คืนค่าว่าง
+            return Object.assign(Object.assign({}, photo), { imageBase64: null });
         }
-    }
+    });
+    // รอให้การดาวน์โหลด (หรือล้มเหลว) ทั้งหมดเสร็จสิ้น
+    const photosWithImages = await Promise.all(downloadPromises);
     return photosWithImages;
 }
 function getCurrentThaiDate() {
@@ -208,9 +212,6 @@ function createPhotosGrid(photos, pageIndex, photosPerPage) {
     for (let i = 0; i < photos.length; i += itemsPerBatch) {
         rows.push(photos.slice(i, i + itemsPerBatch));
     }
-    const totalGridHeight = 750;
-    const numRows = rows.length > 0 ? rows.length : 1;
-    const rowHeight = totalGridHeight / numRows;
     const rowsHTML = rows.map((rowPhotos, rowIndex) => {
         const photosHTML = rowPhotos.map((photo, photoIndex) => {
             const photoNumberInPage = (rowIndex * itemsPerBatch) + photoIndex + 1;
@@ -232,7 +233,8 @@ function createPhotosGrid(photos, pageIndex, photosPerPage) {
         </div>
       `;
         }).join('');
-        return `<div class="photo-row" style="height: ${rowHeight}px;">${photosHTML}</div>`;
+        // [แก้ไข] ลบ inline height ออก ให้ CSS จัดการ
+        return `<div class="photo-row">${photosHTML}</div>`;
     }).join('');
     return `<main class="photos-grid">${rowsHTML}</main>`;
 }
@@ -298,7 +300,8 @@ function getInlineCSS() {
       .info-item {
         margin-bottom: 4px; font-size: 10px; line-height: 1.2;
         font-family: 'Times New Roman', Times, serif;
-        display: flex; align-items: center;
+        display: flex; 
+        align-items: flex-start; /* [แก้ไข] เปลี่ยนจาก center เป็น flex-start */
       }
       .info-grid-3 .info-item,
       .info-grid-4 .info-item {
@@ -313,23 +316,42 @@ function getInlineCSS() {
         min-width: 40px; font-size: 9px;
       }
       .value {
-        color: #333; margin-left: 4px; word-wrap: break-word; flex: 1;
+        color: #333; margin-left: 4px; 
+        word-wrap: break-word; 
+        overflow-wrap: break-word;
+        hyphens: auto; /* [เพิ่ม] ตัดคำแบบอัตโนมัติ */
+        min-width: 0;
+        flex: 1;
+        white-space: pre-line; /* [เพิ่ม] ให้ \n ขึ้นบรรทัดใหม่ */
+        /* [เพิ่ม] จำกัดความสูงสูงสุดไม่ให้เกิน 3 บรรทัด */
+        max-height: 3.6em; /* 3 บรรทัด (1.2 line-height × 3) */
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3; /* จำกัด 3 บรรทัด */
+        -webkit-box-orient: vertical;
       }
       .photos-grid {
         width: 100%; overflow: hidden; flex: 1;
         display: flex; flex-direction: column;
-        margin-top: 5px; max-height: 750px;
+        gap: 15px; /* [แก้ไข] ใช้ gap แทน space-between */
+        margin-top: 5px; 
+        min-height: 600px; /* [แก้ไข] ใช้ min-height แทน max-height */
       }
       .photo-row {
-        display: flex; margin-bottom: 5px; justify-content: flex-start; 
+        display: flex; 
+        flex: 1; /* [เพิ่ม] ให้แต่ละแถวแบ่งพื้นที่เท่าๆ กัน */
+        margin-bottom: 0;
+        justify-content: flex-start; 
       }
       .photo-row:last-child { margin-bottom: 0; }
       .photo-frame {
         flex: 1; display: flex; flex-direction: column;
         margin: 0 3px; max-width: 50%;
       }
+      /* [แก้ไข] รูปเดียวในแถวให้คงขนาด 50% ไม่ขยายเต็ม */
       .photo-row .photo-frame:only-child {
-        flex: 1; max-width: 100%;
+        flex: 0 0 50%; /* [แก้ไข] ไม่ขยาย, คงขนาด 50% */
+        max-width: 50%; /* [แก้ไข] จำกัดไว้ที่ 50% */
       }
       .photo-frame:first-child { margin-left: 0; }
       .photo-frame:last-child { margin-right: 0; }
@@ -530,7 +552,7 @@ async function generatePDF(reportData, photos, settings) {
     const pdfData = {
         photos: photos,
         projectName: reportData.projectName,
-        category: `${reportData.mainCategory} > ${reportData.subCategory}`,
+        category: `${reportData.mainCategory}\n${reportData.subCategory}`, // [แก้ไข] ใช้ \n แทน >
         dynamicFields: reportData.dynamicFields,
     };
     return await generateOptimizedPDF(pdfData, settings, logoBase64);
@@ -565,29 +587,48 @@ async function generateDailyPDFWrapper(reportData, photos, settings // (นี�
     return await generateOptimizedPDF(pdfData, settings, logoBase64);
 }
 // (uploadPDFToStorage - Unchanged)
-async function uploadPDFToStorage(pdfBuffer, reportData, reportType) {
+async function uploadPDFToStorage(pdfBuffer, reportData, reportType, stableFilename // <-- [ใหม่] 1. เพิ่ม Argument ที่ 4
+) {
     try {
         const bucket = admin.storage().bucket();
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         let filename;
         let filePath;
-        const basePath = `projects/${reportData.projectId}/reports`;
+        const basePath = `projects/${reportData.projectId}/reports`; // <-- [แก้ไข] 2. แก้ไข Path ให้อยู่ใน projects/
+        // ✅ [ใหม่] 3. ตรวจสอบว่ามี stableFilename ส่งมาหรือไม่
+        if (stableFilename) {
+            filename = stableFilename; // 3.1 ถ้ามี ให้ใช้ชื่อนั้นเลย
+        }
+        else {
+            // 3.2 ถ้าไม่มี (Fallback) ให้สร้างชื่อแบบมี Timestamp (เหมือนเดิม)
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            if (reportType === 'QC') {
+                const { mainCategory, subCategory, dynamicFields = {} } = reportData;
+                const dynamicFieldsStr = Object.values(dynamicFields).filter(v => v).join('_') || 'all';
+                const catPath = `${mainCategory.replace(/\s/g, '_')}_${subCategory.replace(/\s/g, '_')}`;
+                filename = `QC-Report_${catPath}_${dynamicFieldsStr}_${timestamp}.pdf`;
+            }
+            else {
+                const { date } = reportData;
+                filename = `Daily-Report_${date}_${timestamp}.pdf`;
+            }
+        }
+        // ✅ [ใหม่] 4. กำหนด Path ปลายทาง (ย้ายจากด้านบนลงมา)
         if (reportType === 'QC') {
-            const { mainCategory, subCategory, dynamicFields = {} } = reportData;
-            const dynamicFieldsStr = Object.values(dynamicFields).filter(v => v).join('_') || 'all';
-            const catPath = `${mainCategory.replace(/\s/g, '_')}_${subCategory.replace(/\s/g, '_')}`;
-            filename = `QC-Report_${catPath}_${dynamicFieldsStr}_${timestamp}.pdf`;
-            filePath = `${basePath}/QC/${filename}`;
+            const { mainCategory, subCategory } = reportData;
+            // ใช้วิธี slugify (ถ้ามี) หรือ replace แบบเดิม เพื่อความปลอดภัย
+            const safeMainCat = (mainCategory || 'qc-reports').replace(/\s/g, '_');
+            const safeSubCat = (subCategory || 'unknown').replace(/\s/g, '_');
+            filePath = `${basePath}/QC/${safeMainCat}/${safeSubCat}/${filename}`; // <-- [แก้ไข] จัด Path ให้ดีขึ้น
         }
         else {
             const { date } = reportData;
-            filename = `Daily-Report_${date}_${timestamp}.pdf`;
-            filePath = `${basePath}/Daily/${filename}`;
+            filePath = `${basePath}/Daily/${date}/${filename}`; // <-- [แก้ไข] จัด Path ให้ดีขึ้น
         }
         const file = bucket.file(filePath);
         await file.save(pdfBuffer, {
             metadata: {
                 contentType: 'application/pdf',
+                cacheControl: 'public, max-age=300', // <-- [แนะนำ] ลด Cache Control ลง
                 metadata: {
                     projectId: reportData.projectId, reportType: reportType,
                     mainCategory: reportData.mainCategory || '',
@@ -595,10 +636,14 @@ async function uploadPDFToStorage(pdfBuffer, reportData, reportType) {
                     date: reportData.date || '',
                     generatedAt: new Date().toISOString()
                 }
-            }
+            },
+            public: true // <-- [ใหม่] 5. ต้องตั้งค่า Public เพื่อให้ URL ใช้งานได้
         });
-        const [signedUrl] = await file.getSignedUrl({ action: 'read', expires: '03-09-2491' });
-        return { filename, publicUrl: signedUrl, filePath };
+        // ✅ [ใหม่] 6. ใช้ publicUrl() แทน getSignedUrl()
+        // getSignedUrl() จะหมดอายุ แต่ publicUrl() จะถาวร (ถ้าไฟล์ตั้งค่าเป็น Public)
+        const publicUrl = file.publicUrl();
+        console.log(`✅ PDF Uploaded/Overwritten: ${filePath}`);
+        return { filename, publicUrl: publicUrl, filePath };
     }
     catch (error) {
         console.error('❌ Error uploading PDF:', error);

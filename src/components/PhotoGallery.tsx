@@ -1,8 +1,8 @@
-// Filename: src/components/PhotoGallery.tsx
+// Filename: src/components/PhotoGallery.tsx (REFACTORED - แสดงลายน้ำใน Preview)
 
 import React, { useState, useEffect, useMemo } from 'react';
-// ✅ 1. แก้ไข: import 'Photo' interface จาก api.ts
 import { api, Photo } from '../utils/api'; 
+import styles from './PhotoGallery.module.css';
 
 interface PhotoGalleryProps {
   projectId: string;
@@ -36,18 +36,14 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
         
         const response = await api.getPhotosByProject(projectId); 
         
-        // ✅ 2. แก้ไข: เพิ่มการตรวจสอบ response.success และ response.data ที่นี่
         if (response.success && response.data) {
-          // ถ้ามีข้อมูล เราถึงจะทำการ sort
           const sortedPhotos = response.data.sort((a: Photo, b: Photo) => 
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
           setPhotos(sortedPhotos);
         } else if (!response.success) {
-          // ถ้า API ไม่สำเร็จ ให้โยน Error
           throw new Error(response.error || 'Failed to fetch photos');
         }
-        // กรณีที่ success แต่ data เป็น array ว่างๆ ก็ไม่ต้องทำอะไร setPhotos([]) จะเป็นค่าเริ่มต้นอยู่แล้ว
 
       } catch (err) {
         setError((err as Error).message);
@@ -64,40 +60,66 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
     return photos.filter(p => p.reportType === filter);
   }, [photos, filter]);
 
-  if (isLoading) return <p style={{ textAlign: 'center', padding: '20px' }}>🔄 Loading reports...</p>;
-  if (error) return <p style={{ textAlign: 'center', padding: '20px', color: 'red' }}>❌ Error: {error}</p>;
+  if (isLoading) return <p className={styles.infoText}>🔄 Loading reports...</p>;
+  if (error) return <p className={styles.errorText}>❌ Error: {error}</p>;
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className={styles.galleryContainer}>
       <h1>📸 Photo Reports for Project: {projectId}</h1>
 
-      <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-        <button onClick={() => setFilter('all')} disabled={filter === 'all'}>All Photos</button>
-        <button onClick={() => setFilter('QC')} disabled={filter === 'QC'} style={{ marginLeft: '10px' }}>QC Reports</button>
-        <button onClick={() => setFilter('Daily')} disabled={filter === 'Daily'} style={{ marginLeft: '10px' }}>Daily Reports</button>
+      <div className={styles.filterBar}>
+        <button className={styles.filterButton} onClick={() => setFilter('all')} disabled={filter === 'all'}>All Photos</button>
+        <button className={styles.filterButton} onClick={() => setFilter('QC')} disabled={filter === 'QC'}>QC Reports</button>
+        <button className={styles.filterButton} onClick={() => setFilter('Daily')} disabled={filter === 'Daily'}>Daily Reports</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+      <div className={styles.photoGrid}>
         {filteredPhotos.length > 0 ? (
-          filteredPhotos.map(photo => (
-            <div key={photo.id} style={{ border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
-              <a href={getDisplayUrl(photo.driveUrl)} target="_blank" rel="noopener noreferrer">
-                <img 
-                  src={getDisplayUrl(photo.driveUrl)}
-                  alt={photo.filename} 
-                  style={{ width: '100%', height: '220px', objectFit: 'cover', display: 'block' }} 
-                />
-              </a>
-              <div style={{ padding: '15px' }}>
-                <p style={{ fontWeight: 'bold', margin: '0 0 5px 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {photo.reportType === 'QC' ? `Topic: ${photo.topic}` : `Desc: ${photo.description}`}
-                </p>
-                <small style={{ color: '#555' }}>{new Date(photo.createdAt).toLocaleString()}</small>
-              </div>
-            </div>
-          ))
+          filteredPhotos.map(photo => {
+                  // [ปรับปรุง] จัดรูปแบบวันที่แบบเดียวกับ PDF (วว/ดด/ปปปป HH:mm:ss)
+                  const date = new Date(photo.createdAt);
+                  const datePart = date.toLocaleDateString('th-TH', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  });
+                  const timePart = date.toLocaleTimeString('th-TH', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                  });
+                  const formattedTimestamp = `${datePart} ${timePart}`;
+
+                  return (
+                    <div key={photo.id} className={styles.photoCard}>
+                      <a href={getDisplayUrl(photo.driveUrl)} target="_blank" rel="noopener noreferrer">
+                        <div className={styles.photoImageContainer}>
+                          <img 
+                            src={getDisplayUrl(photo.driveUrl)}
+                            alt={photo.filename} 
+                            className={styles.photoImage}
+                          />
+
+                          {/* [✅ แสดงลายน้ำใน Preview] */}
+                          <div className={styles.watermarkOverlay}>
+                            <span>{formattedTimestamp}</span>
+                            <span>{photo.location || 'ไม่สามารถระบุตำแหน่งได้'}</span>
+                          </div>
+                        </div>
+                      </a>
+
+                      <div className={styles.photoContent}>
+                        <p className={styles.photoText}>
+                          {photo.reportType === 'QC' ? `Topic: ${photo.topic}` : `Desc: ${photo.description}`}
+                        </p>
+                        <small className={styles.photoTimestamp}>{new Date(photo.createdAt).toLocaleString()}</small>
+                      </div>
+                    </div>
+                  )
+                })
         ) : (
-          <p style={{ textAlign: 'center', gridColumn: '1 / -1' }}>No photos found for this project.</p>
+          <p className={styles.infoText}>No photos found for this project.</p>
         )}
       </div>
     </div>

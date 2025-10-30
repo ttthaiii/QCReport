@@ -32,21 +32,33 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.api = void 0;
 // Filename: qc-functions/src/index.ts (VERSION 8 - Dynamic PDF Settings)
-console.log("--- EMULATOR IS RUNNING CODE VERSION 555 ---");
 const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
+const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
+const crypto_1 = require("crypto");
 // ✅ [แก้ไข] Import ReportSettings (ต้องสร้าง Interface นี้ใน pdf-generator.ts ด้วย)
 const pdf_generator_1 = require("./services/pdf-generator");
-const firestore_1 = require("./api/firestore");
+const firestore_2 = require("./api/firestore");
 const storage_2 = require("./api/storage");
 const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
 function slugify(text) {
@@ -59,6 +71,18 @@ function slugify(text) {
         .replace(/^-+/, '') // Trim - from start of text
         .replace(/-+$/, '') // Trim - from end of text
         || `doc-${Date.now()}`; // Fallback for empty string
+}
+function createStableReportId(reportType, mainCategory, subCategory, dynamicFields, date) {
+    if (reportType === 'Daily') {
+        return `daily_${date || 'no-date'}`;
+    }
+    // สำหรับ QC
+    const fieldString = dynamicFields
+        ? Object.keys(dynamicFields).sort().map(k => `${k}=${dynamicFields[k]}`).join('&')
+        : '';
+    const combinedString = `qc_${mainCategory || ''}_${subCategory || ''}_${fieldString}`;
+    // ใช้ Hash เพื่อให้ ID สั้นและไม่ซ้ำกันสำหรับแต่ละ Filter
+    return (0, crypto_1.createHash)('sha256').update(combinedString).digest('hex').substring(0, 20);
 }
 if (!admin.apps.length) {
     if (IS_EMULATOR) {
@@ -76,7 +100,7 @@ if (!admin.apps.length) {
         });
     }
 }
-const db = admin.firestore();
+const db = (0, firestore_1.getFirestore)();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true }));
 //app.use(cors({ origin: true }));
@@ -364,7 +388,7 @@ app.post("/upload-photo-base64", jsonParser, async (req, res) => {
         photoData.filename = storageResult.filename;
         photoData.driveUrl = storageResult.publicUrl;
         photoData.filePath = storageResult.filePath;
-        const firestoreResult = await (0, firestore_1.logPhotoToFirestore)(photoData);
+        const firestoreResult = await (0, firestore_2.logPhotoToFirestore)(photoData);
         return res.json({
             success: true,
             data: Object.assign(Object.assign({}, firestoreResult), storageResult)
@@ -383,151 +407,139 @@ app.post("/generate-report", jsonParser, async (req, res) => {
     var _a, _b;
     try {
         const { projectId, projectName, reportType, mainCategory, subCategory, dynamicFields, date } = req.body;
-        if (!projectId || !reportType) {
-            return res.status(400).json({
-                success: false,
-                error: "Missing projectId or reportType."
-            });
-        }
-        // ===================================
-        //  [ใหม่] Fetch Report Settings
-        // ===================================
+        // ... (ส่วนการตรวจสอบ projectId, reportType, และ Fetch Report Settings เหมือนเดิม) ...
         let reportSettings = Object.assign({}, pdf_generator_1.DEFAULT_SETTINGS);
         try {
             const projectDoc = await db.collection("projects").doc(projectId).get();
             if (projectDoc.exists && ((_a = projectDoc.data()) === null || _a === void 0 ? void 0 : _a.reportSettings)) {
-                const settingsFromDB = (_b = projectDoc.data()) === null || _b === void 0 ? void 0 : _b.reportSettings;
-                // Merge defaults with DB settings to ensure all keys exist
-                reportSettings = Object.assign(Object.assign({}, pdf_generator_1.DEFAULT_SETTINGS), settingsFromDB);
-                console.log(`✅ Loaded custom report settings for ${projectId}: ${reportSettings.photosPerPage} photos/page`);
-            }
-            else {
-                console.log(`⚠️ No custom report settings found for ${projectId}, using defaults.`);
+                reportSettings = Object.assign(Object.assign({}, pdf_generator_1.DEFAULT_SETTINGS), (_b = projectDoc.data()) === null || _b === void 0 ? void 0 : _b.reportSettings);
             }
         }
         catch (settingsError) {
             console.error(`❌ Error fetching report settings:`, settingsError);
-            // Continue with defaults
         }
-        console.log(`📊 Generating ${reportType} report for ${projectName}`);
+        console.log(`📊 Generating ${reportType} report (Overwrite Mode) for ${projectName}`);
+        // ✅ [ใหม่] 1. สร้าง Stable ID และ Stable Filename
+        const stableDocId = createStableReportId(reportType, mainCategory, subCategory, dynamicFields, date);
+        let stableFilename = ""; // เราจะกำหนดชื่อไฟล์ให้เสถียร (ไม่มี Timestamp)
+        // ✅ [ใหม่] 2. สร้างตัวแปรสำหรับเก็บข้อมูล Metadata
+        let generatedReportData = {};
+        const reportTimestamp = firestore_1.FieldValue.serverTimestamp(); // <-- (ต้องแน่ใจว่าใช้ FieldValue จาก v10)
+        let pdfBuffer;
+        let responseData = {};
         // ===================================
         //  QC REPORT LOGIC
         // ===================================
         if (reportType === 'QC') {
             if (!mainCategory || !subCategory) {
-                return res.status(400).json({
-                    success: false,
-                    error: "Missing QC fields (mainCategory, subCategory)."
-                });
+                return res.status(400).json({ success: false, error: "Missing QC fields." });
             }
+            // ... (Logic การหา allTopics, foundPhotos, fullLayoutPhotos เหมือนเดิม) ...
             const projectConfigRef = db.collection("projectConfig").doc(projectId);
-            const mainCatSnap = await projectConfigRef
-                .collection("mainCategories")
-                .where("name", "==", mainCategory)
-                .limit(1)
-                .get();
-            if (mainCatSnap.empty) {
-                return res.status(404).json({ success: false, error: `Main category '${mainCategory}' not found.` });
-            }
+            const mainCatSnap = await projectConfigRef.collection("mainCategories").where("name", "==", mainCategory).limit(1).get();
+            if (mainCatSnap.empty)
+                return res.status(404).json({ success: false, error: "Main category not found." });
             const mainCatId = mainCatSnap.docs[0].id;
-            const subCatSnap = await projectConfigRef
-                .collection("subCategories")
-                .where("name", "==", subCategory)
-                .where("mainCategoryId", "==", mainCatId)
-                .limit(1)
-                .get();
-            if (subCatSnap.empty) {
-                return res.status(404).json({ success: false, error: `Sub category '${subCategory}' not found under '${mainCategory}'.` });
-            }
+            const subCatSnap = await projectConfigRef.collection("subCategories").where("name", "==", subCategory).where("mainCategoryId", "==", mainCatId).limit(1).get();
+            if (subCatSnap.empty)
+                return res.status(404).json({ success: false, error: "Sub category not found." });
             const subCatId = subCatSnap.docs[0].id;
-            const topicsSnap = await projectConfigRef
-                .collection("topics")
-                .where("subCategoryId", "==", subCatId)
-                .where("isArchived", "==", false)
-                .get();
+            const topicsSnap = await projectConfigRef.collection("topics").where("subCategoryId", "==", subCatId).where("isArchived", "==", false).get();
             const allTopics = topicsSnap.docs.map(doc => doc.data().name);
-            if (allTopics.length === 0) {
-                return res.status(404).json({
-                    success: false,
-                    error: "No topics found."
-                });
-            }
-            console.log(`✅ Found ${allTopics.length} total topics for the layout.`);
+            if (allTopics.length === 0)
+                return res.status(404).json({ success: false, error: "No topics found." });
             const foundPhotos = await (0, pdf_generator_1.getLatestPhotos)(projectId, mainCategory, subCategory, allTopics, dynamicFields || {});
-            console.log(`📸 Found and downloaded ${foundPhotos.length} photos.`);
             const fullLayoutPhotos = (0, pdf_generator_1.createFullLayout)(allTopics, foundPhotos);
-            const reportData = {
-                projectId,
-                projectName: projectName || projectId,
-                mainCategory,
-                subCategory,
-                dynamicFields: dynamicFields || {}
+            const reportData = { projectId, projectName, mainCategory, subCategory, dynamicFields: dynamicFields || {} };
+            const qcReportSettings = Object.assign(Object.assign({}, reportSettings), { photosPerPage: reportSettings.qcPhotosPerPage });
+            pdfBuffer = await (0, pdf_generator_1.generatePDF)(reportData, fullLayoutPhotos, qcReportSettings);
+            // ✅ [ใหม่] สร้างชื่อไฟล์ที่เสถียร (ไม่มีเวลา)
+            const fieldSlug = (dynamicFields && Object.values(dynamicFields).length > 0)
+                ? `_${Object.values(dynamicFields).map((val) => slugify(String(val))).join('_')}` // <-- ✅ แก้ไข
+                : '';
+            stableFilename = `QC-Report_${slugify(mainCategory)}_${slugify(subCategory)}${fieldSlug}.pdf`;
+            // เตรียม Metadata
+            generatedReportData = {
+                reportType: 'QC',
+                createdAt: reportTimestamp, // อัปเดตเวลาที่สร้างล่าสุด
+                filename: stableFilename,
+                mainCategory: mainCategory,
+                subCategory: subCategory,
+                dynamicFields: dynamicFields || {},
+                photosFound: foundPhotos.length,
+                totalTopics: allTopics.length,
             };
-            const qcReportSettings = Object.assign(Object.assign({}, reportSettings), { photosPerPage: reportSettings.qcPhotosPerPage // <-- แปลงค่า!
-             });
-            // ✅ [แก้ไข] ส่ง reportSettings เข้าไปด้วย
-            const pdfBuffer = await (0, pdf_generator_1.generatePDF)(reportData, fullLayoutPhotos, qcReportSettings);
-            console.log(`✅ QC PDF generated: ${pdfBuffer.length} bytes`);
-            const uploadResult = await (0, pdf_generator_1.uploadPDFToStorage)(pdfBuffer, reportData, 'QC');
-            return res.json({
-                success: true,
-                data: {
-                    filename: uploadResult.filename,
-                    publicUrl: uploadResult.publicUrl,
-                    totalTopics: allTopics.length,
-                    photosFound: foundPhotos.length,
-                    placeholders: allTopics.length - foundPhotos.length
-                }
-            });
+            responseData = {
+                filename: stableFilename,
+                totalTopics: allTopics.length,
+                photosFound: foundPhotos.length
+            };
             // ===================================
             //  DAILY REPORT LOGIC
             // ===================================
         }
         else if (reportType === 'Daily') {
             if (!date) {
-                return res.status(400).json({
-                    success: false,
-                    error: "Missing Daily field (date)."
-                });
+                return res.status(400).json({ success: false, error: "Missing Daily field (date)." });
             }
-            console.log(`📅 Fetching Daily photos for date: ${date}`);
+            // ... (Logic การหา foundPhotos เหมือนเดิม) ...
             const foundPhotos = await (0, pdf_generator_1.getDailyPhotosByDate)(projectId, date);
-            console.log(`📸 Found and downloaded ${foundPhotos.length} daily photos.`);
             if (foundPhotos.length === 0) {
-                return res.status(404).json({
-                    success: false,
-                    error: `ไม่พบรูปรายงานประจำวันสำหรับวันที่ ${date}`
-                });
+                return res.status(404).json({ error: `ไม่พบรูปสำหรับวันที่ ${date}` });
             }
-            const reportData = {
-                projectId,
-                projectName: projectName || projectId,
-                date
+            const reportData = { projectId, projectName, date };
+            const dailyReportSettings = Object.assign(Object.assign({}, reportSettings), { photosPerPage: reportSettings.dailyPhotosPerPage });
+            pdfBuffer = await (0, pdf_generator_1.generateDailyPDFWrapper)(reportData, foundPhotos, dailyReportSettings);
+            // ✅ [ใหม่] สร้างชื่อไฟล์ที่เสถียร
+            stableFilename = `Daily-Report_${date}.pdf`;
+            // เตรียม Metadata
+            generatedReportData = {
+                reportType: 'Daily',
+                createdAt: reportTimestamp, // อัปเดตเวลาที่สร้างล่าสุด
+                filename: stableFilename,
+                reportDate: date,
+                photosFound: foundPhotos.length,
+                dynamicFields: {},
+                mainCategory: "",
+                subCategory: ""
             };
-            const dailyReportSettings = Object.assign(Object.assign({}, reportSettings), { photosPerPage: reportSettings.dailyPhotosPerPage // <-- แปลงค่า!
-             });
-            // ✅ [แก้ไข] ส่ง reportSettings เข้าไปด้วย
-            const pdfBuffer = await (0, pdf_generator_1.generateDailyPDFWrapper)(reportData, foundPhotos, dailyReportSettings);
-            console.log(`✅ Daily PDF generated: ${pdfBuffer.length} bytes`);
-            const uploadResult = await (0, pdf_generator_1.uploadPDFToStorage)(pdfBuffer, reportData, 'Daily');
-            return res.json({
-                success: true,
-                data: {
-                    filename: uploadResult.filename,
-                    publicUrl: uploadResult.publicUrl,
-                    photosFound: foundPhotos.length
-                }
-            });
+            responseData = {
+                filename: stableFilename,
+                photosFound: foundPhotos.length
+            };
         }
         else {
-            return res.status(400).json({
-                success: false,
-                error: "Invalid reportType."
-            });
+            return res.status(400).json({ success: false, error: "Invalid reportType." });
         }
+        // ===================================
+        //  ✅ [ใหม่] 3. UPLOAD & SAVE (ส่วนที่แก้ไข)
+        // ===================================
+        // 3.1 Upload to Storage (ด้วยชื่อไฟล์ที่เสถียร)
+        // การอัปโหลดไฟล์ไปยัง Path เดิม จะเป็นการ "เขียนทับ" ไฟล์เก่าใน Storage อัตโนมัติ
+        const reportDataForUpload = { projectId, projectName, mainCategory, subCategory, dynamicFields, date }; // (ข้อมูลสำหรับ path)
+        // เราส่ง stableFilename เข้าไปแทนการสร้างชื่อใหม่
+        const uploadResult = await (0, pdf_generator_1.uploadPDFToStorage)(pdfBuffer, reportDataForUpload, reportType, stableFilename);
+        console.log(`✅ PDF Overwritten in Storage: ${uploadResult.filePath}`);
+        // 3.2 Save Metadata to Firestore (ด้วย Stable ID)
+        const reportDocRef = db
+            .collection('projects')
+            .doc(projectId)
+            .collection('generatedReports')
+            .doc(stableDocId); // <-- ใช้ ID ที่เสถียร
+        // เพิ่ม URL และ Path ที่ได้จากการอัปโหลด
+        generatedReportData.publicUrl = uploadResult.publicUrl;
+        generatedReportData.storagePath = uploadResult.filePath;
+        // ใช้ .set() เพื่อ "สร้างหรือเขียนทับ" เอกสารใน Firestore
+        await reportDocRef.set(generatedReportData, { merge: true }); // merge:true เผื่อไว้
+        console.log(`✅ Firestore Metadata Overwritten: ${stableDocId}`);
+        // 3.3 ส่ง Response กลับ
+        return res.json({
+            success: true,
+            data: Object.assign(Object.assign({}, responseData), { publicUrl: uploadResult.publicUrl })
+        });
     }
     catch (error) {
-        console.error("❌ Error generating report:", error);
+        console.error("❌ Error generating report (Overwrite Mode):", error);
         return res.status(500).json({
             success: false,
             error: error.message
@@ -891,6 +903,206 @@ app.post("/project-config/:projectId/sub-category/:subCatId/fields", jsonParser,
         return res.status(500).json({
             success: false,
             error: error.message
+        });
+    }
+});
+app.get("/projects/:projectId/shared-jobs", async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const jobsSnapshot = await db
+            .collection("projects") // <-- [สำคัญ] แก้ไข Collection หลักให้ถูกต้อง (ถ้าจำเป็น)
+            .doc(projectId)
+            .collection("sharedJobs") // <-- สร้าง Subcollection ใหม่ชื่อ 'sharedJobs'
+            .where("status", "==", "pending") // <-- กรองเฉพาะงานที่ยังไม่เสร็จ
+            .orderBy("lastUpdatedAt", "desc") // <-- เรียงตามวันที่อัปเดตล่าสุด
+            .limit(20) // <-- จำกัดจำนวนที่ดึงมา (ปรับตามต้องการ)
+            .get();
+        if (jobsSnapshot.empty) {
+            return res.json({ success: true, data: [] }); // ถ้าไม่มี ก็ส่ง array ว่างกลับไป
+        }
+        const jobs = jobsSnapshot.docs.map((doc) => (Object.assign({ id: doc.id }, doc.data())));
+        return res.json({ success: true, data: jobs });
+    }
+    catch (error) {
+        console.error("Error in GET /shared-jobs:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+async function checkHasNewPhotos(projectId, reportData, reportCreatedAt) {
+    // ถ้าไม่มีเวลาอ้างอิง ก็ไม่ต้องเช็ค
+    if (!reportCreatedAt)
+        return false;
+    try {
+        let photoQuery;
+        if (reportData.reportType === 'QC') {
+            // สร้าง Query สำหรับ qcPhotos
+            photoQuery = db.collection('qcPhotos')
+                .where('projectId', '==', projectId)
+                .where('category', '==', `${reportData.mainCategory} > ${reportData.subCategory}`);
+            // เพิ่ม Filter Dynamic Fields
+            if (reportData.dynamicFields) {
+                Object.keys(reportData.dynamicFields).forEach(key => {
+                    const value = reportData.dynamicFields[key];
+                    if (value) {
+                        photoQuery = photoQuery.where(`dynamicFields.${key}`, '==', value);
+                    }
+                });
+            }
+        }
+        else if (reportData.reportType === 'Daily') {
+            if (!reportData.reportDate)
+                return false; // ถ้า report ไม่มีวันที่ ก็เช็คไม่ได้
+            // สร้าง Query สำหรับ dailyPhotos
+            // [ข้อควรระวัง] เราต้อง *สมมติ* ว่า dailyPhotos มี field 'reportDate' (YYYY-MM-DD)
+            // ซึ่งถูกเพิ่มเข้าไปตอนอัปโหลดรูป (ถ้าไม่มี field นี้ Logic นี้ต้องปรับใหม่)
+            photoQuery = db.collection('dailyPhotos')
+                .where('projectId', '==', projectId)
+                // [สมมติฐาน] กรองด้วย 'reportDate' เพื่อให้ตรงกับ Scope ของรายงาน
+                .where('reportDate', '==', reportData.reportDate);
+        }
+        else {
+            return false; // ไม่ใช่ Type ที่รู้จัก
+        }
+        // --- [สำคัญ] ค้นหารูปที่ใหม่กว่ารายงานฉบับนี้ ---
+        const snapshot = await photoQuery
+            .where('createdAt', '>', reportCreatedAt) // <-- เงื่อนไขหลัก
+            .limit(1) // ขอแค่ 1 รูปก็พอ
+            .get();
+        return !snapshot.empty; // ถ้าเจอ (ไม่ว่าง) = true, ถ้าไม่เจอ (ว่าง) = false
+    }
+    catch (error) {
+        console.error(`Error checking new photos for report:`, error);
+        return false; // ถ้า Error ให้คืน false (ปลอดภัยกว่า)
+    }
+}
+app.get("/projects/:projectId/generated-reports", async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const _a = req.query, { reportType, mainCategory, subCategory, date } = _a, 
+        // เพิ่มการอ่าน dynamicFields จาก query string
+        dynamicFieldsQuery = __rest(_a, ["reportType", "mainCategory", "subCategory", "date"]) // ตัวแปรนี้จะเก็บ dynamicFields ทั้งหมด เช่น { 'dynamicFields[field1]': 'value1' }
+        ;
+        console.log(`🔍 Fetching generated reports for project ${projectId} with filter:`, req.query);
+        if (!reportType || (reportType !== 'QC' && reportType !== 'Daily')) {
+            return res.status(400).json({ success: false, error: "Missing or invalid 'reportType' query parameter (QC or Daily)." });
+        }
+        // สร้าง Query เริ่มต้นไปยัง Subcollection
+        let query = db
+            .collection('projects') // <-- ตรวจสอบ Collection หลัก
+            .doc(projectId)
+            .collection('generatedReports') // ใช้ subcollection ที่สร้างจาก migration script
+            .where('reportType', '==', reportType);
+        // --- เพิ่มเงื่อนไขการ Filter ตาม reportType ---
+        if (reportType === 'QC') {
+            if (mainCategory) {
+                query = query.where('mainCategory', '==', mainCategory);
+            }
+            if (subCategory) {
+                query = query.where('subCategory', '==', subCategory);
+            }
+            // Filter ด้วย Dynamic Fields (ถ้ามีส่งมา)
+            Object.keys(dynamicFieldsQuery).forEach(key => {
+                if (key.startsWith('dynamicFields[')) {
+                    const fieldName = key.substring(14, key.length - 1); // ดึงชื่อ field ออกมา
+                    const fieldValue = dynamicFieldsQuery[key];
+                    if (fieldName && fieldValue) {
+                        console.log(`  -> Filtering by dynamic field: ${fieldName} = ${fieldValue}`);
+                        // ใช้ dot notation สำหรับ query field ที่อยู่ใน map
+                        query = query.where(`dynamicFields.${fieldName}`, '==', fieldValue);
+                    }
+                }
+            });
+        }
+        else if (reportType === 'Daily') {
+            if (date) {
+                query = query.where('reportDate', '==', date);
+            }
+            else {
+                // ถ้าเป็น Daily แต่ไม่ส่ง date มา อาจจะคืนค่าว่าง หรือ error
+                console.warn("Daily report requested without date filter.");
+                // อาจจะไม่ต้องทำอะไร ปล่อยให้ query ดึง Daily ทั้งหมดมา (เรียงตามวันที่สร้าง)
+                // หรือถ้าต้องการให้ error ก็ uncomment บรรทัดล่าง
+                // return res.status(400).json({ success: false, error: "'date' query parameter is required for Daily reports." });
+            }
+        }
+        // --- ดึงข้อมูลและเรียงลำดับ ---
+        const reportsSnapshot = await query
+            .orderBy('createdAt', 'desc') // เรียงตามวันที่สร้างล่าสุด
+            .limit(30) // จำกัดจำนวนที่ดึง (ปรับตามต้องการ)
+            .get();
+        if (reportsSnapshot.empty) {
+            console.log("  -> No matching reports found.");
+            return res.json({ success: true, data: [] });
+        }
+        // --- ประมวลผลข้อมูล + [ชั่วคราว] เช็ค hasNewPhotos ---
+        const reportDocs = reportsSnapshot.docs;
+        const reportPromises = reportDocs.map(async (doc) => {
+            const data = doc.data();
+            const reportCreatedAt = data.createdAt;
+            // --- [สำคัญ] เรียกใช้ฟังก์ชัน Helper ที่เราสร้าง ---
+            const hasNewPhotos = await checkHasNewPhotos(projectId, data, reportCreatedAt);
+            // --- จบส่วนแก้ไข ---
+            return {
+                reportId: doc.id,
+                reportType: data.reportType,
+                createdAt: reportCreatedAt && typeof reportCreatedAt.toDate === 'function'
+                    ? reportCreatedAt.toDate().toISOString()
+                    : new Date().toISOString(),
+                filename: data.filename,
+                publicUrl: data.publicUrl,
+                storagePath: data.storagePath,
+                mainCategory: data.mainCategory,
+                subCategory: data.subCategory,
+                dynamicFields: data.dynamicFields,
+                reportDate: data.reportDate,
+                photosFound: data.photosFound,
+                totalTopics: data.totalTopics,
+                hasNewPhotos: hasNewPhotos, // <-- ใช้ค่าจริงที่ได้มา
+            };
+        });
+        // รอให้ทุก Promise (การเช็ค) ทำงานเสร็จ
+        const reports = await Promise.all(reportPromises);
+        // --- จบส่วนแก้ไข Promise.all ---
+        console.log(`  -> Found ${reports.length} reports.`);
+        return res.json({ success: true, data: reports });
+    }
+    catch (error) {
+        console.error("Error in GET /generated-reports:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+});
+// 2. POST /projects/:projectId/shared-jobs - สร้างหรืออัปเดตงาน
+app.post("/projects/:projectId/shared-jobs", jsonParser, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        // ตอนนี้ TypeScript รู้จัก 'SharedJob' แล้ว
+        const jobData = req.body;
+        // ตรวจสอบข้อมูลเบื้องต้น
+        if (!jobData || !jobData.id || !jobData.reportType || !jobData.lastUpdatedAt) {
+            return res.status(400).json({ success: false, error: "Missing required job data (id, reportType, lastUpdatedAt)." });
+        }
+        // กำหนด Document ID ให้ตรงกับ Job ID ที่ส่งมา
+        const jobRef = db
+            .collection("projects") // <-- [สำคัญ] แก้ไข Collection หลักให้ถูกต้อง (ถ้าจำเป็น)
+            .doc(projectId)
+            .collection("sharedJobs")
+            .doc(jobData.id); // <-- ใช้ Job ID เป็น Document ID
+        // ใช้ set + merge:true เพื่อสร้าง (ถ้ายังไม่มี) หรือ อัปเดต (ถ้ามีอยู่แล้ว)
+        await jobRef.set(jobData, { merge: true });
+        console.log(`✅ Shared Job saved/updated: ${projectId}/${jobData.id}`);
+        return res.json({ success: true, data: { id: jobData.id, status: jobData.status } });
+    }
+    catch (error) {
+        console.error("Error in POST /shared-jobs:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message,
         });
     }
 });

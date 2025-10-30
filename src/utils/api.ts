@@ -50,6 +50,7 @@ export interface UploadPhotoData {
   timestamp: string;
   location?: string;
   dynamicFields?: object;
+  jobId?: string;
 }
 
 /**
@@ -64,6 +65,46 @@ export interface Photo {
   topic?: string;
   description?: string;
   createdAt: string; // ISO String
+  location?: string;
+}
+
+export interface SharedJob {
+  id: string; // ID ของ Job (เช่น mainId_subId_fields)
+  label: string; // ชื่อที่แสดงผล (เช่น "โครงสร้าง / กำแพงลิฟต์ / k/k/k")
+  reportType: 'QC' | 'Daily';
+  mainCategory: string;
+  subCategory: string;
+  dynamicFields: Record<string, string>;
+  
+  // สถานะ
+  completedTopics: number;
+  totalTopics: number;
+  status: 'pending' | 'completed'; // เพิ่มสถานะ
+  
+  // การเรียงลำดับ
+  lastUpdatedAt: string; // ISO Timestamp
+}
+
+export interface GeneratedReportInfo {
+  reportId: string;
+  reportType: 'QC' | 'Daily';
+  createdAt: string; // ISO Timestamp string
+  filename: string;
+  publicUrl: string;
+  storagePath: string;
+  
+  // Filter fields (อาจจะมีบางอันเป็น null/undefined)
+  mainCategory?: string;
+  subCategory?: string;
+  dynamicFields?: Record<string, string>;
+  reportDate?: string; // YYYY-MM-DD
+
+  // Display fields
+  photosFound: number;
+  totalTopics?: number; // Only for QC
+
+  // [ใหม่] สถานะว่ามีรูปใหม่รอสร้างรายงานหรือไม่
+  hasNewPhotos?: boolean; 
 }
 
 export interface ApiResponse<T = any> {
@@ -72,10 +113,65 @@ export interface ApiResponse<T = any> {
   error?: string;
 }
 
+
 // --- API configuration ---
 const API_BASE_URL = process.env.NODE_ENV === 'development' 
   ? 'http://localhost:5001/qcreport-54164/asia-southeast1/api'
   : 'https://asia-southeast1-qcreport-54164.cloudfunctions.net/api';
+
+async function getGeneratedReports(
+  projectId: string,
+  filterCriteria: {
+    reportType: 'QC' | 'Daily';
+    mainCategory?: string;
+    subCategory?: string;
+    dynamicFields?: Record<string, string>;
+    date?: string; // YYYY-MM-DD
+  }
+): Promise<ApiResponse<GeneratedReportInfo[]>> {
+  try {
+    // สร้าง Query Parameters จาก Filter
+    const params = new URLSearchParams();
+    params.append('reportType', filterCriteria.reportType);
+    if (filterCriteria.reportType === 'QC') {
+      if (filterCriteria.mainCategory) params.append('mainCategory', filterCriteria.mainCategory);
+      if (filterCriteria.subCategory) params.append('subCategory', filterCriteria.subCategory);
+      if (filterCriteria.dynamicFields) {
+        // แปลง dynamicFields object เป็น string เพื่อส่ง (Backend ต้องรู้วิธีอ่านกลับ)
+        // ตัวอย่าง: field1=value1&field2=value2
+        Object.entries(filterCriteria.dynamicFields).forEach(([key, value]) => {
+          if (value) params.append(`dynamicFields[${key}]`, value);
+        });
+      }
+    } else if (filterCriteria.reportType === 'Daily') {
+      if (filterCriteria.date) params.append('date', filterCriteria.date);
+    }
+
+    // เรียก Backend endpoint ใหม่ (ที่เราจะสร้าง)
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/generated-reports?${params.toString()}`);
+    
+    if (!response.ok) {
+       // พยายามอ่าน Error message จาก JSON response ถ้ามี
+       let errorMsg = `HTTP Error ${response.status}`;
+       try {
+           const errorData = await response.json();
+           errorMsg = errorData.error || errorMsg;
+       } catch (e) { /* ไม่ต้องทำอะไรถ้า response ไม่ใช่ JSON */ }
+       throw new Error(errorMsg);
+    }
+    
+    const data = await response.json();
+    return data; // ควรจะเป็น { success: true, data: GeneratedReportInfo[] }
+
+  } catch (error) {
+    console.error('Error fetching generated reports:', error);
+    return { 
+      success: false, 
+      error: (error as Error).message, 
+      data: [] // คืนค่า array ว่างเมื่อเกิด Error
+    };
+  }
+}
 
 // --- API service ---
 export const api = {
@@ -588,5 +684,82 @@ export const api = {
       } catch (err) {
         return { success: false, error: (err as Error).message };
       }
-    },  
+    },
+
+    async getSharedJobs(projectId: string): Promise<ApiResponse<SharedJob[]>> {
+        try {
+          const response = await fetch(`${API_BASE_URL}/projects/${projectId}/shared-jobs`);
+          if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+          return await response.json();
+        } catch (error) {
+          console.error('Error fetching shared jobs:', error);
+          return { success: false, error: (error as Error).message, data: [] };
+        }
+      },
+
+      async saveSharedJob(projectId: string, jobData: SharedJob): Promise<ApiResponse> {
+          try {
+            const response = await fetch(`${API_BASE_URL}/projects/${projectId}/shared-jobs`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(jobData),
+            });
+            if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+            return await response.json();
+          } catch (error) {
+            console.error('Error saving shared job:', error);
+            return { success: false, error: (error as Error).message };
+          }
+        },
+
+    async getGeneratedReports(
+      projectId: string,
+      filterCriteria: {
+        reportType: 'QC' | 'Daily';
+        mainCategory?: string;
+        subCategory?: string;
+        dynamicFields?: Record<string, string>;
+        date?: string; // YYYY-MM-DD
+      }
+    ): Promise<ApiResponse<GeneratedReportInfo[]>> {
+      try {
+        // สร้าง Query Parameters จาก Filter
+        const params = new URLSearchParams();
+        params.append('reportType', filterCriteria.reportType);
+        if (filterCriteria.reportType === 'QC') {
+          if (filterCriteria.mainCategory) params.append('mainCategory', filterCriteria.mainCategory);
+          if (filterCriteria.subCategory) params.append('subCategory', filterCriteria.subCategory);
+          if (filterCriteria.dynamicFields) {
+            Object.entries(filterCriteria.dynamicFields).forEach(([key, value]) => {
+              if (value) params.append(`dynamicFields[${key}]`, value);
+            });
+          }
+        } else if (filterCriteria.reportType === 'Daily') {
+          if (filterCriteria.date) params.append('date', filterCriteria.date);
+        }
+
+        // เรียก Backend endpoint ใหม่
+        const response = await fetch(`${API_BASE_URL}/projects/${projectId}/generated-reports?${params.toString()}`);
+
+        if (!response.ok) {
+          let errorMsg = `HTTP Error ${response.status}`;
+          try {
+              const errorData = await response.json();
+              errorMsg = errorData.error || errorMsg;
+          } catch (e) { /* Ignore if not JSON */ }
+          throw new Error(errorMsg);
+        }
+
+        const data = await response.json();
+        return data;
+
+      } catch (error) {
+        console.error('Error fetching generated reports:', error);
+        return {
+          success: false,
+          error: (error as Error).message,
+          data: []
+        };
+      }
+    },      
 };

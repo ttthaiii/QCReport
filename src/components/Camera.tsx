@@ -1,49 +1,25 @@
-// Filename: src/components/Camera.tsx (REFACTORED - V6 - ID Based)
+// Filename: src/components/Camera.tsx (REFACTORED for Kebab-case bug)
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-// [แก้ไข] 1. Import Types ใหม่ที่เราสร้างขึ้นมา
-import { api, UploadPhotoData, ProjectConfig, MainCategory, SubCategory, Topic } from '../utils/api';
+import { api, UploadPhotoData, ProjectConfig, MainCategory, SubCategory, Topic, SharedJob } from '../utils/api';
 import { addWatermark, WatermarkOptions } from '../utils/watermark';
-import './Camera.css';
+// [แก้ไข] 1. เปลี่ยนวิธี Import CSS
+import styles from './Camera.module.css';
 
+// (โค้ดส่วนบนทั้งหมดเหมือนเดิม)
 interface CameraProps {
-  qcTopics: ProjectConfig | null; // <-- นี่คือ MainCategory[] | null
+  qcTopics: ProjectConfig | null; 
   projectId: string;
   projectName: string | undefined;
 }
-
-interface Geolocation {
-  latitude: number;
-  longitude: number;
-}
-
-// ... (Interface PersistentJob, getRecentJobs, reverseGeocodeNominatim, saveRecentJob ไม่ต้องแก้) ...
-interface PersistentJob {
-  id: string;
-  label: string;
-  reportType: 'QC' | 'Daily';
-  mainCategory: string;
-  subCategory: string;
-  description: string; // <--- เพิ่มบรรทัดนี้กลับเข้าไป
-  dynamicFields: Record<string, string>;
-  completedTopics: number;
-  totalTopics: number;
-}
-
+interface Geolocation { latitude: number; longitude: number; }
 interface PhotoQueueItem {
   base64: string;
   addWatermark: boolean;
+  timestamp?: string;        // [เพิ่ม] เก็บเวลาถ่าย
+  location?: string | null;  // [เพิ่ม] เก็บตำแหน่ง
 }
 
-const RECENT_JOBS_KEY = 'qc-recent-jobs';
-const getRecentJobs = (projectId: string): PersistentJob[] => {
-  try {
-    const data = localStorage.getItem(`${RECENT_JOBS_KEY}_${projectId}`);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
 async function reverseGeocodeNominatim(latitude: number, longitude: number): Promise<string> {
   const url = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=th&zoom=18&addressdetails=1`;
   try {
@@ -53,32 +29,50 @@ async function reverseGeocodeNominatim(latitude: number, longitude: number): Pro
     const data = await response.json();
     if (data && data.address) {
       const addr = data.address;
+      
+      // [แก้ไข] แยกข้อมูลที่ละเอียดขึ้น แต่ละบรรทัดสั้นๆ
+      const parts: string[] = [];
+      
+      // บรรทัด 1: ถนน/ซอย (ถ้ามี)
+      const road = addr.road || addr.street;
+      if (road) {
+        parts.push(road);
+      }
+      
+      // บรรทัด 2: แขวง/ตำบล
+      const subdistrict = addr.suburb || addr.village || addr.hamlet;
+      if (subdistrict) {
+        parts.push(subdistrict);
+      }
+      
+      // บรรทัด 3: เขต/อำเภอ
       const district = addr.district || addr.city_district || addr.town || addr.municipality;
+      if (district) {
+        parts.push(district);
+      }
+      
+      // บรรทัด 4: จังหวัด
       const province = addr.state || addr.province;
-      if (district && province) return `${district}\n${province}`;
-      else if (province) return province;
-      else if (district) return district;
-      return data.display_name.split(',').slice(0, 3).join(', ');
+      if (province) {
+        parts.push(province);
+      }
+      
+      // ถ้ามีข้อมูล คืนค่าแบบแยกบรรทัด
+      if (parts.length > 0) {
+        return parts.join('\n');
+      }
+      
+      // ถ้าไม่มีข้อมูลเลย ใช้ display_name แทน (แบ่งเป็นบรรทัดสั้นๆ)
+      const displayParts = data.display_name.split(',').slice(0, 3).map((s: string) => s.trim());
+      return displayParts.join('\n');
     } else {
-      return `พิกัด: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+      return `พิกัด:\n${latitude.toFixed(4)},\n${longitude.toFixed(4)}`;
     }
   } catch (error) {
     console.error('Error fetching Nominatim:', error);
     return `ไม่สามารถระบุสถานที่`;
   }
 }
-const saveRecentJob = (
-  projectId: string,
-  job: Omit<PersistentJob, 'completedTopics' | 'totalTopics'>,
-  completedTopics: number,
-  totalTopics: number
-) => {
-  const jobs = getRecentJobs(projectId);
-  const otherJobs = jobs.filter(j => j.id !== job.id);
-  const jobToSave: PersistentJob = { ...job, completedTopics, totalTopics };
-  const updatedJobs = [jobToSave, ...otherJobs].slice(0, 5);
-  localStorage.setItem(`${RECENT_JOBS_KEY}_${projectId}`, JSON.stringify(updatedJobs));
-};
 
 type WizardStep = 
   | 'type'
@@ -91,6 +85,7 @@ type WizardStep =
   | 'uploading';
 
 const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => {
+  // (State ทั้งหมดเหมือนเดิม)
   const [step, setStep] = useState<WizardStep>('type');
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
@@ -99,160 +94,96 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [currentTopic, setCurrentTopic] = useState<string>(''); 
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
-  const [recentJobs, setRecentJobs] = useState<PersistentJob[]>([]);
+  const [sharedJobs, setSharedJobs] = useState<SharedJob[]>([]);
   const [uploadedStatus, setUploadedStatus] = useState<Map<string, boolean>>(new Map());
   const [isChecklistLoading, setIsChecklistLoading] = useState(false);
-  const [selectedMainCategory, setSelectedMainCategory] = useState<string>(''); // <-- เก็บ 'name'
-  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('');  // <-- เก็บ 'name'
+  const [selectedMainCategory, setSelectedMainCategory] = useState<string>('');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('');
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [dailyDescriptions, setDailyDescriptions] = useState<Map<string, string>>(new Map());
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
   const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(true);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-  // --- [แก้ไข] 2. Logic การดึงข้อมูล (Refactored for ID-based Array) ---
+  const [previewData, setPreviewData] = useState<{ url: string, timestamp?: string, location?: string | null } | null>(null);
+
+  // (useMemo, useEffect, Functions ทั้งหมดเหมือนเดิม)
   const mainCategories: MainCategory[] = useMemo(() => qcTopics || [], [qcTopics]);
-  
-  const selectedMainCat: MainCategory | undefined = useMemo(() =>
-    mainCategories.find(m => m.name === selectedMainCategory),
-  [mainCategories, selectedMainCategory]);
+  const selectedMainCat: MainCategory | undefined = useMemo(() => mainCategories.find(m => m.name === selectedMainCategory), [mainCategories, selectedMainCategory]);
+  const subCategories: SubCategory[] = useMemo(() => selectedMainCat?.subCategories || [], [selectedMainCat]);
+  const selectedSubCat: SubCategory | undefined = useMemo(() => subCategories.find(s => s.name === selectedSubCategory), [subCategories, selectedSubCategory]);
+  const topics: Topic[] = useMemo(() => selectedSubCat?.topics || [], [selectedSubCat]);
+  const requiredDynamicFields: string[] = useMemo(() => selectedSubCat?.dynamicFields || [], [selectedSubCat]);
 
-  const subCategories: SubCategory[] = useMemo(() =>
-    selectedMainCat?.subCategories || [],
-  [selectedMainCat]);
-
-  const selectedSubCat: SubCategory | undefined = useMemo(() =>
-    subCategories.find(s => s.name === selectedSubCategory),
-  [subCategories, selectedSubCategory]);
-
-  const topics: Topic[] = useMemo(() =>
-    selectedSubCat?.topics || [],
-  [selectedSubCat]);
-  
-  const requiredDynamicFields: string[] = useMemo(() =>
-    selectedSubCat?.dynamicFields || [],
-  [selectedSubCat]);
-  // --- สิ้นสุดการแก้ไข ---
-
-  useEffect(() => { setRecentJobs(getRecentJobs(projectId)); }, [projectId]);
-
-  const getCurrentJobIdentifier = (): { id: string, label: string } => {
-    if (reportType === 'QC') {
-      const fieldValues = Object.values(dynamicFields).filter(Boolean).join('_') || 'default';
-      // [แก้ไข] 3. ใช้ ID ที่เสถียร (ถ้ามี) หรือ Name (ถ้าไม่มี)
-      const mainId = selectedMainCat?.id || selectedMainCategory;
-      const subId = selectedSubCat?.id || selectedSubCategory;
-      const id = `${mainId}_${subId}_${fieldValues}`;
-      const label = [selectedMainCategory, selectedSubCategory, ...Object.values(dynamicFields).filter(Boolean)].join(' / ');
-      return { id, label: `📋 ${label}` };
+  const fetchSharedJobs = useCallback(async () => {
+    const response = await api.getSharedJobs(projectId);
+    if (response.success && response.data) {
+      // (เราจะกรองเฉพาะงานที่ยังไม่เสร็จ และเรียงตามวันที่อัปเดตล่าสุด)
+      const pendingJobs = response.data
+        .filter(job => job.status === 'pending')
+        .sort((a, b) => new Date(b.lastUpdatedAt).getTime() - new Date(a.lastUpdatedAt).getTime());
+      setSharedJobs(pendingJobs);
     } else {
-      const dateStr = new Date().toISOString().split('T')[0];
-      return { id: `daily_${dateStr}`, label: '☀️ รายงานประจำวัน' };
+      console.error("Failed to fetch shared jobs:", response.error);
+      setSharedJobs([]); // ถ้าโหลดไม่สำเร็จ ให้เป็นค่าว่าง
     }
-  };
-
-  const fetchChecklistStatus = useCallback(async (
-    mainCat: string,
-    subCat: string,
-    fields: Record<string, string>
-  ) => {
-    if (!mainCat || !subCat) return;
-    setIsChecklistLoading(true);
-    setUploadedStatus(new Map());
-    try {
-      const response = await api.getChecklistStatus(projectId, mainCat, subCat, fields);
-      if (response.success && response.data) {
-        setUploadedStatus(new Map(Object.entries(response.data)));
-      } else {
-        throw new Error(response.error || 'Failed to fetch status');
-      }
-    } catch (error) {
-      console.error('Error fetching checklist status:', error);
-      alert(`ไม่สามารถดึงสถานะงาน: ${(error as Error).message}`);
-    }
-    setIsChecklistLoading(false);
   }, [projectId]);
 
   useEffect(() => {
-    if (step === 'topicList' && reportType === 'QC') { // <-- [แก้ไข] เพิ่ม check reportType
-      fetchChecklistStatus(selectedMainCategory, selectedSubCategory, dynamicFields);
-    }
-  }, [step, reportType, selectedMainCategory, selectedSubCategory, dynamicFields, fetchChecklistStatus]);
-  
-  const processNativePhoto = (file: File): Promise<string> => {
-    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (readerEvent) => {
-        const img = new Image();
-        img.onload = () => {
-          const MAX_WIDTH = 1600;
-          const { width, height } = img;
-          if (width <= MAX_WIDTH) {
-            resolve(img.src);
-            return;
-          }
-          const ratio = MAX_WIDTH / width;
-          const newHeight = height * ratio;
-          const canvas = document.createElement('canvas');
-          canvas.width = MAX_WIDTH;
-          canvas.height = newHeight;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            return reject(new Error('ไม่สามารถสร้าง canvas context ได้'));
-          }
-          ctx.drawImage(img, 0, 0, MAX_WIDTH, newHeight);
-          const resizedBase64 = canvas.toDataURL('image/jpeg', 0.9);
-          resolve(resizedBase64);
-        };
-        img.onerror = (err) => reject(new Error('ไม่สามารถโหลด Image object ได้'));
-        img.src = readerEvent.target?.result as string;
-      };
-      reader.onerror = (err) => reject(new Error('ไม่สามารถอ่านไฟล์ได้'));
-      reader.readAsDataURL(file);
-    });
-  };
+    fetchSharedJobs();
+  }, [fetchSharedJobs]);
 
-  const handleNativeFileSelected = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-    isNewCapture: boolean // true = ถ่าย, false = แนบ
-  ) => {
-    const file = event.target.files?.[0];
-    if (event.target) event.target.value = "";
-    if (!file) return;
-    setIsProcessingPhoto(true);
+  const getCurrentJobIdentifier = (): { id: string, label: string } => { if (reportType === 'QC') { const fieldValues = Object.values(dynamicFields).filter(Boolean).join('_') || 'default'; const mainId = selectedMainCat?.id || selectedMainCategory; const subId = selectedSubCat?.id || selectedSubCategory; const id = `${mainId}_${subId}_${fieldValues}`; const label = [selectedMainCategory, selectedSubCategory, ...Object.values(dynamicFields).filter(Boolean)].join(' / '); return { id, label: `📋 ${label}` }; } else { const dateStr = new Date().toISOString().split('T')[0]; return { id: `daily_${dateStr}`, label: '☀️ รายงานประจำวัน' }; } };
+  const fetchChecklistStatus = useCallback(async ( mainCat: string, subCat: string, fields: Record<string, string> ) => { if (!mainCat || !subCat) return; setIsChecklistLoading(true); setUploadedStatus(new Map()); try { const response = await api.getChecklistStatus(projectId, mainCat, subCat, fields); if (response.success && response.data) { setUploadedStatus(new Map(Object.entries(response.data))); } else { throw new Error(response.error || 'Failed to fetch status'); } } catch (error) { console.error('Error fetching checklist status:', error); alert(`ไม่สามารถดึงสถานะงาน: ${(error as Error).message}`); } setIsChecklistLoading(false); }, [projectId]);
+  useEffect(() => { if (step === 'topicList' && reportType === 'QC') { fetchChecklistStatus(selectedMainCategory, selectedSubCategory, dynamicFields); } }, [step, reportType, selectedMainCategory, selectedSubCategory, dynamicFields, fetchChecklistStatus]);
+  const processNativePhoto = (file: File): Promise<string> => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = (readerEvent) => { const img = new Image(); img.onload = () => { const MAX_WIDTH = 1600; const { width, height } = img; if (width <= MAX_WIDTH) { resolve(img.src); return; } const ratio = MAX_WIDTH / width; const newHeight = height * ratio; const canvas = document.createElement('canvas'); canvas.width = MAX_WIDTH; canvas.height = newHeight; const ctx = canvas.getContext('2d'); if (!ctx) { return reject(new Error('ไม่สามารถสร้าง canvas context ได้')); } ctx.drawImage(img, 0, 0, MAX_WIDTH, newHeight); const resizedBase64 = canvas.toDataURL('image/jpeg', 0.9); resolve(resizedBase64); }; img.onerror = (err) => reject(new Error('ไม่สามารถโหลด Image object ได้')); img.src = readerEvent.target?.result as string; }; reader.onerror = (err) => reject(new Error('ไม่สามารถอ่านไฟล์ได้')); reader.readAsDataURL(file); }); };
+  const handleNativeFileSelected = async ( event: React.ChangeEvent<HTMLInputElement>, isNewCapture: boolean ) => { 
+    const file = event.target.files?.[0]; 
+    if (event.target) event.target.value = ""; 
+    if (!file) return; 
+    setIsProcessingPhoto(true); 
     
+    // [เพิ่ม] ดึง location ทันทีตอนถ่าย/แนบรูป
+    let locationString: string | null = null;
     try {
-      const photoBase64 = await processNativePhoto(file);
-      
-      // Logic การตัดสินใจว่าจะใส่ลายน้ำหรือไม่
-      // 1. ถ้าถ่ายใหม่ (isNewCapture=true) -> บังคับใส่ลายน้ำ
-      // 2. ถ้าแนบไฟล์ (isNewCapture=false) -> ดูจากค่า Checkbox
-      const shouldAddWatermark = isNewCapture || addWatermarkToAttached;
-      
-      const newQueueItem: PhotoQueueItem = {
-        base64: photoBase64,
-        addWatermark: shouldAddWatermark
-      };
-      
-      const newQueue = new Map(photoQueue);
-      
-      if (reportType === 'QC' && currentTopic) {
-          newQueue.set(currentTopic, newQueueItem); // <-- ใส่ Item object
-          setPhotoQueue(newQueue);
-          setCurrentTopic('');
-      } else if (reportType === 'Daily' && step === 'camera') {
-          const timestampKey = `daily_${Date.now()}`;
-          newQueue.set(timestampKey, newQueueItem); // <-- ใส่ Item object
-          setPhotoQueue(newQueue);
-      }
-    } catch (error) {
-      console.error("Error processing native photo:", error);
-      alert("เกิดข้อผิดพลาดในการประมวลผลรูป: " + (error as Error).message);
-    } finally {
-      setIsProcessingPhoto(false);
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { 
+          enableHighAccuracy: true, timeout: 5000 
+        });
+      });
+      locationString = await reverseGeocodeNominatim(
+        position.coords.latitude,
+        position.coords.longitude
+      );
+    } catch (geoError) {
+      console.warn('Could not get geolocation:', geoError);
+      locationString = null;
     }
+    
+    try { 
+      const photoBase64 = await processNativePhoto(file); 
+      const shouldAddWatermark = isNewCapture || addWatermarkToAttached; 
+      const newQueueItem: PhotoQueueItem = { 
+        base64: photoBase64, 
+        addWatermark: shouldAddWatermark,
+        timestamp: new Date().toISOString(),  // [เพิ่ม] เก็บเวลาถ่าย
+        location: locationString               // [เพิ่ม] เก็บตำแหน่ง
+      }; 
+      const newQueue = new Map(photoQueue); 
+      if (reportType === 'QC' && currentTopic) { 
+        newQueue.set(currentTopic, newQueueItem); 
+        setPhotoQueue(newQueue); 
+        setCurrentTopic(''); 
+      } else if (reportType === 'Daily' && step === 'camera') { 
+        const timestampKey = `daily_${Date.now()}`; 
+        newQueue.set(timestampKey, newQueueItem); 
+        setPhotoQueue(newQueue); 
+      } 
+    } catch (error) { 
+      console.error("Error processing native photo:", error); 
+      alert("เกิดข้อผิดพลาดในการประมวลผลรูป: " + (error as Error).message); 
+    } finally { 
+      setIsProcessingPhoto(false); 
+    } 
   };
-
   const handleUploadAll = async () => {
     if (photoQueue.size === 0) return;
     setIsUploading(true); setUploadStatus(`กำลังอัปโหลด 0/${photoQueue.size}...`); setStep('uploading');
@@ -271,31 +202,23 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       console.warn('Could not get geolocation or geocode:', geoError);
       locationString = 'ไม่สามารถระบุตำแหน่งได้';
     }
-    
-    // ... (ตรรกะการวนลูป Upload ไม่ต้องแก้) ...
+
+    const { id: jobId, label: jobLabel } = getCurrentJobIdentifier();
     let successCount = 0; const totalPhotosInQueue = photoQueue.size; const topicsJustUploaded = new Map<string, boolean>();
     try {
-      const photosToUpload = Array.from(photoQueue.entries()); // <-- ได้ Array ของ [key, PhotoQueueItem]
-      
+      const photosToUpload = Array.from(photoQueue.entries()); 
       for (const [key, photoItem] of photosToUpload) {
         if (!photoItem || !photoItem.base64) continue;
-        
-        let photoToUpload = photoItem.base64; // รูปตั้งต้น (อาจจะไม่ใส่ลายน้ำ)
-        
-        // --- ตรวจสอบว่าต้องใส่ลายน้ำหรือไม่ ---
+        let photoToUpload = photoItem.base64; 
         if (photoItem.addWatermark) {
           setUploadStatus(`กำลังเพิ่มลายน้ำรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
           const timestamp = new Date().toISOString();
           const watermarkOptions: WatermarkOptions = { location: locationString, timestamp: timestamp };
-          photoToUpload = await addWatermark(photoItem.base64, watermarkOptions); // ได้รูปใหม่ที่มีลายน้ำ
+          photoToUpload = await addWatermark(photoItem.base64, watermarkOptions); 
         } else {
-          // ไม่ต้องใส่ลายน้ำ
           setUploadStatus(`กำลังเตรียมรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
         }
-        // ------------------------------------
-
         setUploadStatus(`กำลังอัปโหลดรูปที่ ${successCount + 1}/${totalPhotosInQueue}...`);
-        
         let descriptionForUpload = '';
         if (reportType === 'Daily') {
           descriptionForUpload = dailyDescriptions.get(key) || '';
@@ -303,33 +226,54 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         
         const uploadData: UploadPhotoData = {
           projectId, projectName: projectName || 'N/A', reportType, 
-          photoBase64: photoToUpload, // <-- [แก้ไข] ใช้รูปที่ผ่านการตรวจสอบแล้ว
-          timestamp: new Date().toISOString(), // <-- [แก้ไข] timestamp ควรเป็นเวลาปัจจุบันเสมอ
+          photoBase64: photoToUpload, 
+          timestamp: new Date().toISOString(),
           location: locationString,
+          jobId: jobId, // <-- [ใหม่] ส่ง Job ID ไปกับรูป
           ...(reportType === 'QC'
             ? { mainCategory: selectedMainCategory, subCategory: selectedSubCategory, topic: key, dynamicFields }
             : { description: descriptionForUpload, dynamicFields: {} }
           ),
         };
-        
         const response = await api.uploadPhoto(uploadData);
         if (!response.success) throw new Error(`อัปโหลดล้มเหลวที่รูป: ${reportType === 'QC' ? key : `Daily Photo ${successCount + 1}`} (${response.error})`);
         if (reportType === 'QC') {
             topicsJustUploaded.set(key, true);
         }
         successCount++;
-      }
-
-      // ... (ตรรกะ Success ไม่ต้องแก้) ...
+      }  
       setUploadStatus(`อัปโหลดสำเร็จ ${successCount} รูป!`);
       const newUploadedStatus = new Map(uploadedStatus); topicsJustUploaded.forEach((value, key) => newUploadedStatus.set(key, value));
       const completedCount = newUploadedStatus.size;
-      const totalTopicCount = topics.length; // <-- [แก้ไข] 4. topics ตอนนี้เป็น Array
-      const { id, label } = getCurrentJobIdentifier();
+      const totalTopicCount = topics.length;  
+
+      // [ใหม่] สร้าง Job Data และเรียก api.saveSharedJob
       if (reportType === 'QC') {
-        saveRecentJob(projectId, { id, label, reportType, mainCategory: selectedMainCategory, subCategory: selectedSubCategory, dynamicFields, description: '' }, completedCount, totalTopicCount);
-        setRecentJobs(getRecentJobs(projectId));
+        const jobData: SharedJob = {
+          id: jobId,
+          label: jobLabel,
+          reportType: 'QC',
+          mainCategory: selectedMainCategory,
+          subCategory: selectedSubCategory,
+          dynamicFields: dynamicFields,
+          completedTopics: completedCount,
+          totalTopics: totalTopicCount,
+          status: (completedCount >= totalTopicCount) ? 'completed' : 'pending',
+          lastUpdatedAt: new Date().toISOString()
+        };
+        // เราไม่จำเป็นต้องรอ (await) ให้เสร็จ
+        api.saveSharedJob(projectId, jobData).then(response => {
+          if (response.success) {
+            fetchSharedJobs(); // [ใหม่] เมื่อบันทึกสำเร็จ ให้ดึงรายการใหม่
+          } else {
+            console.error("Failed to save shared job:", response.error);
+          }
+        });
       }
+
+      // [แก้ไข] ลบ setRecentJobs
+      // setRecentJobs(getRecentJobs(projectId));
+      
       setTimeout(() => {
         setPhotoQueue(new Map());
         setDailyDescriptions(new Map());
@@ -341,155 +285,156 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     } catch (error) { console.error('Upload failed:', error); setUploadStatus(`อัปโหลดล้มเหลว: ${(error as Error).message}`); setIsUploading(false); }
   };
 
-
-  // --- Logic การควบคุม Wizard ---
-  const resetAllState = () => {
+  const goToTypeScreen = () => {
     setPhotoQueue(new Map()); setCurrentTopic(''); setUploadStatus('');
     setDailyDescriptions(new Map());
     setSelectedMainCategory(''); setSelectedSubCategory(''); setDynamicFields({});
-    setUploadedStatus(new Map()); setStep('type'); setRecentJobs(getRecentJobs(projectId));
-    setAddWatermarkToAttached(true); // [ใหม่] 7. Reset Checkbox
+    setUploadedStatus(new Map()); setStep('type');
+    setAddWatermarkToAttached(true); 
+    
+    // [ใหม่] ดึงข้อมูล Job ล่าสุดทุกครั้งที่กลับมาหน้าแรก
+    fetchSharedJobs(); 
   };
-
-  const handleDynamicFieldChange = (fieldName: string, value: string) => {
-    setDynamicFields(prev => ({ ...prev, [fieldName]: value }));
-  };
-
+  const handleDynamicFieldChange = (fieldName: string, value: string) => { setDynamicFields(prev => ({ ...prev, [fieldName]: value })); };
   const handleSelectReportType = (type: 'QC' | 'Daily') => {
-      resetAllState();
+      // [แก้ไข] เรียกใช้ goToTypeScreen แทน
+      goToTypeScreen(); 
       setReportType(type);
       if (type === 'QC') setStep('mainCat');
       else setStep('camera');
   };
-
-  const handleSelectMainCat = (mainCat: string) => {
-    setSelectedMainCategory(mainCat);
-    setSelectedSubCategory('');
-    setPhotoQueue(new Map());
-    setUploadedStatus(new Map());
-    setStep('subCat');
-  };
-
-  const handleSelectSubCat = (subCat: string) => {
-    setSelectedSubCategory(subCat);
-    setPhotoQueue(new Map());
-    setUploadedStatus(new Map());
-    
-    // [แก้ไข] 5. ใช้ Array .find() เพื่อหา config
-    const mainCat = mainCategories.find(m => m.name === selectedMainCategory);
-    const config = mainCat?.subCategories.find(s => s.name === subCat);
-    
-    if (config?.dynamicFields && config.dynamicFields.length > 0) {
-      setStep('dynamicFields');
-    } else {
-      setStep('topicList');
-    }
-  };
-
-  const handleDynamicFieldsSubmit = () => {
-    setPhotoQueue(new Map());
-    setUploadedStatus(new Map());
-    setStep('topicList');
-  };
+  const handleSelectMainCat = (mainCat: string) => { setSelectedMainCategory(mainCat); setSelectedSubCategory(''); setPhotoQueue(new Map()); setUploadedStatus(new Map()); setStep('subCat'); };
+  const handleSelectSubCat = (subCat: string) => { setSelectedSubCategory(subCat); setPhotoQueue(new Map()); setUploadedStatus(new Map()); const mainCat = mainCategories.find(m => m.name === selectedMainCategory); const config = mainCat?.subCategories.find(s => s.name === subCat); if (config?.dynamicFields && config.dynamicFields.length > 0) { setStep('dynamicFields'); } else { setStep('topicList'); } };
+  const handleDynamicFieldsSubmit = () => { setPhotoQueue(new Map()); setUploadedStatus(new Map()); setStep('topicList'); };
+  const handleStartPhotoForTopic = (topic: string, type: 'capture' | 'attach') => { setCurrentTopic(topic); if (type === 'capture') { cameraInputRef.current?.click(); } else { attachInputRef.current?.click(); } };
+  const handleDailyDescriptionChange = (photoKey: string, text: string) => { const newDescriptions = new Map(dailyDescriptions); newDescriptions.set(photoKey, text); setDailyDescriptions(newDescriptions); };
+  const handleDeleteDailyPhoto = (photoKey: string) => { const newQueue = new Map(photoQueue); const newDescriptions = new Map(dailyDescriptions); newQueue.delete(photoKey); newDescriptions.delete(photoKey); setPhotoQueue(newQueue); setDailyDescriptions(newDescriptions); }; 
   
-  const handleStartPhotoForTopic = (topic: string, type: 'capture' | 'attach') => {
-    setCurrentTopic(topic);
-    if (type === 'capture') {
-      cameraInputRef.current?.click();
-    } else {
-      attachInputRef.current?.click();
-    }
-  };
-
-  const handleDailyDescriptionChange = (photoKey: string, text: string) => {
-    const newDescriptions = new Map(dailyDescriptions);
-    newDescriptions.set(photoKey, text);
-    setDailyDescriptions(newDescriptions);
-  };
-
-  const handleDeleteDailyPhoto = (photoKey: string) => {
-    const newQueue = new Map(photoQueue);
-    const newDescriptions = new Map(dailyDescriptions);
-    newQueue.delete(photoKey);
-    newDescriptions.delete(photoKey);
-    setPhotoQueue(newQueue);
-    setDailyDescriptions(newDescriptions);
-  };
-
-  const handleSelectRecentJob = (job: PersistentJob) => {
-    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
+  const handleSelectSharedJob = (job: SharedJob) => {
     if (job.reportType === 'QC') {
-        setReportType('QC'); setSelectedMainCategory(job.mainCategory); setSelectedSubCategory(job.subCategory); setDynamicFields(job.dynamicFields);
-        setPhotoQueue(new Map()); setUploadedStatus(new Map()); setStep('topicList');
+        setReportType('QC'); 
+        setSelectedMainCategory(job.mainCategory); 
+        setSelectedSubCategory(job.subCategory); 
+        setDynamicFields(job.dynamicFields);
+        setPhotoQueue(new Map()); 
+        setUploadedStatus(new Map()); 
+        setStep('topicList');
     } else {
-        setReportType('Daily');
-        setPhotoQueue(new Map()); setDailyDescriptions(new Map());
-        setStep('camera');
+        // (ยังไม่รองรับการ "ทำต่อ" สำหรับ Daily Job ที่แชร์กัน)
+        // setReportType('Daily');
+        // setPhotoQueue(new Map()); 
+        // setDailyDescriptions(new Map());
+        // setStep('camera');
     }
   };
 
   const goBack = () => {
-    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
     if (isUploading) return;
     switch (step) {
-      case 'mainCat': setStep('type'); break;
+      case 'mainCat': goToTypeScreen(); break; // [แก้ไข]
       case 'subCat': setStep('mainCat'); break;
       case 'dynamicFields': setStep('subCat'); break;
       case 'topicList': 
-        // [แก้ไข] 6. กลับไปหน้า subCat ถ้ามี dynamic fields
         if (requiredDynamicFields.length > 0) setStep('dynamicFields');
         else setStep('subCat');
         break;
       case 'dailyReview': setStep('camera'); break;
-      case 'camera':
-        setStep('type');
-        break;
-      default:
-        setStep('type');
+      case 'camera': goToTypeScreen(); break; // [แก้ไข]
+      default: goToTypeScreen(); // [แก้ไข]
     }
   };
 
-  // --- Render ส่วนของ Wizard ---
+  // --- Render Functions (มีการแก้ไข className) ---
+  
+  // [แก้ไข] ใช้ Bracket Notation styles['...']
   const renderChecklistHeader = () => {
-    // ... (ฟังก์ชันนี้ไม่ต้องแก้) ...
     if (reportType === 'QC') {
       const parts = [selectedMainCategory, selectedSubCategory, ...Object.values(dynamicFields)];
-      return <div className="checklist-header">{parts.filter(Boolean).join(' / ')}</div>;
+      return <div className={styles['checklist-header']}>{parts.filter(Boolean).join(' / ')}</div>;
     }
     return null;
   };
 
+  // [แก้ไข] ใช้ Bracket Notation styles['...']
   const renderDailyReviewItem = ([key, photoItem]: [string, PhotoQueueItem]) => (
-    <div key={key} className="daily-review-item">
-      <img src={photoItem.base64} alt={`Daily ${key}`} className="daily-review-thumbnail" />
+    <div key={key} className={styles['daily-review-item']}>
+      <img 
+        src={photoItem.base64} 
+        alt={`Daily ${key}`} 
+        className={styles['daily-review-thumbnail']}
+        onClick={() => setPreviewData({
+          url: photoItem.base64,
+          timestamp: photoItem.timestamp,
+          location: photoItem.location
+        })}
+        style={{ cursor: 'pointer' }}
+        title="กดเพื่อดูรูปขนาดใหญ่"
+      />
       
-      {/* [ใหม่] เพิ่ม wrapper เพื่อจัด layout */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
         <textarea
           value={dailyDescriptions.get(key) || ''}
           onChange={(e) => handleDailyDescriptionChange(key, e.target.value)}
           placeholder="เพิ่มคำบรรยาย (Optional)..."
           rows={3}
-          className="daily-review-textarea"
+          className={styles['daily-review-textarea']}
         />
-        {/* [ใหม่] แสดงสถานะลายน้ำ */}
         <small style={{ color: '#555', paddingLeft: '5px' }}>
           {photoItem.addWatermark ? '✅ จะเพิ่มลายน้ำ' : '❌ ไม่เพิ่มลายน้ำ'}
         </small>
       </div>
 
-      <button onClick={() => handleDeleteDailyPhoto(key)} className="daily-review-delete-button">🗑️</button>
+      <button onClick={() => handleDeleteDailyPhoto(key)} className={styles['daily-review-delete-button']}>🗑️</button>
     </div>
   );
+  
+  // [แก้ไข] ใช้ Bracket Notation styles['...']
   const renderPreviewModal = () => {
-      if (!previewImageUrl) return null;
+      if (!previewData) return null;
+
+      // [เพิ่ม] จัดรูปแบบวันที่
+      let formattedTimestamp = '';
+      if (previewData.timestamp) {
+        const date = new Date(previewData.timestamp);
+        const datePart = date.toLocaleDateString('th-TH', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+        const timePart = date.toLocaleTimeString('th-TH', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+        formattedTimestamp = `${datePart} ${timePart}`;
+      }
+
+      // [เพิ่ม] แยก location เป็นบรรทัด (ถ้ามี \n)
+      const locationLines = previewData.location 
+        ? previewData.location.split('\n').filter(line => line.trim())
+        : ['ไม่สามารถระบุตำแหน่งได้'];
 
       return (
-        // กดที่พื้นหลังสีดำเพื่อปิด
-        <div className="preview-modal-overlay" onClick={() => setPreviewImageUrl(null)}>
-          <div className="preview-modal-content" onClick={(e) => e.stopPropagation()}>
-            <img src={previewImageUrl} alt="Preview" />
-            <button className="preview-modal-close" onClick={() => setPreviewImageUrl(null)}>
+        <div className={styles['preview-modal-overlay']} onClick={() => setPreviewData(null)}>
+          <div className={styles['preview-modal-content']} onClick={(e) => e.stopPropagation()}>
+            {/* [เพิ่ม] Container ครอบรูป + ลายน้ำ */}
+            <div className={styles['preview-image-container']}>
+              <img src={previewData.url} alt="Preview" />
+              
+              {/* [เพิ่ม] Watermark Overlay */}
+              {(formattedTimestamp || previewData.location) && (
+                <div className={styles['preview-watermark-overlay']}>
+                  {formattedTimestamp && <span>{formattedTimestamp}</span>}
+                  {/* [แก้ไข] แสดง location ทีละบรรทัด */}
+                  {locationLines.map((line, index) => (
+                    <span key={index}>{line}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button className={styles['preview-modal-close']} onClick={() => setPreviewData(null)}>
               &times;
             </button>
           </div>
@@ -497,23 +442,23 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       );
     };
 
+  // [แก้ไข] ใช้ Bracket Notation styles['...']
   return (
-    <div className="wizard-container">
-      {/* [แก้ไข] 10. เพิ่ม Input สำหรับ "แนบไฟล์" (ไม่มี capture) */}
+    <div className={styles['wizard-container']}>
       <input
         ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         style={{ display: 'none' }}
-        onChange={(e) => handleNativeFileSelected(e, true)} // true = ถ่ายใหม่
+        onChange={(e) => handleNativeFileSelected(e, true)} 
       />
       <input
         ref={attachInputRef}
         type="file"
         accept="image/*"
         style={{ display: 'none' }}
-        onChange={(e) => handleNativeFileSelected(e, false)} // false = แนบ
+        onChange={(e) => handleNativeFileSelected(e, false)} 
       />
       {renderPreviewModal()} 
 
@@ -532,33 +477,31 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
       {/* 1. Step: เลือกประเภท (Recent Jobs) */}
       {step === 'type' && (
-        <div className="wizard-step">
-          {/* ... (ปุ่ม QC/Daily ไม่ต้องแก้) ... */}
+        <div className={styles['wizard-step']}>
           <h2>1. เลือกประเภทรายงาน</h2>
-          <div className="selection-grid">
-            <div className="selection-card" onClick={() => handleSelectReportType('QC')}>
+          <div className={styles['selection-grid']}>
+            <div className={styles['selection-card']} onClick={() => handleSelectReportType('QC')}>
               <span style={{fontSize: '2rem'}}>📋</span>
               <p>รายงาน QC (ตามหัวข้อ)</p>
             </div>
-            <div className="selection-card daily" onClick={() => handleSelectReportType('Daily')}>
+            <div className={`${styles['selection-card']} ${styles.daily}`} onClick={() => handleSelectReportType('Daily')}>
               <span style={{fontSize: '2rem'}}>☀️</span>
               <p>รายงานประจำวัน (Daily)</p>
             </div>
           </div>
           
-          {/* ... (Recent Jobs render ไม่ต้องแก้) ... */}
-          {recentJobs.length > 0 && (
-            <div className="recent-jobs-container">
-              <h3>📌 งานที่ค้างอยู่</h3>
-              {recentJobs.map((job) => (
+          {sharedJobs.length > 0 && (
+            <div className={styles['recent-jobs-container']}>
+              <h3>📌 งานที่ค้างอยู่ (สำหรับทุกคน)</h3>
+              {sharedJobs.map((job) => (
                 <div
                   key={job.id}
-                  className="recent-job-item"
-                  onClick={() => handleSelectRecentJob(job)}
+                  className={styles['recent-job-item']}
+                  onClick={() => handleSelectSharedJob(job)} // [แก้ไข]
                 >
                   <span>{job.label}</span>
                   {job.reportType === 'QC' && job.totalTopics > 0 && (
-                     <span className="job-progress">
+                     <span style={{marginLeft: '10px', color: '#555', fontSize: '0.9em'}}> {/* (ใช้ inline style แทน .jobProgress) */}
                        (ถ่ายแล้ว {job.completedTopics}/{job.totalTopics})
                      </span>
                   )}
@@ -571,50 +514,47 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
       {/* 2. Step: เลือก Main Category */}
       {step === 'mainCat' && (
-        <div className="wizard-step">
+        <div className={styles['wizard-step']}>
           <h2>2. เลือกหมวดงานหลัก</h2>
           {renderChecklistHeader()}
-          <div className="selection-grid">
-            {/* [แก้ไข] 7. .map() จาก Array (MainCategory[]) */}
+          <div className={styles['selection-grid']}>
             {mainCategories.map((mainCat) => (
-              <div key={mainCat.id} className="selection-card" onClick={() => handleSelectMainCat(mainCat.name)}>
+              <div key={mainCat.id} className={styles['selection-card']} onClick={() => handleSelectMainCat(mainCat.name)}>
                 {mainCat.name}
               </div>
             ))}
           </div>
-          <div className="wizard-nav">
-            <button className="wizard-button secondary" onClick={goBack}>ย้อนกลับ</button>
+          <div className={styles['wizard-nav']}>
+            <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}>ย้อนกลับ</button>
           </div>
         </div>
       )}
       
       {/* 3. Step: เลือก Sub Category */}
       {step === 'subCat' && (
-        <div className="wizard-step">
+        <div className={styles['wizard-step']}>
           <h2>3. เลือกหมวดงานย่อย</h2>
           {renderChecklistHeader()}
-          <div className="selection-grid">
-            {/* [แก้ไข] 8. .map() จาก Array (SubCategory[]) */}
+          <div className={styles['selection-grid']}>
             {subCategories.map((subCat) => (
-              <div key={subCat.id} className="selection-card" onClick={() => handleSelectSubCat(subCat.name)}>
+              <div key={subCat.id} className={styles['selection-card']} onClick={() => handleSelectSubCat(subCat.name)}>
                 {subCat.name}
               </div>
             ))}
           </div>
-          <div className="wizard-nav">
-            <button className="wizard-button secondary" onClick={goBack}>ย้อนกลับ</button>
+          <div className={styles['wizard-nav']}>
+            <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}>ย้อนกลับ</button>
           </div>
         </div>
       )}
 
       {/* 4. Step: กรอก Dynamic Fields */}
       {step === 'dynamicFields' && (
-        <div className="wizard-step">
+        <div className={styles['wizard-step']}>
           <h2>4. กรอกข้อมูลเพิ่มเติม</h2>
           {renderChecklistHeader()}
-          {/* [แก้ไข] 9. เพิ่ม Type (string) เพื่อแก้ TS7006 */}
           {requiredDynamicFields.map((fieldName: string) => (
-            <div className="form-group" key={fieldName}>
+            <div className={styles['form-group']} key={fieldName}>
               <label>{fieldName}</label>
               <input
                 type="text"
@@ -624,16 +564,16 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
               />
             </div>
           ))}
-          <div className="wizard-nav">
-            <button className="wizard-button secondary" onClick={goBack}>ย้อนกลับ</button>
-            <button className="wizard-button" onClick={handleDynamicFieldsSubmit}>ถัดไป</button>
+          <div className={styles['wizard-nav']}>
+            <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}>ย้อนกลับ</button>
+            <button className={styles['wizard-button']} onClick={handleDynamicFieldsSubmit}>ถัดไป</button>
           </div>
         </div>
       )}
 
       {/* 5. Step: Topic Checklist */}
       {step === 'topicList' && (
-        <div className="wizard-step">
+        <div className={styles['wizard-step']}>
           <h2>5. ถ่ายรูปตามหัวข้อ</h2>
           {renderChecklistHeader()}
 
@@ -641,34 +581,35 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             <div className="loading-container" style={{height: '50vh'}}>กำลังตรวจสอบสถานะ...</div>
           ) : (
             <>
-            <div className="topic-list">
+            <div className={styles['topic-list']}>
                 {topics.map((topic: Topic) => {
                   const topicName = topic.name; 
                   const isQueued = photoQueue.has(topicName);
                   const isUploaded = uploadedStatus.has(topicName);
                   const queueItem = photoQueue.get(topicName);
-
                   const statusIcon = isUploaded ? '✅' : (isQueued ? '🔄' : '⚪️');
                   const statusLabel = isUploaded ? '(อัปโหลดแล้ว)' : '';
 
                   return (
-                    <div key={topic.id} className="topic-list-item"> 
-                      <span className="topic-list-item-status">
+                    <div key={topic.id} className={styles['topic-list-item']}> 
+                      <span className={styles['topic-list-item-status']}>
                         {statusIcon}
                       </span>
                       
-                      {/* [แก้ไข] 1. ทำให้ชื่อหัวข้อกดดูรูปได้ */}
                       <span 
-                        className={`topic-list-item-name ${isQueued ? 'viewable' : ''}`}
-                        onClick={() => isQueued && queueItem ? setPreviewImageUrl(queueItem.base64) : undefined}
+                        className={`${styles['topic-list-item-name']} ${isQueued ? styles.viewable : ''}`}
+                        onClick={() => isQueued && queueItem ? setPreviewData({ 
+                          url: queueItem.base64,
+                          timestamp: queueItem.timestamp,
+                          location: queueItem.location
+                        }) : undefined}
                         title={isQueued ? 'กดเพื่อดูรูป' : topicName}
                       >
                         {topicName} <span style={{color: '#888', fontSize: '0.8em'}}>{statusLabel}</span>
                       </span>
                       
-                      {/* 3. ปุ่มถ่ายรูป/แนบรูป (เหมือนเดิม) */}
                       <button
-                        className={`topic-list-item-button ${(isQueued || isUploaded) ? 'retake' : ''}`}
+                        className={`${styles['topic-list-item-button']} ${(isQueued || isUploaded) ? styles.retake : ''}`}
                         onClick={() => handleStartPhotoForTopic(topicName, 'capture')}
                         title="ถ่ายรูป (บังคับลายน้ำ)"
                       >
@@ -676,7 +617,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                       </button>
                       
                       <button
-                        className="topic-list-item-button attach"
+                        className={`${styles['topic-list-item-button']} ${styles.attach}`}
                         onClick={() => handleStartPhotoForTopic(topicName, 'attach')}
                         title="แนบรูป"
                       >
@@ -687,8 +628,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 })}
               </div>
 
-              {/* [ใหม่] 13. เพิ่ม Checkbox ควบคุมลายน้ำ */}
-              <div className="watermark-toggle">
+              <div className={styles['watermark-toggle']}>
                 <input 
                   type="checkbox" 
                   id="wm-toggle-qc" 
@@ -700,20 +640,20 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 </label>
               </div>
 
-              <div className="button-grid-container">
+              <div className={styles['button-grid-container']}>
                 <button
-                  className="wizard-button secondary"
+                  className={`${styles['wizard-button']} ${styles.secondary}`}
                   onClick={goBack}
-                  style={{ width: '100%' }} // ทำให้ปุ่มเต็มคอลัมน์
+                  style={{ width: '100%' }}
                 >
                   ย้อนกลับ
                 </button>
                 
                 <button
-                  className="upload-all-button"
+                  className={styles['upload-all-button']}
                   disabled={photoQueue.size === 0 || isUploading}
                   onClick={handleUploadAll}
-                  style={{ width: '100%' }} // ทำให้ปุ่มเต็มคอลัมน์
+                  style={{ width: '100%' }}
                 >
                   📤 อัปโหลด ({photoQueue.size})
                 </button>
@@ -725,21 +665,21 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
       {/* 6. Step: Daily Review */}
       {step === 'dailyReview' && (
-        <div className="wizard-step">
+        <div className={styles['wizard-step']}>
           <h2>📝 จัดการรูป & คำบรรยาย (Daily)</h2>
-          <div className="daily-review-list">
+          <div className={styles['daily-review-list']}>
              {photoQueue.size > 0 ? Array.from(photoQueue.entries()).map(renderDailyReviewItem) : null}
           </div>
           {photoQueue.size === 0 && ( <p style={{textAlign: 'center', color: '#888', margin: '40px 0'}}>ยังไม่มีรูปถ่าย</p> )}
           <button
-            className="upload-all-button"
+            className={styles['upload-all-button']}
             onClick={handleUploadAll}
             disabled={isUploading || photoQueue.size === 0}
           >
             📤 อัปโหลดทั้งหมด ({photoQueue.size}) รูป
           </button>
-          <div className="wizard-nav" style={{ justifyContent: 'center', borderTop: 'none', paddingTop: '10px' }}>
-            <button className="wizard-button secondary" onClick={() => setStep('camera')}>
+          <div className={styles['wizard-nav']} style={{ justifyContent: 'center', borderTop: 'none', paddingTop: '10px' }}>
+            <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={() => setStep('camera')}>
                📷 กลับไปถ่ายรูปเพิ่ม
             </button>
           </div>
@@ -748,16 +688,15 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
     {/* 7. Step: Camera (Daily) */}
       {step === 'camera' && (
-        <div className="wizard-step" style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className={styles['wizard-step']} style={{ display: 'flex', flexDirection: 'column' }}>
           <h2>☀️ รายงานประจำวัน</h2>
           <p style={{ textAlign: 'center', color: '#666', marginBottom: '30px' }}>
             กดปุ่ม "ถ่ายรูป" เพื่อเปิดกล้อง<br/>
             รูปที่ถ่ายจะถูกเพิ่มเข้าคิวอัตโนมัติ
           </p>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
-            {/* 1. ปุ่มถ่ายรูป */}
             <button 
-              className="wizard-button"
+              className={styles['wizard-button']}
               style={{ padding: '20px 40px', fontSize: '1.5rem', height: 'auto', lineHeight: '1.5' }}
               onClick={() => cameraInputRef.current?.click()}
             >
@@ -766,9 +705,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
               ถ่ายรูป (บังคับลายน้ำ)
             </button>
             
-            {/* 2. ปุ่มแนบรูป */}
             <button 
-              className="wizard-button secondary" // <-- ใช้ .secondary
+              className={`${styles['wizard-button']} ${styles.secondary}`}
               style={{ padding: '20px 40px', fontSize: '1.5rem', height: 'auto', lineHeight: '1.5' }}
               onClick={() => attachInputRef.current?.click()}
             >
@@ -778,8 +716,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             </button>
           </div>
 
-          {/* [ใหม่] 15. เพิ่ม Checkbox ควบคุมลายน้ำ (Daily) */}
-          <div className="watermark-toggle" style={{ marginTop: '20px', textAlign: 'center' }}>
+          <div className={styles['watermark-toggle']} style={{ marginTop: '20px', textAlign: 'center' }}>
             <input 
               type="checkbox" 
               id="wm-toggle-daily" 
@@ -793,13 +730,13 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           <p style={{ textAlign: 'center', color: '#666', marginTop: '30px' }}>
             มี {photoQueue.size} รูปในคิว
           </p>
-          <div className="wizard-nav">
-            <button className="wizard-button secondary" onClick={goBack}>
+          <div className={styles['wizard-nav']}>
+            <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}>
               ย้อนกลับ
             </button>
             {photoQueue.size > 0 ? (
               <button 
-                className="wizard-button" 
+                className={styles['wizard-button']} 
                 onClick={() => setStep('dailyReview')}
                 title="จัดการรูปและเพิ่มคำบรรยาย"
               >
@@ -814,11 +751,11 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
     {/* 8. Step: Uploading */}
     {step === 'uploading' && (
-      <div className="wizard-step" style={{textAlign: 'center', paddingTop: '100px'}}>
+      <div className={styles['wizard-step']} style={{textAlign: 'center', paddingTop: '100px'}}>
         <h2>{uploadStatus}</h2>
         {isUploading && <p>กรุณารอสักครู่...</p>}
         {!isUploading && uploadStatus.includes('ล้มเหลว') && (
-          <button className="wizard-button" onClick={() => setStep(reportType === 'QC' ? 'topicList' : 'dailyReview')}>
+          <button className={styles['wizard-button']} onClick={() => setStep(reportType === 'QC' ? 'topicList' : 'dailyReview')}>
             กลับไปแก้ไข
           </button>
         )}

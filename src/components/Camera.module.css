@@ -1,4 +1,5 @@
-/* Filename: src/components/Camera.css (REPLACED) */
+/* Filename: src/components/Camera.module.css (REFACTORED) */
+/* (เนื้อหาเดิมจาก Camera.css) */
 
 .wizard-container {
   width: 100%;
@@ -30,7 +31,7 @@
   margin-bottom: 10px;
 }
 
-/* --- [ใหม่] "งานที่ทำต่อเนื่อง" (Recent Jobs) --- */
+/* --- "งานที่ทำต่อเนื่อง" (Recent Jobs) --- */
 .recent-jobs-container {
   margin-top: 30px;
   border-top: 1px solid #eee;
@@ -61,7 +62,7 @@
   background: #f0f0f0;
 }
 
-/* --- [เพิ่ม] ส่วนหัวของ Checklist --- */
+/* --- ส่วนหัวของ Checklist --- */
 .checklist-header {
   font-size: 0.9rem;
   color: #555;
@@ -113,7 +114,7 @@
   color: #fff;
 }
 
-/* --- [ใหม่] Topic Checklist --- */
+/* --- Topic Checklist --- */
 .topic-list {
   display: flex;
   flex-direction: column;
@@ -141,7 +142,6 @@
   font-size: 0.95rem;
   color: var(--text-color);
   padding-right: 10px;
-  /* [แก้ไข] 1. เพิ่ม transition และ cursor เริ่มต้น */
   cursor: default;
   transition: color 0.2s;
 }
@@ -176,7 +176,6 @@
   color: #555;
   font-size: 1.1rem; /* 🔄 */
 }
-
 
 /* --- Form Group (สำหรับ Dynamic Fields) --- */
 .form-group {
@@ -235,7 +234,7 @@
   background-color: #e0e0e0;
 }
 
-/* --- [ใหม่] ปุ่ม Upload All --- */
+/* --- ปุ่ม Upload All --- */
 .upload-all-button {
   background-color: #27ae60; /* สีเขียว */
   color: white;
@@ -273,7 +272,6 @@
 }
 .watermark-toggle input[type="checkbox"] {
   margin-right: 10px;
-  /* ทำให้ Checkbox ใหญ่ขึ้นเล็กน้อยสำหรับมือถือ */
   width: 18px;
   height: 18px;
   transform: scale(1.1);
@@ -284,19 +282,19 @@
   cursor: pointer;
 }
 
-
+/* --- Modal ดูรูป --- */
 .preview-modal-overlay {
-  position: fixed; /* แสดงทับเต็มจอ */
+  position: fixed; 
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.85); /* พื้นหลังสีดำโปร่งแสง */
+  background-color: rgba(0, 0, 0, 0.85); 
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1050; /* ให้อยู่เหนือสุด */
-  padding: 15px; /* เว้นขอบสำหรับจอมือถือ */
+  z-index: 1050; 
+  padding: 15px; 
 }
 
 .preview-modal-content {
@@ -309,17 +307,57 @@
   box-shadow: 0 5px 20px rgba(0,0,0,0.4);
 }
 
+/* [เพิ่ม] Container สำหรับรูป + ลายน้ำ */
+.preview-image-container {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
 .preview-modal-content img {
   display: block;
   max-width: 100%;
-  max-height: 80vh; /* ให้รูปสูงไม่เกิน 80% ของจอ */
-  object-fit: contain; /* ให้รูปพอดี ไม่ล้น */
+  max-height: 80vh; 
+  object-fit: contain; 
   border-radius: 4px;
+}
+
+/* [เพิ่ม] ลายน้ำสำหรับ Preview Modal */
+.preview-watermark-overlay {
+  position: absolute;
+  bottom: 0.5vmin;   /* [แก้ไข] ใช้ vmin */
+  right: 0.5vmin;    /* [แก้ไข] ใช้ vmin */
+  left: auto;
+  z-index: 10;
+  max-width: 50%;
+
+  background-color: transparent;
+  color: white;
+  padding: 0.3vmin 0.6vmin; /* [แก้ไข] ใช้ vmin */
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1vmin;      /* [แก้ไข] ใช้ vmin */
+
+  /* [สำคัญ] ใช้ vmin เพื่อให้ขนาดสัมพันธ์กับ viewport */
+  font-size: 1.5vmin;  /* [แก้ไข] ประมาณ 1.5% ของหน้าจอ */
+  line-height: 1.3;
+  font-family: Arial, sans-serif;
+  font-weight: 600;
+  
+  /* [สำคัญ] เพิ่ม Text Shadow เพื่อให้อ่านง่าย */
+  text-shadow: 
+    0.1vmin 0.1vmin 0.3vmin rgba(0, 0, 0, 0.9),
+    -0.1vmin -0.1vmin 0.2vmin rgba(0, 0, 0, 0.8);
+
+  word-break: break-word;
+  text-align: right;
 }
 
 .preview-modal-close {
   position: absolute;
-  top: -15px; /* วางปุ่มปิดไว้มุมขวาบน (อยู่นอกกรอบรูป) */
+  top: -15px; 
   right: -15px;
   background: white;
   color: black;
@@ -329,17 +367,17 @@
   height: 30px;
   font-size: 1.5rem;
   font-weight: bold;
-  line-height: 28px; /* จัดกากบาทให้อยู่กลาง */
+  line-height: 28px; 
   cursor: pointer;
   box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  z-index: 20; /* [เพิ่ม] ให้ปุ่มปิดอยู่เหนือลายน้ำ */
 }
 
-/* --- Camera View (หน้ากล้อง) --- */
-
+/* --- Daily Review --- */
 .daily-review-list {
   display: flex;
   flex-direction: column;
-  gap: 15px; /* ลดระยะห่างลงเล็กน้อย */
+  gap: 15px; 
   margin-bottom: 20px;
 }
 
@@ -350,42 +388,41 @@
   border: 1px solid #eee;
   border-radius: 8px;
   padding: 10px;
-  gap: 12px; /* ปรับระยะห่าง */
+  gap: 12px; 
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .daily-review-thumbnail {
-  /* [แก้ไข] เพิ่มขนาด Thumbnail */
   width: 120px;
   height: 120px;
   object-fit: cover;
   border-radius: 6px;
   flex-shrink: 0;
-  cursor: pointer; /* <-- เพิ่ม: ทำให้รู้ว่ากดดูรูปใหญ่ได้ (ถ้าจะทำฟีเจอร์นี้) */
+  cursor: pointer;
 }
 
 .daily-review-textarea {
   flex-grow: 1;
   border: 1px solid #ddd;
   border-radius: 6px;
-  padding: 8px 10px; /* ปรับ Padding */
-  font-size: 0.95rem; /* เพิ่มขนาดตัวอักษรเล็กน้อย */
-  min-height: 120px; /* [แก้ไข] ทำให้สูงเท่า Thumbnail */
+  padding: 8px 10px; 
+  font-size: 0.95rem; 
+  min-height: 120px; 
   resize: vertical;
 }
 
 .daily-review-delete-button {
   background: none;
   border: none;
-  color: #c0392b; /* ปรับสีแดงให้อ่อนลงเล็กน้อย */
-  font-size: 1.4rem; /* [แก้ไข] ลดขนาดปุ่มลบ */
+  color: #c0392b; 
+  font-size: 1.4rem; 
   cursor: pointer;
-  padding: 8px; /* ปรับ Padding */
-  align-self: center; /* จัดกลางเหมือนเดิม */
-  flex-shrink: 0; /* ไม่ให้หด */
+  padding: 8px; 
+  align-self: center; 
+  flex-shrink: 0; 
 }
 
-.review-button { /* สไตล์ปุ่ม [📝 (x)] ในหน้า Camera */
+.review-button { 
     background-color: rgba(255, 255, 255, 0.8);
     color: var(--primary-color);
     border: none;
@@ -403,4 +440,46 @@
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 20px; /* ระยะห่างจาก Checkbox */
+}
+
+/* * --- 8. [ใหม่] Accessibility (ตามคำแนะนำ) --- 
+ */
+
+/* 8.1 Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .wizard-step {
+    animation: none;
+  }
+  .selection-card,
+  .selection-card:hover,
+  .wizard-button {
+    transition: none;
+  }
+}
+
+/* 8.2 Focus States */
+.selection-card:focus,
+.wizard-button:focus,
+.upload-all-button:focus,
+.topic-list-item-button:focus,
+.preview-modal-close:focus,
+.daily-review-delete-button:focus,
+.review-button:focus {
+  outline: 3px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Focus สำหรับ Input ที่มีขอบชัดเจนอยู่แล้ว */
+.form-group input:focus,
+.form-group textarea:focus,
+.daily-review-textarea:focus {
+   outline: 3px solid var(--primary-color);
+   outline-offset: 1px;
+}
+
+/* Focus สำหรับ Checkbox */
+.watermark-toggle input[type="checkbox"]:focus + label {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: 2px;
 }

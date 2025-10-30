@@ -70,28 +70,36 @@ async function migrateDataV2() {
     // ✅ [ใหม่] กำหนดค่า Default Settings ที่นี่
     const defaultReportSettings = {
         layoutType: "default",
-        photosPerPage: 6, // <-- ค่าเริ่มต้น 6 รูป
-        customHeaderText: "",
-        customFooterText: "",
+        // [แก้ไข] เพิ่ม field ตาม interface ล่าสุดใน api.ts
+        qcPhotosPerPage: 6,
+        dailyPhotosPerPage: 2,
+        // ลบ photosPerPage, customHeaderText, customFooterText ออก
         projectLogoUrl: ""
     };
 
     for (const project of projectsData) {
-      const projectId = project.id ? project.id.trim() : null;
-      if (!projectId) {
-        console.warn('Skipping project with missing ID:', project);
-        continue;
-      }
-      const projectRef = db.collection('projects').doc(projectId);
+        const projectId = project.id ? project.id.trim() : null;
+        if (!projectId) {
+            console.warn('Skipping project with missing ID:', project);
+            continue;
+        }
+        const projectRef = db.collection('projects').doc(projectId);
 
-      // ✅ [แก้ไข] เพิ่ม reportSettings เข้าไปตอน set ข้อมูล
-      projectBatch.set(projectRef, {
-        projectName: project.name || 'Unnamed Project',
-        projectCode: project.code || '',
-        isActive: true,
-        reportSettings: defaultReportSettings // <-- เพิ่มบรรทัดนี้
-      });
-      console.log(`  -> Preparing Project: ${projectId} (${project.name})`);
+        projectBatch.set(projectRef, {
+            projectName: project.name || 'Unnamed Project',
+            projectCode: project.code || '',
+            isActive: true,
+            reportSettings: defaultReportSettings // ใช้ชื่อ field ที่แก้ไขแล้ว
+        });
+
+        // --- [ใหม่] สร้าง Dummy Document ใน generatedReports ---
+        const generatedReportsRef = projectRef // ใช้ projectRef ที่สร้างไว้แล้ว
+            .collection('generatedReports')
+            .doc('_init'); // ชื่อเอกสาร Dummy
+        projectBatch.set(generatedReportsRef, { initialized: true, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+        // --- จบส่วนใหม่ ---
+
+        console.log(`  -> Preparing Project: ${projectId} (${project.name}) and generatedReports dummy doc.`); // [แก้ไข] เพิ่มข้อความ
     }
     await projectBatch.commit();
     console.log(`  -> Committed ${projectsData.length} projects.`);

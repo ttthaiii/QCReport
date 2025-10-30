@@ -1,0 +1,375 @@
+/* Filename: src/components/Reports.module.css (NEW FILE) */
+/* * นี่คือสไตล์ใหม่สำหรับ Reports.tsx 
+ * เราย้าย Inline Styles ทั้งหมด มาไว้ที่นี่
+ */
+
+.reportsContainer {
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* --- 1. Form Box --- */
+.formBox {
+  margin-bottom: 20px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.formBoxTitle {
+  margin-top: 0;
+  color: #495057;
+}
+
+/* --- 2. Report Type Toggle --- */
+.reportTypeToggle {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.reportTypeButton {
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: normal;
+  border: 1px solid #ced4da;
+  background-color: white;
+  color: #495057;
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 1;
+  transition: all 0.2s;
+}
+
+.reportTypeButton.activeQc {
+  font-weight: bold;
+  border-color: #007bff;
+  background-color: #007bff;
+  color: white;
+}
+
+.reportTypeButton.activeDaily {
+  font-weight: bold;
+  border-color: #28a745;
+  background-color: #28a745;
+  color: white;
+}
+
+/* --- 3. Form Grid & Inputs --- */
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.gridContainer {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.formInput {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+
+.subheading {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #495057;
+}
+
+.smallGridContainer {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.smallLabel {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+/* --- 4. Generate Button --- */
+.centerAlign {
+  text-align: center;
+}
+
+.generateButton {
+  padding: 12px 30px;
+  font-size: 16px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 200px;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.generateButton:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* --- 5. Preview Box --- */
+.previewBox {
+  margin-bottom: 20px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.previewTitle {
+  color: #495057;
+  margin-bottom: 15px;
+  margin-top: 0;
+}
+
+.previewList {
+  background-color: white;
+  padding: 15px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.previewItem {
+  padding: 8px 0;
+  border-bottom: 1px solid #e9ecef;
+  font-size: 14px;
+}
+.previewItem:last-child {
+  border-bottom: none;
+}
+
+.previewItemText {
+  color: #495057;
+}
+
+/* --- 6. Generated Box --- */
+.generatedBox {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #d4edda;
+  border-radius: 8px;
+  border: 1px solid #c3e6cb;
+}
+
+.generatedTitle {
+  margin-top: 0;
+  color: #155724;
+}
+
+.generatedInfo {
+  margin-bottom: 15px;
+}
+
+.generatedActions {
+  margin-top: 15px;
+}
+
+.generatedButton {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #28a745;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  margin-right: 10px;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
+}
+.generatedButton:hover {
+  background-color: #218838;
+}
+
+.generatedButtonDownload {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #17a2b8;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
+}
+.generatedButtonDownload:hover {
+  background-color: #117a8b;
+}
+
+/* --- [ใหม่] 7. Generated Reports List --- */
+.generatedReportsBox {
+  margin-top: 30px; /* ระยะห่างจาก Form Box */
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.generatedReportsTitle {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #495057;
+  font-size: 1.2rem; /* ขนาดใหญ่ขึ้นเล็กน้อย */
+}
+
+/* Container สำหรับรายการ */
+.reportListContainer {
+  max-height: 400px; /* จำกัดความสูง ให้ scroll ได้ */
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background-color: #fff; /* พื้นหลังสีขาว */
+}
+
+/* แต่ละรายการ */
+.reportListItem {
+  display: flex;
+  justify-content: space-between; /* แยก ข้อมูล กับ ปุ่ม */
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #f0f0f0;
+  gap: 15px; /* ระยะห่างระหว่าง Info กับ Actions */
+}
+.reportListItem:last-child {
+  border-bottom: none;
+}
+
+/* ส่วนแสดงข้อมูล (ซ้าย) */
+.reportInfo {
+  display: flex;
+  flex-direction: column; /* เรียงแนวตั้ง */
+  gap: 3px; /* ระยะห่างระหว่างบรรทัด */
+  flex: 1; /* ให้ยืดเต็มพื้นที่ */
+  min-width: 0; /* ป้องกัน Text overflow */
+}
+
+.reportFilename {
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* ตัดข้อความถ้าชื่อไฟล์ยาว */
+}
+
+.reportDate {
+  font-size: 0.85em;
+  color: #555;
+}
+
+.reportPhotoCount {
+  font-size: 0.85em;
+  color: #777;
+}
+
+/* ส่วนปุ่ม Actions (ขวา) */
+.reportActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0; /* ไม่ให้ปุ่มหด */
+}
+
+/* ป้าย "รูปใหม่!" */
+.newPhotosIndicator {
+  background-color: #ffeeba; /* สีเหลืองอ่อน */
+  color: #856404; /* สีน้ำตาลเข้ม */
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: bold;
+}
+
+/* ปุ่ม ดู / โหลด */
+.reportButtonView,
+.reportButtonDownload {
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  border: none; /* เพิ่ม */
+  cursor: pointer; /* เพิ่ม */
+}
+
+.reportButtonView {
+  background-color: #007bff; /* สีน้ำเงิน */
+}
+.reportButtonView:hover {
+  background-color: #0056b3;
+}
+
+.reportButtonDownload {
+  background-color: #17a2b8; /* สีฟ้าเทอร์ควอยซ์ */
+}
+.reportButtonDownload:hover {
+  background-color: #117a8b;
+}
+
+/* ข้อความ Loading / Error / No Reports */
+.loadingText,
+.errorText,
+.noReportsText {
+  text-align: center;
+  padding: 20px;
+  color: #555;
+  font-style: italic;
+}
+
+.errorText {
+  color: var(--error-color);
+  font-weight: bold;
+  font-style: normal;
+}
+
+/* --- [แก้ไข] 8. Accessibility Focus --- */
+.reportTypeButton:focus,
+.formInput:focus,
+.generateButton:focus,
+.generatedButton:focus,
+.generatedButtonDownload:focus,
+.reportButtonView:focus, /* <-- เพิ่ม */
+.reportButtonDownload:focus { /* <-- เพิ่ม */
+  outline: 3px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.reportButtonRegenerate {
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  font-weight: bold; /* <-- เพิ่ม */
+  color: #333; /* <-- เปลี่ยน */
+  background-color: #ffc107; /* สีเหลืองอัมพัน */
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background-color 0.2s, opacity 0.2s; /* <-- เพิ่ม opacity */
+  border: none;
+  cursor: pointer;
+}
+.reportButtonRegenerate:hover {
+  background-color: #e0a800;
+}
+
+/* Style ตอน Disable (ใช้ร่วมกัน) */
+.reportButtonRegenerate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #6c757d;
+  color: white;
+}
