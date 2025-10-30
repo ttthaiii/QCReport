@@ -25,13 +25,13 @@ const auth = getAuth(app);
 // Connect to emulators in development
 // (ใช้ process.env.NODE_ENV ก็ได้ หรือ window.location.hostname ก็ได้)
 if (process.env.NODE_ENV === 'development') {
-  console.log("Connecting to local emulators...");
+  console.log("Connecting to local emulators using 'localhost'...");
   
   // Connect to Functions emulator
   connectFunctionsEmulator(functions, 'localhost', 5001);
 
   // Connect to Firestore emulator <-- เพิ่มส่วนนี้
-  connectFirestoreEmulator(db, 'localhost', 8080);
+  connectFirestoreEmulator(db, 'localhost', 8081);
 
   // Connect to Storage emulator <-- เพิ่มส่วนนี้
   connectStorageEmulator(storage, 'localhost', 9199);

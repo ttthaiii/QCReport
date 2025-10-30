@@ -20,7 +20,7 @@ const ICONS = {
 };
 type View = 'projects' | 'camera' | 'reports' | 'admin';
 
-interface UserProfile extends DocumentData {
+export interface UserProfile extends DocumentData {
   uid: string;
   email: string;
   displayName: string;
@@ -327,6 +327,7 @@ function App() {
             projectName={selectedProject.projectName}
             projectConfig={projectConfig}
             onConfigUpdated={() => fetchProjectConfig()}
+            currentUserProfile={userProfile} // <-- [ใหม่] ส่ง Profile ไปด้วย
           />
         )}
         {/* [ใหม่] แสดงข้อความถ้า User ธรรมดาพยายามเข้า */}

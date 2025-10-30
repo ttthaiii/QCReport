@@ -153,10 +153,27 @@ const checkAuth = async (req: Request, res: Response, next: Function) => {
     // 1.5 ไปยังขั้นตอนต่อไป (API หลัก)
     return next(); 
     
-  } catch (error) {
-    console.error("Auth Error: Invalid token.", error);
-    return res.status(403).json({ success: false, error: 'Unauthorized: Invalid token.' });
-  }
+    } catch (error) {
+    console.error("Auth Error: Invalid token.", error);
+    return res.status(403).json({ success: false, error: 'Unauthorized: Invalid token.' });
+  }
+  return;
+};
+
+const checkRole = (roles: Array<'admin' | 'god'>) => {
+  return (req: any, res: any, next: any) => { // <-- ลบ :any
+    if (!req.user || !req.user.role) {
+      res.status(401).json({ success: false, error: 'Unauthorized: No user role found.' });
+      return; // <-- [แก้ไข]
+    }
+    
+    if (roles.includes(req.user.role)) {
+      return next(); 
+    }
+    
+    res.status(403).json({ success: false, error: 'Forbidden: Insufficient permissions.' });
+    return; // <-- [แก้ไข]
+  };
 };
 
 // ... (คง Endpoint /health, /projects, /project-config, /projects/:projectId/report-settings ไว้เหมือนเดิม) ...
@@ -197,6 +214,82 @@ app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
 });
 
 app.use(checkAuth);
+
+app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
+  try {
+    const listUsersResult = await admin.auth().listUsers();
+    const firestoreUsersSnap = await db.collection('users').get();
+    
+    const firestoreUsersData: { [uid: string]: any } = {};
+    firestoreUsersSnap.forEach(doc => {
+      firestoreUsersData[doc.id] = doc.data();
+    });
+
+    const combinedUsers = listUsersResult.users.map(userRecord => {
+      const firestoreData = firestoreUsersData[userRecord.uid] || {};
+      return {
+        uid: userRecord.uid,
+        email: userRecord.email,
+        displayName: firestoreData.displayName || userRecord.displayName || 'N/A',
+        role: firestoreData.role || 'user',
+        status: firestoreData.status || 'unknown',
+        assignedProjectId: firestoreData.assignedProjectId || null,
+      };
+    });
+
+    res.status(200).json({ success: true, data: combinedUsers });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * (Admin) อัปเดตสถานะผู้ใช้ (อนุมัติ/ปฏิเสธ)
+ * (ต้องเป็น Admin หรือ God)
+ */
+app.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), async (req, res): Promise<Response> => {
+  try {
+    const { uid } = req.params;
+    const { status } = req.body; // รับ 'approved' หรือ 'rejected'
+
+    if (!uid || !status || (status !== 'approved' && status !== 'rejected')) {
+       return res.status(400).json({ success: false, error: 'Invalid uid or status' });
+    }
+
+    const userDocRef = db.collection('users').doc(uid);
+    await userDocRef.update({ status: status });
+
+    return res.status(200).json({ success: true, data: { uid, newStatus: status } });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * (God) ตั้งค่า Role ผู้ใช้
+ * (ต้องเป็น God เท่านั้น)
+ */
+app.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { role } = req.body; // รับ 'user', 'admin', หรือ 'god'
+
+    if (!uid || !role || !['user', 'admin', 'god'].includes(role)) {
+      return res.status(400).json({ success: false, error: 'Invalid uid or role' });
+    }
+    
+    // 1. อัปเดตใน Auth Custom Claims (สำคัญต่อความปลอดภัยของ Rules)
+    await admin.auth().setCustomUserClaims(uid, { role: role });
+
+    // 2. อัปเดตใน Firestore (เพื่อให้ UI แสดงผลถูกต้อง)
+    const userDocRef = db.collection('users').doc(uid);
+    await userDocRef.update({ role: role });
+
+    return res.status(200).json({ success: true, data: { uid, newRole: role } });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // ✅ Get project configuration
 app.get("/project-config/:projectId", async (req: Request, res: Response): Promise<Response> => {

@@ -111,6 +111,16 @@ const DEFAULT_REPORT_SETTINGS: ReportSettings = {
   dailyPhotosPerPage: 2, // (คุณอาจจะอยากเปลี่ยนเป็น 6 เหมือนใน Config)
   projectLogoUrl: '',
 };
+
+export interface AdminUser {
+  uid: string;
+  email?: string;
+  displayName: string;
+  role: 'user' | 'admin' | 'god';
+  status: 'pending' | 'approved' | 'rejected' | 'unknown';
+  assignedProjectId: string | null;
+}
+
 // --- จบ Type definitions ---
 
 
@@ -118,7 +128,7 @@ const DEFAULT_REPORT_SETTINGS: ReportSettings = {
 // (อ้างอิงจาก firebase.json และ qc-functions/src/index.ts)
 const IS_DEV = process.env.NODE_ENV === 'development';
 const API_BASE_URL = IS_DEV 
-  ? 'http://localhost:5000/api'
+  ? 'http://localhost:5001/qcreport-54164/asia-southeast1/api' 
   : '/api';
 
 
@@ -183,6 +193,39 @@ export const api = {
     }
   },
 
+  getUsers: async (): Promise<ApiResponse<AdminUser[]>> => {
+    try {
+      const data = await fetchWithAuth('/admin/users', { method: 'GET' });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message, data: [] };
+    }
+  },
+
+  /**
+   * (Admin) อัปเดตสถานะผู้ใช้ (อนุมัติ/ปฏิเสธ)
+   */
+  updateUserStatus: async (uid: string, status: 'approved' | 'rejected'): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/admin/update-status/${uid}`, {
+        method: 'POST',
+        body: JSON.stringify({ status })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  /**
+   * (God) ตั้งค่า Role ผู้ใช้
+   */
+  setUserRole: async (uid: string, role: 'user' | 'admin' | 'god'): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/admin/set-role/${uid}`, {
+        method: 'POST',
+        body: JSON.stringify({ role })
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+  
   // --- Photo Upload (สำหรับหน้า Camera) ---
   uploadPhoto: async (data: UploadPhotoData): Promise<ApiResponse<any>> => {
     try {
