@@ -60,18 +60,21 @@ function createStableReportId(
   return createHash('sha256').update(combinedString).digest('hex').substring(0, 20);
 }
 
+const NEW_PROJECT_ID = "tts2004-smart-report-generate";
+
 if (!admin.apps.length) {
   if (IS_EMULATOR) {
     console.log("🔧 Running in EMULATOR mode (with Service Account)");
-    const serviceAccount = require("../keys/qcreport-54164-4d8f26cbb52f.json");
+    // TODO: ควรเปลี่ยนไปใช้ Service Account ของโปรเจกต์ใหม่ด้วย
+    const serviceAccount = require("../keys/tts2004-smart-report-generate-firebase-adminsdk-fbsvc-6e20b0c418.json"); 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount), 
-      storageBucket: "qcreport-54164.appspot.com"
+      storageBucket: `${NEW_PROJECT_ID}.appspot.com` // <-- ✅ แก้ไขแล้ว
     });
   } else {
     console.log("🚀 Running in PRODUCTION mode");
     admin.initializeApp({
-      storageBucket: "qcreport-54164.appspot.com"
+      storageBucket: `${NEW_PROJECT_ID}.appspot.com` // <-- ✅ แก้ไขแล้ว
     });
   }
 }
