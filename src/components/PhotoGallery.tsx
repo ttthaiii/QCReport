@@ -1,22 +1,24 @@
-// Filename: src/components/PhotoGallery.tsx (REFACTORED - แสดงลายน้ำใน Preview)
+// Filename: src/components/PhotoGallery.tsx (REFACTORED for SVG Icons)
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { api, Photo } from '../utils/api'; 
 import styles from './PhotoGallery.module.css';
 
+// ✅ [ใหม่] 1. Import ไอคอน SVG
+import { FiImage, FiLoader, FiAlertTriangle } from 'react-icons/fi';
+
 interface PhotoGalleryProps {
   projectId: string;
 }
 
+// (ฟังก์ชัน getDisplayUrl เหมือนเดิม)
 const getDisplayUrl = (driveUrl: string): string => {
   const USE_CDN = false;
   const CDN_ENDPOINT = 'https://bim-tracking-cdn.ttthaiii30.workers.dev';
-
   if (USE_CDN) {
     const url = new URL(driveUrl);
     return `${CDN_ENDPOINT}${url.pathname}`;
   }
-  
   return driveUrl;
 };
 
@@ -29,13 +31,10 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
   useEffect(() => {
     const fetchPhotos = async () => {
       if (!projectId) return;
-      
       try {
         setIsLoading(true);
         setError(null);
-        
         const response = await api.getPhotosByProject(projectId); 
-        
         if (response.success && response.data) {
           const sortedPhotos = response.data.sort((a: Photo, b: Photo) => 
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -44,14 +43,12 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
         } else if (!response.success) {
           throw new Error(response.error || 'Failed to fetch photos');
         }
-
       } catch (err) {
         setError((err as Error).message);
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchPhotos();
   }, [projectId]);
 
@@ -60,12 +57,14 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
     return photos.filter(p => p.reportType === filter);
   }, [photos, filter]);
 
-  if (isLoading) return <p className={styles.infoText}>🔄 Loading reports...</p>;
-  if (error) return <p className={styles.errorText}>❌ Error: {error}</p>;
+  // ✅ [แก้ไข] 2. เปลี่ยน Emoji เป็น SVG Icon
+  if (isLoading) return <p className={styles.infoText}><FiLoader className={styles.iconSpin} /> Loading reports...</p>; // <--- 🔄
+  if (error) return <p className={styles.errorText}><FiAlertTriangle /> Error: {error}</p>; // <--- ❌
 
   return (
     <div className={styles.galleryContainer}>
-      <h1>📸 Photo Reports for Project: {projectId}</h1>
+      {/* ✅ [แก้ไข] 3. เปลี่ยน Emoji เป็น SVG Icon */}
+      <h1><FiImage style={{ verticalAlign: 'middle', marginRight: '8px' }} /> Photo Reports for Project: {projectId}</h1> {/* <--- 📸 */}
 
       <div className={styles.filterBar}>
         <button className={styles.filterButton} onClick={() => setFilter('all')} disabled={filter === 'all'}>All Photos</button>
@@ -76,19 +75,9 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
       <div className={styles.photoGrid}>
         {filteredPhotos.length > 0 ? (
           filteredPhotos.map(photo => {
-                  // [ปรับปรุง] จัดรูปแบบวันที่แบบเดียวกับ PDF (วว/ดด/ปปปป HH:mm:ss)
                   const date = new Date(photo.createdAt);
-                  const datePart = date.toLocaleDateString('th-TH', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                  });
-                  const timePart = date.toLocaleTimeString('th-TH', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                  });
+                  const datePart = date.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                  const timePart = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
                   const formattedTimestamp = `${datePart} ${timePart}`;
 
                   return (
@@ -100,15 +89,12 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
                             alt={photo.filename} 
                             className={styles.photoImage}
                           />
-
-                          {/* [✅ แสดงลายน้ำใน Preview] */}
                           <div className={styles.watermarkOverlay}>
                             <span>{formattedTimestamp}</span>
                             <span>{photo.location || 'ไม่สามารถระบุตำแหน่งได้'}</span>
                           </div>
                         </div>
                       </a>
-
                       <div className={styles.photoContent}>
                         <p className={styles.photoText}>
                           {photo.reportType === 'QC' ? `Topic: ${photo.topic}` : `Desc: ${photo.description}`}

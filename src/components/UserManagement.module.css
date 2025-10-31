@@ -1,8 +1,10 @@
 /* Filename: src/components/UserManagement.module.css */
-/* (วางโค้ดนี้ในไฟล์ใหม่) */
+/* (ฉบับสมบูรณ์ - REFACTORED for Responsive Card Layout & Batch Actions) */
 
 .userManagement {
   padding: 0; 
+  /* [ใหม่] เพิ่ม padding ด้านล่างเผื่อแถบ Batch Action */
+  padding-bottom: 80px; 
 }
 
 .searchInput {
@@ -24,12 +26,35 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-.userSection h3 {
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   background-color: #f7f7f7;
   padding: 12px 15px;
-  margin: 0;
   border-bottom: 1px solid #ddd;
+}
+
+.sectionHeader h3 {
+  margin: 0;
   color: #333;
+}
+
+.selectAllButton {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-size: 0.9em;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* --- 1. Table Styles (Desktop) --- */
+
+/* [ใหม่] Container นี้จะซ่อนบนมือถือ */
+.tableResponsiveContainer {
+  display: none; /* ซ่อนตารางใน Mobile-first */
+  overflow-x: auto; /* เผื่อไว้สำหรับจอ Tablet */
 }
 
 .userTable {
@@ -43,6 +68,7 @@
   text-align: left;
   border-bottom: 1px solid #eee;
   vertical-align: middle;
+  white-space: nowrap; /* [ใหม่] ป้องกันข้อความในตารางตกบรรทัด */
 }
 
 .userTable th {
@@ -60,10 +86,20 @@
   background-color: #f9f9f9;
 }
 
+.checkboxColumn {
+  width: 40px;
+  text-align: center;
+}
+.actionsColumn {
+  width: 180px; /* จองพื้นที่สำหรับปุ่ม */
+  text-align: right;
+}
+
 .actions {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap; 
+  flex-wrap: nowrap; /* [ใหม่] บังคับไม่ให้ปุ่มตกบรรทัด */
+  justify-content: flex-end;
 }
 
 .btn {
@@ -73,6 +109,7 @@
   cursor: pointer;
   font-weight: bold;
   font-size: 0.9em;
+  white-space: nowrap;
 }
 
 .btnApprove {
@@ -101,7 +138,6 @@
 
 .pendingRow {
   background-color: #fffcf5;
-  font-weight: bold;
 }
 
 .rejectedRow {
@@ -117,4 +153,286 @@
   padding: 10px;
   border-radius: 4px;
   margin-bottom: 15px;
+}
+
+/* --- 2. Card Styles (Mobile) --- */
+
+/* [ใหม่] Container นี้จะแสดงบนมือถือ (Default) */
+.cardListMobile {
+  display: block;
+  padding: 10px;
+  background-color: #f9f9f9; /* พื้นหลังส่วนการ์ด */
+}
+
+.userCard {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.cardHeader input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.cardHeaderText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0; /* ป้องกัน text overflow */
+}
+.cardHeaderText strong {
+  font-size: 1.1em;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cardHeaderText small {
+  font-size: 0.9em;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardBody {
+  padding: 12px 15px;
+  font-size: 0.95em;
+  line-height: 1.6;
+  color: #444;
+}
+.cardBody strong {
+  color: #000;
+}
+.cardBody select {
+  margin-left: 5px;
+  font-size: 0.9em;
+}
+
+.cardActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 15px 15px 15px;
+}
+/* ขยายปุ่มให้เต็มพื้นที่ใน Card */
+.cardActions .btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 1em;
+}
+
+.pendingCard {
+  border-left: 4px solid var(--primary-color);
+}
+.rejectedCard {
+  background-color: #fdf2f2;
+  opacity: 0.9;
+}
+.rejectedCard .cardHeaderText strong {
+  text-decoration: line-through;
+}
+
+.noUsersText {
+  text-align: center;
+  color: #777;
+  padding: 20px 0;
+  font-style: italic;
+}
+
+
+/* --- 3. Modal Styles --- */
+.modalBackdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 15px;
+}
+
+.modalContent {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 450px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  animation: fadeInModal 0.2s ease-out;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modalHeader {
+  font-size: 1.3rem;
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #155724; /* เขียว */
+}
+
+.modalHeaderDanger {
+  font-size: 1.3rem;
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #721c24; /* แดง */
+}
+
+.modalBody {
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+.modalBody p {
+  margin: 0 0 15px 0;
+  font-size: 1.1em;
+}
+.modalBody ul {
+  list-style: none;
+  padding-left: 10px;
+  border-left: 3px solid #eee;
+}
+.modalBody li {
+  margin-bottom: 5px;
+  font-size: 0.95em;
+  color: #333;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btnCancel {
+  background-color: #6c757d;
+  color: white;
+}
+.btnCancel:hover {
+  background-color: #5a6268;
+}
+
+/* --- 4. Batch Action Bar Styles --- */
+.batchActionBar {
+  position: fixed;
+  bottom: 60px; /* [สำคัญ] อยู่เหนือ Bottom Nav Bar (ที่สูง 60px) */
+  left: 0;
+  right: 0;
+  background: #333;
+  color: white;
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 900;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+  animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.batchInfo {
+  font-size: 0.9em;
+  font-weight: bold;
+}
+.batchInfoNote {
+  font-size: 0.8em;
+  color: #aaa;
+  font-style: italic;
+  margin-right: 10px;
+}
+
+.batchActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.batchBtnApprove,
+.batchBtnReject,
+.batchBtnCancel {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+.batchBtnApprove { background-color: #28a745; color: white; }
+.batchBtnReject { background-color: #dc3545; color: white; }
+.batchBtnCancel { background-color: #6c757d; color: white; }
+
+/* --- 5. Responsive Media Query (สลับการแสดงผล) --- */
+
+/* เมื่อจอใหญ่ขึ้น (Tablet/Desktop) */
+@media (min-width: 769px) {
+  
+  /* 1. ซ่อน Card View */
+  .cardListMobile {
+    display: none;
+  }
+  
+  /* 2. แสดง Table View */
+  .tableResponsiveContainer {
+    display: block;
+  }
+
+  /* 3. ย้าย Batch Action Bar ไปไว้ด้านบน แทน Search */
+  .batchActionBar {
+    position: relative; /* ไม่ลอย */
+    bottom: auto;
+    margin-bottom: 20px; /* แทนที่ช่อง Search */
+    border-radius: 6px;
+    animation: none; /* ไม่ต้องสไลด์ */
+  }
+
+  /* 4. ซ่อน Search Bar เมื่อ Batch Action ทำงาน */
+  /* (เราจะใช้ .userManagement > .searchInput) */
+  .userManagement .batchActionBar + .searchInput {
+    display: none;
+  }
+}
+
+/* [แก้ไข] สำหรับ Desktop (เมื่อ .bottomNav กลายเป็น Sidebar) */
+@media (min-width: 768px) {
+    .batchActionBar {
+        bottom: 0; /* ย้ายลงมาติดขอบล่างสุด */
+        left: 240px; /* [สำคัญ] ขยับให้พ้น Sidebar */
+        width: calc(100% - 240px); /* กว้างเต็มพื้นที่ที่เหลือ */
+        border-radius: 0;
+    }
+
+    /* เมื่อจอใหญ่จริงๆ ให้ย้ายกลับไปด้านบน */
+    @media (min-width: 1024px) {
+      .batchActionBar {
+        position: relative; 
+        bottom: auto;
+        left: auto;
+        width: auto;
+        margin-bottom: 20px;
+        border-radius: 6px;
+      }
+    }
 }

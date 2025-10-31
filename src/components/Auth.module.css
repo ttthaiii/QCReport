@@ -1,0 +1,132 @@
+/* Filename: src/components/Auth.module.css (NEW FILE) */
+
+.authPage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  background-color: var(--background-color); /* <-- สีครีมจาก index.css */
+}
+
+.authContainer {
+  width: 100%;
+  max-width: 400px;
+  padding: 30px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  border: 1px solid #eee;
+}
+
+.title {
+  text-align: center;
+  color: var(--text-color); /* <-- สีน้ำตาลเข้มจาก index.css */
+  font-size: 1.8rem;
+  margin-top: 0;
+  margin-bottom: 25px;
+}
+
+.formGroup {
+  margin-bottom: 15px;
+}
+
+.label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 15px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-sizing: border-box; /* สำคัญมาก */
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(217, 91, 0, 0.15);
+  outline: none;
+}
+
+.buttonPrimary {
+  width: 100%;
+  padding: 15px;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background-color: var(--primary-color); /* <-- สีส้ม/น้ำตาลหลัก */
+  color: white;
+  transition: background-color 0.2s;
+}
+.buttonPrimary:hover {
+  background-color: var(--primary-hover);
+}
+.buttonPrimary:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.separator {
+  margin: 25px 0;
+  border: 0;
+  border-top: 1px solid #eee;
+}
+
+.buttonSecondary {
+  width: 100%;
+  padding: 15px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  cursor: pointer;
+  background-color: #fff;
+  color: #555;
+  transition: background-color 0.2s, color 0.2s;
+}
+.buttonSecondary:hover {
+  background-color: #f8f8f8;
+  color: #000;
+}
+
+.errorText {
+  color: var(--error-color);
+  background-color: rgba(220, 53, 69, 0.05);
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  padding: 10px 15px;
+  border-radius: 6px;
+  margin-top: 15px;
+  text-align: center;
+  font-size: 0.9em;
+}
+
+/* --- Styles for Success Page --- */
+.successContainer {
+  width: 100%;
+  max-width: 450px;
+  padding: 30px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  border: 1px solid #eee;
+  text-align: center;
+  line-height: 1.6;
+}
+.successContainer h2 {
+  color: #28a745;
+  margin-top: 0;
+}
+.successContainer p {
+  color: #333;
+  margin-bottom: 20px;
+}

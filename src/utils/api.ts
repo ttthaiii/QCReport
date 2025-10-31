@@ -119,6 +119,19 @@ export interface AdminUser {
   role: 'user' | 'admin' | 'god';
   status: 'pending' | 'approved' | 'rejected' | 'unknown';
   assignedProjectId: string | null;
+  assignedProjectName?: string;
+}
+
+export interface ChecklistStatusResponse {
+  found: number;
+  total: number;
+  statusMap?: Record<string, boolean>; // statusMap มีแค่ใน QC
+}
+
+export interface ChecklistStatusResponse {
+  found: number;
+  total: number;
+  statusMap?: Record<string, boolean>; // statusMap มีแค่ใน QC
 }
 
 // --- จบ Type definitions ---
@@ -225,13 +238,33 @@ export const api = {
       });
     } catch (error: any) { return { success: false, error: error.message }; }
   },
-  
+
   // --- Photo Upload (สำหรับหน้า Camera) ---
   uploadPhoto: async (data: UploadPhotoData): Promise<ApiResponse<any>> => {
     try {
+      // 1. [FIX] สร้าง Payload ใหม่ที่ Backend (index.ts) คาดหวัง
+      const payload = {
+        projectId: data.projectId,
+        reportType: data.reportType,
+        
+        // [FIX] เปลี่ยน 'photoBase64' เป็น 'photo'
+        photo: data.photoBase64, 
+        
+        // [FIX] รวม 'mainCategory' และ 'subCategory' เป็น 'category'
+        category: data.reportType === 'QC' ? `${data.mainCategory} > ${data.subCategory}` : undefined,
+        
+        topic: data.topic,
+        description: data.description,
+        location: data.location,
+        dynamicFields: data.dynamicFields,
+        // (เราไม่ต้องส่ง 'jobId', 'projectName' หรือ 'timestamp' ไป
+        // เพราะ Backend ตัวเก่าไม่ได้ใช้)
+      };
+
+      // 2. ส่ง Payload ที่ "แปลง" แล้ว
       const responseData = await fetchWithAuth('/upload-photo-base64', {
         method: 'POST',
-        body: JSON.stringify(data)
+        body: JSON.stringify(payload) // <-- ส่ง payload ที่ถูกต้อง
       });
       return responseData;
     } catch (error: any) {
@@ -252,16 +285,19 @@ export const api = {
     }
   },
 
-getChecklistStatus: async (payload: {
+  
+  getChecklistStatus: async (payload: {
     projectId: string;
-    mainCategory: string;
-    subCategory: string;
-    dynamicFields: Record<string, string>;
-  }): Promise<ApiResponse<Record<string, boolean>>> => {
+    reportType: 'QC' | 'Daily'; // <-- [ใหม่]
+    mainCategory?: string;      // <-- [ใหม่] optional
+    subCategory?: string;       // <-- [ใหม่] optional
+    dynamicFields?: Record<string, string>;
+    date?: string; // <-- [ใหม่]
+  }): Promise<ApiResponse<ChecklistStatusResponse>> => { // <-- [แก้ไข] ใช้ Type ใหม่
      try {
       const data = await fetchWithAuth('/checklist-status', {
         method: 'POST',
-        body: JSON.stringify(payload) // ส่งเป็น object เดียว
+        body: JSON.stringify(payload) 
       });
       return data;
     } catch (error: any) {

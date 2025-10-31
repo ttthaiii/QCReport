@@ -259,3 +259,51 @@
 .tabContent {
   padding-top: 10px;
 }
+
+.configSubTabs {
+  display: flex;
+  margin-bottom: 20px;
+  /* [ใหม่] ใช้พื้นหลังสีเทาอ่อนและ padding */
+  background-color: #f8f9fa;
+  padding: 5px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.subTabButton {
+  flex: 1; /* แบ่งพื้นที่เท่ากัน */
+  padding: 10px 15px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 0.9em; /* [ใหม่] ขนาดเล็กกว่าแท็บหลัก */
+  color: #555;
+  border-radius: 4px; /* [ใหม่] ทำให้ปุ่มมีขอบมน */
+  font-weight: 500;
+  transition: background-color 0.2s, color 0.2s;
+  display: flex; /* [ใหม่] สำหรับจัดไอคอน */
+  align-items: center;
+  justify-content: center;
+  gap: 6px; /* [ใหม่] ระยะห่างระหว่างไอคอนกับข้อความ */
+}
+
+.subTabButton:hover {
+  background-color: #e9ecef;
+}
+
+.subTabButton.activeSubTab {
+  color: #fff; /* [ใหม่] สีตัวอักษร */
+  font-weight: bold;
+  background-color: var(--primary-color); /* [ใหม่] ใช้สีหลักของธีม */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* [แก้ไข] ทำให้ Report Settings Box มี padding 
+   แม้จะไม่ได้อยู่ใน .accordionItem แล้ว
+   (โค้ดนี้อาจจะมีอยู่แล้ว ให้ตรวจสอบ)
+*/
+.reportSettingsBox {
+  margin-bottom: 0; 
+  /* [ใหม่] เพิ่ม padding ถ้ามันถูกย้ายออกมา */
+  padding: 15px;
+}

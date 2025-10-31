@@ -1,15 +1,15 @@
-// Filename: src/components/Login.tsx (ไฟล์ใหม่)
+// Filename: src/components/Login.tsx (REFACTORED for UI)
 
 import React, { useState } from 'react';
-import { auth } from '../firebase'; // Import auth ที่เราสร้าง
+import { auth } from '../firebase'; 
 import { signInWithEmailAndPassword } from 'firebase/auth';
+
+// ✅ [ใหม่] 1. Import CSS Module
+import styles from './Auth.module.css'; 
 
 interface LoginProps {
   onSwitchToRegister: () => void;
 }
-
-// (ใช้ CSS Modules หรือ CSS ปกติก็ได้)
-// import styles from './Login.module.css'; 
 
 const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   const [email, setEmail] = useState('');
@@ -22,51 +22,56 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
     setIsLoading(true);
     setError(null);
     try {
-      // 1. เรียกใช้ Firebase Auth
       await signInWithEmailAndPassword(auth, email, password);
-      // (ถ้าสำเร็จ... onAuthStateChanged ใน App.tsx จะทำงาน
-      //  และ App.tsx จะ re-render แสดงแอปหลักให้เอง)
+      // (ถ้าสำเร็จ... onAuthStateChanged ใน App.tsx จะทำงาน)
     } catch (err) {
       setError('Log-in ล้มเหลว: ' + (err as Error).message);
       setIsLoading(false);
     }
   };
 
+  // ✅ [แก้ไข] 2. ลบ inline styles ทั้งหมด และใช้ className
   return (
-    // <div className={styles.loginContainer}>
-    <div style={{ padding: '20px', maxWidth: '400px', margin: '50px auto' }}>
-      <h1>QC Report - Log In</h1>
-      <form onSubmit={handleLogin}>
-        <div style={{ margin: '10px 0' }}>
-          <label>Email:</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{ width: '100%' }}
-          />
-        </div>
-        <div style={{ margin: '10px 0' }}>
-          <label>Password:</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={{ width: '100%' }}
-          />
-        </div>
-        <button type="submit" disabled={isLoading} style={{ width: '100%' }}>
-          {isLoading ? 'กำลัง Log-in...' : 'Log In'}
-        </button>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-      </form>
-      
-    <hr style={{ margin: '20px 0' }} />
-    <button onClick={onSwitchToRegister} style={{ width: '100%', background: 'none', border: '1px solid #ccc' }}>
-        ยังไม่มีบัญชี? สมัครสมาชิกที่นี่
-    </button>      
+    <div className={styles.authPage}>
+      <div className={styles.authContainer}>
+        <h1 className={styles.title}>QC Report - Log In</h1>
+        <form onSubmit={handleLogin}>
+          <div className={styles.formGroup}>
+            <label className={styles.label} htmlFor="email">Email:</label>
+            <input
+              id="email"
+              type="email"
+              className={styles.input}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label} htmlFor="password">Password:</label>
+            <input
+              id="password"
+              type="password"
+              className={styles.input}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          
+          <button type="submit" disabled={isLoading} className={styles.buttonPrimary}>
+            {isLoading ? 'กำลัง Log-in...' : 'Log In'}
+          </button>
+          
+          {error && <p className={styles.errorText}>{error}</p>}
+        </form>
+        
+        <hr className={styles.separator} />
+        
+        <button onClick={onSwitchToRegister} className={styles.buttonSecondary}>
+          ยังไม่มีบัญชี? สมัครสมาชิกที่นี่
+        </button>      
+      </div>
     </div>
   );
 };

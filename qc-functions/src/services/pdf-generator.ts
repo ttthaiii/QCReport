@@ -558,6 +558,48 @@ export const getDailyPhotosByDate = async (
     }));
 };
 
+export async function getTopicsForFilter(
+  db: admin.firestore.Firestore,
+  projectId: string, 
+  mainCategory: string, 
+  subCategory: string
+): Promise<string[]> {
+  try {
+    const projectConfigRef = db.collection("projectConfig").doc(projectId);
+
+    // 1. ค้นหา Main Category ID
+    const mainCatSnap = await projectConfigRef.collection("mainCategories")
+      .where("name", "==", mainCategory).limit(1).get();
+    if (mainCatSnap.empty) {
+      throw new Error("Main category not found.");
+    }
+    const mainCatId = mainCatSnap.docs[0].id;
+
+    // 2. ค้นหา Sub Category ID
+    const subCatSnap = await projectConfigRef.collection("subCategories")
+      .where("name", "==", subCategory)
+      .where("mainCategoryId", "==", mainCatId)
+      .limit(1).get();
+    if (subCatSnap.empty) {
+      throw new Error("Sub category not found.");
+    }
+    const subCatId = subCatSnap.docs[0].id;
+
+    // 3. ค้นหา Topics ทั้งหมด
+    const topicsSnap = await projectConfigRef.collection("topics")
+      .where("subCategoryId", "==", subCatId)
+      .where("isArchived", "==", false)
+      .get();
+      
+    const allTopics: string[] = topicsSnap.docs.map(doc => doc.data().name as string);
+    return allTopics;
+
+  } catch (error) {
+    console.error('Error in getTopicsForFilter:', error);
+    return []; // คืนค่าว่างถ้า Error
+  }
+}
+
 // (getLatestPhotos - Unchanged)
 export async function getLatestPhotos(
   projectId: string, mainCategory: string, subCategory: string,

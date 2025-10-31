@@ -1,7 +1,4 @@
-/* Filename: src/components/Reports.module.css (NEW FILE) */
-/* * นี่คือสไตล์ใหม่สำหรับ Reports.tsx 
- * เราย้าย Inline Styles ทั้งหมด มาไว้ที่นี่
- */
+/* Filename: src/components/Reports.module.css (REFACTORED for Search Button & Preview) */
 
 .reportsContainer {
   padding: 20px;
@@ -101,65 +98,81 @@
   font-size: 14px;
 }
 
-/* --- 4. Generate Button --- */
-.centerAlign {
-  text-align: center;
+/* --- 4. [แก้ไข] Generate & Search Button --- */
+.buttonContainer {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* แบ่งครึ่ง */
+  gap: 15px;
 }
 
-.generateButton {
-  padding: 12px 30px;
+.searchButton {
+  padding: 12px 20px;
   font-size: 16px;
-  background-color: #007bff;
+  background-color: #6c757d; /* สีเทา */
   color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  min-width: 200px;
   transition: background-color 0.2s, opacity 0.2s;
 }
+.searchButton:hover {
+  background-color: #5a6268;
+}
 
+.generateButton {
+  padding: 12px 20px;
+  font-size: 16px;
+  background-color: #007bff; /* สีน้ำเงิน */
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+.generateButton:hover {
+  background-color: #0056b3;
+}
+
+/* [แก้ไข] ปุ่ม Generate (แบบเก่าที่อยู่ตรงกลาง)
+.centerAlign {
+  text-align: center;
+}
+*/
+
+/* [แก้ไข] Style ตอน Disable (ใช้ร่วมกัน) */
+.searchButton:disabled,
 .generateButton:disabled {
-  background-color: #6c757d;
+  background-color: #adb5bd;
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
-/* --- 5. Preview Box --- */
+/* --- 5. [แก้ไข] Preview Box (สำหรับสถานะ) --- */
 .previewBox {
-  margin-bottom: 20px;
-  padding: 20px;
-  background-color: #f8f9fa;
+  margin-bottom: 20px; /* [แก้ไข] ลดระยะห่างจาก Form Box */
+  padding: 15px 20px; /* [แก้ไข] ลด Padding */
+  background-color: #e9ecef; /* [แก้ไข] เปลี่ยนสีพื้นหลัง */
   border-radius: 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid #ced4da;
+  text-align: center;
 }
 
-.previewTitle {
-  color: #495057;
-  margin-bottom: 15px;
-  margin-top: 0;
+.previewStatusText {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #155724; /* สีเขียว */
+  margin: 0;
 }
 
-.previewList {
-  background-color: white;
-  padding: 15px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  max-height: 300px;
-  overflow-y: auto;
+.previewWarningText {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #856404; /* สีเหลืองเข้ม */
+  margin: 0;
 }
 
-.previewItem {
-  padding: 8px 0;
-  border-bottom: 1px solid #e9ecef;
-  font-size: 14px;
-}
-.previewItem:last-child {
-  border-bottom: none;
-}
-
-.previewItemText {
-  color: #495057;
-}
+/* (ลบ .previewTitle, .previewList, .previewItem ออก) */
 
 /* --- 6. Generated Box --- */
 .generatedBox {
@@ -169,133 +182,88 @@
   border-radius: 8px;
   border: 1px solid #c3e6cb;
 }
-
-.generatedTitle {
-  margin-top: 0;
-  color: #155724;
-}
-
-.generatedInfo {
-  margin-bottom: 15px;
-}
-
-.generatedActions {
-  margin-top: 15px;
-}
-
+/* (Style .generatedBox อื่นๆ เหมือนเดิม) */
+.generatedTitle { margin-top: 0; color: #155724; }
+.generatedInfo { margin-bottom: 15px; }
+.generatedActions { margin-top: 15px; }
 .generatedButton {
-  display: inline-block;
-  padding: 10px 20px;
-  background-color: #28a745;
-  color: white;
-  text-decoration: none;
-  border-radius: 4px;
-  margin-right: 10px;
-  margin-bottom: 10px;
-  transition: background-color 0.2s;
+  display: inline-block; padding: 10px 20px; background-color: #28a745;
+  color: white; text-decoration: none; border-radius: 4px;
+  margin-right: 10px; margin-bottom: 10px; transition: background-color 0.2s;
 }
-.generatedButton:hover {
-  background-color: #218838;
-}
-
+.generatedButton:hover { background-color: #218838; }
 .generatedButtonDownload {
-  display: inline-block;
-  padding: 10px 20px;
-  background-color: #17a2b8;
-  color: white;
-  text-decoration: none;
-  border-radius: 4px;
-  margin-bottom: 10px;
-  transition: background-color 0.2s;
+  display: inline-block; padding: 10px 20px; background-color: #17a2b8;
+  color: white; text-decoration: none; border-radius: 4px;
+  margin-bottom: 10px; transition: background-color 0.2s;
 }
-.generatedButtonDownload:hover {
-  background-color: #117a8b;
-}
+.generatedButtonDownload:hover { background-color: #117a8b; }
 
-/* --- [ใหม่] 7. Generated Reports List --- */
+/* --- 7. Generated Reports List --- */
 .generatedReportsBox {
-  margin-top: 30px; /* ระยะห่างจาก Form Box */
+  margin-top: 20px; /* [แก้ไข] ลดระยะห่าง */
   padding: 20px;
   background-color: #f8f9fa;
   border-radius: 8px;
   border: 1px solid var(--border-color);
 }
-
 .generatedReportsTitle {
   margin-top: 0;
   margin-bottom: 20px;
   color: #495057;
-  font-size: 1.2rem; /* ขนาดใหญ่ขึ้นเล็กน้อย */
+  font-size: 1.2rem; 
 }
-
-/* Container สำหรับรายการ */
+/* (Style .reportListContainer และอื่นๆ เหมือนเดิม) */
 .reportListContainer {
-  max-height: 400px; /* จำกัดความสูง ให้ scroll ได้ */
+  max-height: 400px; 
   overflow-y: auto;
   border: 1px solid #e0e0e0;
   border-radius: 4px;
-  background-color: #fff; /* พื้นหลังสีขาว */
+  background-color: #fff; 
 }
-
-/* แต่ละรายการ */
 .reportListItem {
   display: flex;
-  justify-content: space-between; /* แยก ข้อมูล กับ ปุ่ม */
+  justify-content: space-between; 
   align-items: center;
   padding: 12px 15px;
   border-bottom: 1px solid #f0f0f0;
-  gap: 15px; /* ระยะห่างระหว่าง Info กับ Actions */
+  gap: 15px; 
 }
-.reportListItem:last-child {
-  border-bottom: none;
-}
-
-/* ส่วนแสดงข้อมูล (ซ้าย) */
+.reportListItem:last-child { border-bottom: none; }
 .reportInfo {
   display: flex;
-  flex-direction: column; /* เรียงแนวตั้ง */
-  gap: 3px; /* ระยะห่างระหว่างบรรทัด */
-  flex: 1; /* ให้ยืดเต็มพื้นที่ */
-  min-width: 0; /* ป้องกัน Text overflow */
+  flex-direction: column; 
+  gap: 3px; 
+  flex: 1; 
+  min-width: 0; 
 }
-
 .reportFilename {
   font-weight: 500;
   color: #333;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis; /* ตัดข้อความถ้าชื่อไฟล์ยาว */
+  text-overflow: ellipsis; 
 }
-
-.reportDate {
-  font-size: 0.85em;
-  color: #555;
-}
-
-.reportPhotoCount {
-  font-size: 0.85em;
-  color: #777;
-}
-
-/* ส่วนปุ่ม Actions (ขวา) */
+.reportDate { font-size: 0.85em; color: #555; }
+.reportPhotoCount { font-size: 0.85em; color: #777; }
 .reportActions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0; /* ไม่ให้ปุ่มหด */
+  flex-shrink: 0; 
 }
-
-/* ป้าย "รูปใหม่!" */
-.newPhotosIndicator {
-  background-color: #ffeeba; /* สีเหลืองอ่อน */
-  color: #856404; /* สีน้ำตาลเข้ม */
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-size: 0.8em;
-  font-weight: bold;
+/* (Style ปุ่ม .reportButton... เหมือนเดิม) */
+.reportButtonRegenerate {
+  padding: 5px 10px; font-size: 0.85rem; font-weight: bold;
+  color: #333; background-color: #ffc107; text-decoration: none;
+  border-radius: 4px; transition: background-color 0.2s, opacity 0.2s;
+  border: none; cursor: pointer;
 }
-
-/* ปุ่ม ดู / โหลด */
+.reportButtonRegenerate:hover { background-color: #e0a800; }
+.reportButtonRegenerate:disabled {
+  opacity: 0.5; cursor: not-allowed;
+  background-color: #6c757d; color: white;
+}
 .reportButtonView,
 .reportButtonDownload {
   padding: 5px 10px;
@@ -304,25 +272,21 @@
   text-decoration: none;
   border-radius: 4px;
   transition: background-color 0.2s;
-  border: none; /* เพิ่ม */
-  cursor: pointer; /* เพิ่ม */
+  border: none; 
+  cursor: pointer; 
+  /* [ใหม่] จัดไอคอนให้อยู่ตรงกลาง */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
 }
+.reportButtonView { background-color: #007bff; }
+.reportButtonView:hover { background-color: #0056b3; }
+.reportButtonDownload { background-color: #17a2b8; }
+.reportButtonDownload:hover { background-color: #117a8b; }
 
-.reportButtonView {
-  background-color: #007bff; /* สีน้ำเงิน */
-}
-.reportButtonView:hover {
-  background-color: #0056b3;
-}
 
-.reportButtonDownload {
-  background-color: #17a2b8; /* สีฟ้าเทอร์ควอยซ์ */
-}
-.reportButtonDownload:hover {
-  background-color: #117a8b;
-}
-
-/* ข้อความ Loading / Error / No Reports */
+/* (Style .loadingText, .errorText, .noReportsText เหมือนเดิม) */
 .loadingText,
 .errorText,
 .noReportsText {
@@ -331,45 +295,17 @@
   color: #555;
   font-style: italic;
 }
-
 .errorText {
   color: var(--error-color);
   font-weight: bold;
   font-style: normal;
 }
 
-/* --- [แก้ไข] 8. Accessibility Focus --- */
-.reportTypeButton:focus,
-.formInput:focus,
-.generateButton:focus,
-.generatedButton:focus,
-.generatedButtonDownload:focus,
-.reportButtonView:focus, /* <-- เพิ่ม */
-.reportButtonDownload:focus { /* <-- เพิ่ม */
-  outline: 3px solid var(--primary-color);
-  outline-offset: 2px;
+/* (Style .iconSpin ที่เพิ่มเข้ามา) */
+.iconSpin {
+  animation: spin 1.5s linear infinite;
 }
-
-.reportButtonRegenerate {
-  padding: 5px 10px;
-  font-size: 0.85rem;
-  font-weight: bold; /* <-- เพิ่ม */
-  color: #333; /* <-- เปลี่ยน */
-  background-color: #ffc107; /* สีเหลืองอัมพัน */
-  text-decoration: none;
-  border-radius: 4px;
-  transition: background-color 0.2s, opacity 0.2s; /* <-- เพิ่ม opacity */
-  border: none;
-  cursor: pointer;
-}
-.reportButtonRegenerate:hover {
-  background-color: #e0a800;
-}
-
-/* Style ตอน Disable (ใช้ร่วมกัน) */
-.reportButtonRegenerate:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background-color: #6c757d;
-  color: white;
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

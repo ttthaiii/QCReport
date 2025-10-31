@@ -1,5 +1,4 @@
-/* Filename: src/components/Camera.module.css (REFACTORED) */
-/* (เนื้อหาเดิมจาก Camera.css) */
+/* Filename: src/components/Camera.module.css (REFACTORED for Daily Review Layout) */
 
 .wizard-container {
   width: 100%;
@@ -7,15 +6,18 @@
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
-  overflow: hidden; /* ซ่อน scrollbar ของ wizard */
+  overflow: hidden; 
 }
 
 .wizard-step {
   width: 100%;
   padding: 20px;
   animation: fadeIn 0.3s ease-in-out;
-  overflow-y: auto; /* ให้ scroll ได้เฉพาะใน step */
+  overflow-y: auto; 
   flex: 1;
+  /* ✅ [ใหม่] 1. เพิ่ม flex-direction เพื่อดัน wizard-nav ลงล่าง */
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes fadeIn {
@@ -29,182 +31,75 @@
   color: var(--primary-color);
   margin-top: 0;
   margin-bottom: 10px;
+  flex-shrink: 0; /* [ใหม่] ไม่ให้หัวข้อย่อ */
 }
 
-/* --- "งานที่ทำต่อเนื่อง" (Recent Jobs) --- */
-.recent-jobs-container {
-  margin-top: 30px;
-  border-top: 1px solid #eee;
-  padding-top: 20px;
-}
-
-.recent-jobs-container h3 {
-  font-size: 1.1rem;
-  color: #555;
-  margin-bottom: 15px;
-}
-
+/* (Recent Jobs, Checklist Header, Selection Cards - เหมือนเดิม) */
+.recent-jobs-container { margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; flex-shrink: 0; }
+.recent-jobs-container h3 { font-size: 1.1rem; color: #555; margin-bottom: 15px; }
 .recent-job-item {
-  background: #f9f9f9;
-  border: 1px solid #eaeaea;
-  border-left: 5px solid var(--primary-color);
-  border-radius: 8px;
-  padding: 15px;
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--text-color);
-  cursor: pointer;
-  margin-bottom: 10px;
-  transition: background-color 0.2s;
+  background: #f9f9f9; border: 1px solid #eaeaea; border-left: 5px solid var(--primary-color);
+  border-radius: 8px; padding: 15px; font-size: 1rem; font-weight: 500;
+  color: var(--text-color); cursor: pointer; margin-bottom: 10px; transition: background-color 0.2s;
 }
-
-.recent-job-item:hover {
-  background: #f0f0f0;
-}
-
-/* --- ส่วนหัวของ Checklist --- */
+.recent-job-item:hover { background: #f0f0f0; }
 .checklist-header {
-  font-size: 0.9rem;
-  color: #555;
-  margin-bottom: 25px;
-  background-color: var(--background-color);
-  padding: 8px 12px;
-  border-radius: 6px;
+  font-size: 0.9rem; color: #555; margin-bottom: 25px; background-color: var(--background-color);
+  padding: 8px 12px; border-radius: 6px; flex-shrink: 0;
 }
-
-/* --- Selection Cards (ปุ่มเลือกแบบการ์ด) --- */
-.selection-grid {
-  display: grid;
-  grid-template-columns: 1fr; /* 1 คอลัมน์สำหรับมือถือ */
-  gap: 15px;
-}
-
-@media (min-width: 600px) {
-  .selection-grid {
-    grid-template-columns: 1fr 1fr; /* 2 คอลัมน์ */
-  }
-}
-
+.selection-grid { display: grid; grid-template-columns: 1fr; gap: 15px; flex-shrink: 0; }
+@media (min-width: 600px) { .selection-grid { grid-template-columns: 1fr 1fr; } }
 .selection-card {
-  background: #fff;
-  border: 2px solid #eee;
-  border-radius: 10px;
-  padding: 20px;
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: var(--text-color);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  background: #fff; border: 2px solid #eee; border-radius: 10px; padding: 20px;
+  font-size: 1.1rem; font-weight: 500; color: var(--text-color); cursor: pointer;
+  transition: all 0.2s ease; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04);
 }
-
 .selection-card:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  border-color: var(--primary-color); color: var(--primary-color);
+  transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.08);
 }
+.selection-card.daily { border-color: #636e72; }
+.selection-card.daily:hover { background: #636e72; color: #fff; }
 
-.selection-card.daily {
-  border-color: #636e72;
-}
-.selection-card.daily:hover {
-  background: #636e72;
-  color: #fff;
-}
-
-/* --- Topic Checklist --- */
-.topic-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
+/* (Topic List, Form Group - เหมือนเดิม) */
+.topic-list { display: flex; flex-direction: column; gap: 10px; }
 .topic-list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fff;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 12px 15px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fff; border: 1px solid #eee; border-radius: 8px;
+  padding: 12px 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);
 }
-
-.topic-list-item-status {
-  font-size: 1.5rem; /* ✅ / ⚪️ */
-  margin-right: 12px;
-}
-
+.topic-list-item-status { font-size: 1.5rem; margin-right: 12px; }
 .topic-list-item-name {
-  flex: 1; /* ดันปุ่มไปชิดขวา */
-  font-size: 0.95rem;
-  color: var(--text-color);
-  padding-right: 10px;
-  cursor: default;
-  transition: color 0.2s;
+  flex: 1; font-size: 0.95rem; color: var(--text-color); padding-right: 10px;
+  cursor: default; transition: color 0.2s;
 }
-
 .topic-list-item-name.viewable {
-  cursor: pointer;
-  font-weight: 500;
-  color: #0056b3; /* สีน้ำเงินเข้ม */
-  text-decoration: underline; /* ขีดเส้นใต้ */
+  cursor: pointer; font-weight: 500; color: #0056b3; text-decoration: underline;
 }
-.topic-list-item-name.viewable:hover {
-  color: #007bff; /* สีฟ้า */
-}
-
+.topic-list-item-name.viewable:hover { color: #007bff; }
 .topic-list-item-button {
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  font-size: 1.2rem; /* 📷 */
-  border-radius: 50%;
-  width: 44px;
-  height: 44px;
-  cursor: pointer;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background-color: var(--primary-color); color: white; border: none;
+  font-size: 1.2rem; border-radius: 50%; width: 44px; height: 44px;
+  cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+}
+.topic-list-item-button.retake { background-color: #f0f0f0; color: #555; font-size: 1.1rem; }
+.form-group { margin-bottom: 20px; flex-shrink: 0; }
+.form-group label { display: block; font-size: 1rem; font-weight: 600; color: #555; margin-bottom: 8px; }
+.form-group input, .form-group textarea {
+  width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #ccc;
+  border-radius: 8px; box-sizing: border-box; 
 }
 
-.topic-list-item-button.retake {
-  background-color: #f0f0f0;
-  color: #555;
-  font-size: 1.1rem; /* 🔄 */
-}
-
-/* --- Form Group (สำหรับ Dynamic Fields) --- */
-.form-group {
-  margin-bottom: 20px;
-}
-.form-group label {
-  display: block;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #555;
-  margin-bottom: 8px;
-}
-.form-group input,
-.form-group textarea {
-  width: 100%;
-  padding: 12px;
-  font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  box-sizing: border-box; /* สำคัญมาก */
-}
-
-/* --- Navigation Buttons (ปุ่ม ถัดไป/ย้อนกลับ) --- */
+/* --- 2. [แก้ไข] Navigation Buttons (ปุ่ม ถัดไป/ย้อนกลับ) --- */
 .wizard-nav {
   display: flex;
   justify-content: space-between;
+  align-items: center; /* [ใหม่] จัดปุ่มให้อยู่กลางแนวตั้ง */
   padding: 20px;
   border-top: 1px solid #eee;
   background: #fff;
+  margin-top: auto; /* [สำคัญ] ดันตัวเองลงไปล่างสุดของ flex container */
+  flex-shrink: 0;
 }
 
 .wizard-button {
@@ -218,268 +113,181 @@
   cursor: pointer;
   transition: background-color 0.2s;
 }
-.wizard-button:hover {
-  background-color: #a04200; /* เข้มขึ้น */
-}
-.wizard-button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
+.wizard-button:hover { background-color: #a04200; }
+.wizard-button:disabled { background-color: #ccc; cursor: not-allowed; }
 
 .wizard-button.secondary {
   background-color: #f0f0f0;
   color: #555;
 }
-.wizard-button.secondary:hover {
-  background-color: #e0e0e0;
-}
+.wizard-button.secondary:hover { background-color: #e0e0e0; }
 
-/* --- ปุ่ม Upload All --- */
+/* --- 3. [แก้ไข] ปุ่ม Upload All (ให้ขนาดเท่า .wizard-button) --- */
 .upload-all-button {
-  background-color: #27ae60; /* สีเขียว */
+  background-color: #27ae60; 
   color: white;
-  font-size: 1.1rem;
-  font-weight: 700;
-  padding: 18px 30px;
   border: none;
+  padding: 15px 30px; /* [แก้ไข] ขนาดเท่า .wizard-button */
+  font-size: 1rem;    /* [แก้ไข] ขนาดเท่า .wizard-button */
+  font-weight: 600; /* [แก้ไข] ขนาดเท่า .wizard-button */
   border-radius: 8px;
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(39, 174, 96, 0.3);
+  transition: background-color 0.2s, box-shadow 0.2s;
 }
-
 .upload-all-button:disabled {
   background-color: #bdc3c7;
   box-shadow: none;
 }
 
+/* (Watermark Toggle, Modal, Daily Review - เหมือนเดิม) */
 .topic-list-item-button.attach {
-  background-color: #e0e0e0;
-  color: #333;
-  font-size: 1.1rem;
-  margin-left: 8px; /* เพิ่มระยะห่างจากปุ่มถ่ายรูป */
+  background-color: #e0e0e0; color: #333; font-size: 1.1rem; margin-left: 8px; 
 }
-
 .watermark-toggle {
-  margin-top: 15px;
-  margin-bottom: 10px;
-  padding: 10px;
-  background: #f9f9f9;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #eee;
+  margin-top: 15px; margin-bottom: 10px; padding: 10px; background: #f9f9f9;
+  border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid #eee; flex-shrink: 0;
 }
 .watermark-toggle input[type="checkbox"] {
-  margin-right: 10px;
-  width: 18px;
-  height: 18px;
-  transform: scale(1.1);
+  margin-right: 10px; width: 18px; height: 18px; transform: scale(1.1);
 }
-.watermark-toggle label {
-  font-size: 0.9rem;
-  color: #333;
-  cursor: pointer;
-}
-
-/* --- Modal ดูรูป --- */
+.watermark-toggle label { font-size: 0.9rem; color: #333; cursor: pointer; }
 .preview-modal-overlay {
-  position: fixed; 
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   background-color: rgba(0, 0, 0, 0.85); 
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1050; 
-  padding: 15px; 
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1050; padding: 15px; 
 }
-
 .preview-modal-content {
-  position: relative;
-  background: #fff;
-  padding: 10px;
-  border-radius: 8px;
-  max-width: 100%;
-  max-height: 90%;
-  box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+  position: relative; background: #fff; padding: 10px; border-radius: 8px;
+  max-width: 100%; max-height: 90%; box-shadow: 0 5px 20px rgba(0,0,0,0.4);
 }
-
-/* [เพิ่ม] Container สำหรับรูป + ลายน้ำ */
-.preview-image-container {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
-}
-
+.preview-image-container { position: relative; display: inline-block; max-width: 100%; }
 .preview-modal-content img {
-  display: block;
-  max-width: 100%;
-  max-height: 80vh; 
-  object-fit: contain; 
-  border-radius: 4px;
+  display: block; max-width: 100%; max-height: 80vh; 
+  object-fit: contain; border-radius: 4px;
 }
-
-/* [เพิ่ม] ลายน้ำสำหรับ Preview Modal */
 .preview-watermark-overlay {
-  position: absolute;
-  bottom: 0.5vmin;   /* [แก้ไข] ใช้ vmin */
-  right: 0.5vmin;    /* [แก้ไข] ใช้ vmin */
-  left: auto;
-  z-index: 10;
-  max-width: 50%;
-
-  background-color: transparent;
-  color: white;
-  padding: 0.3vmin 0.6vmin; /* [แก้ไข] ใช้ vmin */
-
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.1vmin;      /* [แก้ไข] ใช้ vmin */
-
-  /* [สำคัญ] ใช้ vmin เพื่อให้ขนาดสัมพันธ์กับ viewport */
-  font-size: 1.5vmin;  /* [แก้ไข] ประมาณ 1.5% ของหน้าจอ */
-  line-height: 1.3;
-  font-family: Arial, sans-serif;
-  font-weight: 600;
-  
-  /* [สำคัญ] เพิ่ม Text Shadow เพื่อให้อ่านง่าย */
-  text-shadow: 
-    0.1vmin 0.1vmin 0.3vmin rgba(0, 0, 0, 0.9),
-    -0.1vmin -0.1vmin 0.2vmin rgba(0, 0, 0, 0.8);
-
-  word-break: break-word;
-  text-align: right;
+  position: absolute; bottom: 0.5vmin; right: 0.5vmin; left: auto;
+  z-index: 10; max-width: 50%; background-color: transparent; color: white;
+  padding: 0.3vmin 0.6vmin; display: flex; flex-direction: column;
+  align-items: flex-end; gap: 0.1vmin; font-size: 1.5vmin; line-height: 1.3;
+  font-family: Arial, sans-serif; font-weight: 600; 
+  text-shadow: 0.1vmin 0.1vmin 0.3vmin rgba(0, 0, 0, 0.9), -0.1vmin -0.1vmin 0.2vmin rgba(0, 0, 0, 0.8);
+  word-break: break-word; text-align: right;
 }
-
 .preview-modal-close {
-  position: absolute;
-  top: -15px; 
-  right: -15px;
-  background: white;
-  color: black;
-  border: none;
-  border-radius: 50%;
-  width: 30px;
-  height: 30px;
-  font-size: 1.5rem;
-  font-weight: bold;
-  line-height: 28px; 
-  cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-  z-index: 20; /* [เพิ่ม] ให้ปุ่มปิดอยู่เหนือลายน้ำ */
+  position: absolute; top: -15px; right: -15px; background: white;
+  color: black; border: none; border-radius: 50%; width: 30px; height: 30px;
+  font-size: 1.5rem; font-weight: bold; line-height: 28px; 
+  cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); z-index: 20; 
 }
 
-/* --- Daily Review --- */
+/* --- 4. [แก้ไข] Daily Review List --- */
 .daily-review-list {
   display: flex;
   flex-direction: column;
   gap: 15px; 
   margin-bottom: 20px;
+  /* ✅ [ใหม่] 2. ทำให้ List นี้ขยายเต็มพื้นที่ที่เหลือ */
+  flex: 1;
+  overflow-y: auto; /* [ใหม่] ให้ List นี้ scroll ได้เอง */
 }
-
 .daily-review-item {
-  display: flex;
-  align-items: flex-start;
-  background: #fdfdfd;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 10px;
-  gap: 12px; 
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  display: flex; align-items: flex-start; background: #fdfdfd;
+  border: 1px solid #eee; border-radius: 8px; padding: 10px;
+  gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); flex-shrink: 0;
 }
-
 .daily-review-thumbnail {
-  width: 120px;
-  height: 120px;
-  object-fit: cover;
-  border-radius: 6px;
-  flex-shrink: 0;
-  cursor: pointer;
+  width: 120px; height: 120px; object-fit: cover; border-radius: 6px;
+  flex-shrink: 0; cursor: pointer;
 }
-
 .daily-review-textarea {
-  flex-grow: 1;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 8px 10px; 
-  font-size: 0.95rem; 
-  min-height: 120px; 
-  resize: vertical;
+  flex-grow: 1; border: 1px solid #ddd; border-radius: 6px;
+  padding: 8px 10px; font-size: 0.95rem; min-height: 120px; resize: vertical;
 }
-
 .daily-review-delete-button {
-  background: none;
-  border: none;
-  color: #c0392b; 
-  font-size: 1.4rem; 
-  cursor: pointer;
-  padding: 8px; 
-  align-self: center; 
-  flex-shrink: 0; 
+  background: none; border: none; color: #c0392b; 
+  font-size: 1.4rem; cursor: pointer; padding: 8px; 
+  align-self: center; flex-shrink: 0; 
 }
-
 .review-button { 
-    background-color: rgba(255, 255, 255, 0.8);
-    color: var(--primary-color);
-    border: none;
-    padding: 10px 15px;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 8px;
-    cursor: pointer;
-    min-width: 90px;
-    text-align: center;
+  background-color: rgba(255, 255, 255, 0.8); color: var(--primary-color);
+  border: none; padding: 10px 15px; font-size: 1rem; font-weight: 600;
+  border-radius: 8px; cursor: pointer; min-width: 90px; text-align: center;
 }
-
 .button-grid-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 20px; /* ระยะห่างจาก Checkbox */
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-top: 20px; flex-shrink: 0;
 }
 
-/* * --- 8. [ใหม่] Accessibility (ตามคำแนะนำ) --- 
- */
-
-/* 8.1 Reduced Motion */
+/* (Accessibility, Spin, Camera Grid - เหมือนเดิม) */
 @media (prefers-reduced-motion: reduce) {
-  .wizard-step {
-    animation: none;
-  }
-  .selection-card,
-  .selection-card:hover,
-  .wizard-button {
-    transition: none;
-  }
+  .wizard-step { animation: none; }
+  .selection-card, .selection-card:hover, .wizard-button { transition: none; }
 }
-
-/* 8.2 Focus States */
-.selection-card:focus,
-.wizard-button:focus,
-.upload-all-button:focus,
-.topic-list-item-button:focus,
-.preview-modal-close:focus,
-.daily-review-delete-button:focus,
-.review-button:focus {
-  outline: 3px solid var(--primary-color);
-  outline-offset: 2px;
+.selection-card:focus, .wizard-button:focus, .upload-all-button:focus,
+.topic-list-item-button:focus, .preview-modal-close:focus,
+.daily-review-delete-button:focus, .review-button:focus {
+  outline: 3px solid var(--primary-color); outline-offset: 2px;
 }
-
-/* Focus สำหรับ Input ที่มีขอบชัดเจนอยู่แล้ว */
-.form-group input:focus,
-.form-group textarea:focus,
-.daily-review-textarea:focus {
-   outline: 3px solid var(--primary-color);
-   outline-offset: 1px;
+.form-group input:focus, .form-group textarea:focus, .daily-review-textarea:focus {
+   outline: 3px solid var(--primary-color); outline-offset: 1px;
 }
-
-/* Focus สำหรับ Checkbox */
 .watermark-toggle input[type="checkbox"]:focus + label {
-  outline: 2px solid var(--primary-color);
-  outline-offset: 2px;
-  border-radius: 2px;
+  outline: 2px solid var(--primary-color); outline-offset: 2px; border-radius: 2px;
+}
+.iconSpin {
+  animation: spin 1.5s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.cameraActionGrid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 15px; 
+  margin-top: auto; margin-bottom: auto;
+  padding-top: 20px; padding-bottom: 20px;
+}
+.cameraActionGrid .wizardButton {
+  padding: 20px 15px; font-size: 1.2rem; height: auto;
+  line-height: 1.5; min-height: 140px; 
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+
+.pendingQueueContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.pendingQueueWarning {
+  padding: 15px;
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-left-width: 5px; /* เน้นด้านซ้าย */
+  border-left-color: #ffc107;
+  border-radius: 8px;
+  text-align: left; /* [แก้ไข] ชิดซ้าย */
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.pendingQueueWarning:hover {
+  background: #fff9e0; /* สว่างขึ้นเล็กน้อย */
+}
+
+.pendingQueueWarning h3 {
+  margin: 0 0 10px 0;
+  color: #856404;
+  font-size: 1.1rem;
+}
+
+.pendingQueueWarning p {
+  margin: 0;
+  color: #856404;
+  font-size: 0.9rem;
 }

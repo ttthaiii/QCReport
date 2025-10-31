@@ -17,7 +17,8 @@ import {
   getUploadedTopicStatus,
   getDailyPhotosByDate,
   ReportSettings, // <-- [ใหม่] Import
-  DEFAULT_SETTINGS
+  DEFAULT_SETTINGS,
+  getTopicsForFilter, 
 } from './services/pdf-generator';
 
 import { PhotoData as FirestorePhotoData, logPhotoToFirestore } from "./api/firestore";
@@ -217,23 +218,40 @@ app.use(checkAuth);
 
 app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
   try {
+    // 1. ดึงข้อมูล User (เหมือนเดิม)
     const listUsersResult = await admin.auth().listUsers();
     const firestoreUsersSnap = await db.collection('users').get();
     
+    // ✅ [ใหม่] 2. ดึงข้อมูล Projects ทั้งหมดมาสร้าง Map
+    const projectsSnap = await db.collection('projects').get();
+    const projectsMap = new Map<string, string>();
+    projectsSnap.forEach(doc => {
+      projectsMap.set(doc.id, doc.data().projectName || doc.id); // เก็บ projectName
+    });
+
     const firestoreUsersData: { [uid: string]: any } = {};
     firestoreUsersSnap.forEach(doc => {
       firestoreUsersData[doc.id] = doc.data();
     });
 
+    // 3. รวมข้อมูล (เหมือนเดิม)
     const combinedUsers = listUsersResult.users.map(userRecord => {
       const firestoreData = firestoreUsersData[userRecord.uid] || {};
+      
+      // ✅ [ใหม่] 4. เพิ่ม assignedProjectName จาก Map
+      const assignedProjectId = firestoreData.assignedProjectId || null;
+      const assignedProjectName = assignedProjectId 
+        ? projectsMap.get(assignedProjectId) // ดึงชื่อจาก Map
+        : null;
+
       return {
         uid: userRecord.uid,
         email: userRecord.email,
         displayName: firestoreData.displayName || userRecord.displayName || 'N/A',
         role: firestoreData.role || 'user',
         status: firestoreData.status || 'unknown',
-        assignedProjectId: firestoreData.assignedProjectId || null,
+        assignedProjectId: assignedProjectId,
+        assignedProjectName: assignedProjectName || assignedProjectId || 'N/A' // ส่งชื่อกลับไป
       };
     });
 
@@ -540,8 +558,9 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
   }
 
   try {
+    // ✅✅✅ --- START OF FIX --- ✅✅✅
     const { 
-      photo, 
+      photoBase64, // <-- [แก้ไข] เปลี่ยนจาก 'photo'
       projectId, 
       reportType, 
       category, 
@@ -551,7 +570,9 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
       dynamicFields 
     } = req.body;
     
-    if (!photo || !projectId || !reportType) {
+    // [แก้ไข] เปลี่ยน 'photo' เป็น 'photoBase64'
+    if (!photoBase64 || !projectId || !reportType) { 
+    // ✅✅✅ --- END OF FIX --- ✅✅✅
       return res.status(400).json({ 
         success: false, 
         error: "Missing required fields." 
@@ -605,7 +626,9 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
       });
     }
 
-    let cleanBase64 = photo;
+    // ✅✅✅ --- START OF FIX --- ✅✅✅
+    let cleanBase64 = photoBase64; // <-- [แก้ไข] เปลี่ยนจาก 'photo'
+    // ✅✅✅ --- END OF FIX --- ✅✅✅
     if (cleanBase64.includes(',')) {
       cleanBase64 = cleanBase64.split(',')[1];
     }
@@ -845,49 +868,6 @@ app.post("/generate-report", jsonParser, async (req: Request, res: Response): Pr
 
   } catch (error) {
     console.error("❌ Error generating report (Overwrite Mode):", error);
-    return res.status(500).json({ 
-      success: false, 
-      error: (error as Error).message 
-    });
-  }
-});
-
-// ... (คง Endpoint /checklist-status, /photos/:projectId, และ /project-config/... CRUD ทั้งหมดไว้เหมือนเดิม) ...
-app.post("/checklist-status", jsonParser, async (req: Request, res: Response): Promise<Response> => {
-  // [ใหม่] (Optional) ตรวจสอบสิทธิ์
-  const user = (req as any).user;
-  const { projectId } = req.body;
-  if (user.role !== 'god' && user.assignedProjectId !== projectId) {
-     return res.status(403).json({ success: false, error: 'Access denied.' });
-  }
-
-  try {
-    const { 
-      projectId, 
-      mainCategory, 
-      subCategory, 
-      dynamicFields 
-    } = req.body;
-    
-    if (!projectId || !mainCategory || !subCategory || !dynamicFields) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Missing required fields." 
-      });
-    }
-
-    const category = `${mainCategory} > ${subCategory}`;
-
-    const statusMap = await getUploadedTopicStatus(
-      projectId,
-      category,
-      dynamicFields
-    );
-    
-    return res.json({ success: true, data: statusMap });
-
-  } catch (error) {
-    console.error("❌ Error in /checklist-status:", error);
     return res.status(500).json({ 
       success: false, 
       error: (error as Error).message 
@@ -1651,6 +1631,81 @@ app.post("/admin/approve-user/:uidToApprove", async (req: Request, res: Response
 
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/checklist-status", jsonParser, async (req: Request, res: Response): Promise<Response> => {
+  const user = (req as any).user;
+  const { 
+    projectId, 
+    reportType, // <-- [ใหม่] รับ reportType
+    mainCategory, 
+    subCategory, 
+    dynamicFields,
+    date // <-- [ใหม่] รับ date
+  } = req.body;
+
+  // 1. ตรวจสอบสิทธิ์ (เหมือนเดิม)
+  if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+     return res.status(403).json({ success: false, error: 'Access denied.' });
+  }
+
+  try {
+    if (reportType === 'QC') {
+      // --- Logic สำหรับ QC ---
+      if (!projectId || !mainCategory || !subCategory || !dynamicFields) {
+        return res.status(400).json({ success: false, error: "Missing required QC fields." });
+      }
+
+      const category = `${mainCategory} > ${subCategory}`;
+
+      // 1. หา "Total" (เรียกฟังก์ชันใหม่)
+      const allTopics = await getTopicsForFilter(db, projectId, mainCategory, subCategory);
+      const total = allTopics.length;
+      
+      if (total === 0) {
+         return res.status(404).json({ success: false, error: "ไม่พบหัวข้อสำหรับหมวดหมู่นี้" });
+      }
+
+      // 2. หา "Found" (เรียกฟังก์ชันเดิม)
+      const statusMap = await getUploadedTopicStatus(projectId, category, dynamicFields);
+      const found = Object.keys(statusMap).length;
+
+      // 3. ส่งข้อมูลกลับ
+      return res.json({ success: true, data: { found, total, statusMap } });
+
+    } else if (reportType === 'Daily') {
+      // --- Logic สำหรับ Daily ---
+      if (!projectId || !date) {
+        return res.status(400).json({ success: false, error: "Missing required Daily fields (date)." });
+      }
+      
+      // 1. นับจำนวนรูปในวันนั้น
+      const startDate = new Date(`${date}T00:00:00+07:00`);
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 1);
+
+      // [แก้ไข] ใช้ .count() เพื่อประสิทธิภาพ
+      const query = db.collection("dailyPhotos")
+        .where("projectId", "==", projectId)
+        .where("createdAt", ">=", startDate) // ใช้ Timestamp object
+        .where("createdAt", "<", endDate);   // ใช้ Timestamp object
+
+      const photosSnapshot = await query.count().get();
+      const found = photosSnapshot.data().count;
+
+      // 2. ส่งข้อมูลกลับ
+      return res.json({ success: true, data: { found, total: 0 } }); // Daily ไม่มี Total
+    } else {
+      return res.status(400).json({ success: false, error: "Invalid reportType." });
+    }
+
+  } catch (error) {
+    console.error("❌ Error in /checklist-status (V2):", error);
+    return res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
   }
 });
 

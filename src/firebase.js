@@ -25,17 +25,19 @@ const auth = getAuth(app);
 // Connect to emulators in development
 // (ใช้ process.env.NODE_ENV ก็ได้ หรือ window.location.hostname ก็ได้)
 if (process.env.NODE_ENV === 'development') {
-  console.log("Connecting to local emulators using 'localhost'...");
+  console.log("Connecting to local emulators...");
   
   // Connect to Functions emulator
-  connectFunctionsEmulator(functions, 'localhost', 5001);
+  connectFunctionsEmulator(functions, 'localhost', 5001, { disableWarnings: true });
 
-  // Connect to Firestore emulator <-- เพิ่มส่วนนี้
-  connectFirestoreEmulator(db, 'localhost', 8081);
+  // Connect to Firestore emulator 
+  connectFirestoreEmulator(db, 'localhost', 8081, { disableWarnings: true });
 
-  // Connect to Storage emulator <-- เพิ่มส่วนนี้
-  connectStorageEmulator(storage, 'localhost', 9199);
-  connectAuthEmulator(auth, 'http://localhost:9099');
+  // Connect to Storage emulator 
+  connectStorageEmulator(storage, 'localhost', 9199, { disableWarnings: true });
+  
+  // (สำหรับ Auth, { } จะเป็น Argument ที่สาม)
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
 }
 
 // Export ทุกบริการที่ต้องการใช้ในแอป
