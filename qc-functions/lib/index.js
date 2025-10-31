@@ -163,11 +163,15 @@ app.get("/health", (req, res) => {
     res.json({
         status: "healthy",
         environment: IS_EMULATOR ? "emulator" : "production",
-        version: "8.0" // <-- [ใหม่] อัปเดตเวอร์ชัน
+        version: "8.2" // เปลี่ยนเวอร์ชัน
     });
+});
+app.get("/test-public", (req, res) => {
+    res.json({ success: true, message: "Public endpoint works!" });
 });
 // ✅ Get all active projects
 app.get("/projects", async (req, res) => {
+    console.log("📋 /projects endpoint called - NO AUTH REQUIRED"); // <-- เพิ่มบรรทัดนี้
     try {
         const projectsSnapshot = await db
             .collection("projects")
@@ -188,7 +192,8 @@ app.get("/projects", async (req, res) => {
     }
 });
 app.use(checkAuth);
-app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
+console.log("🔐 checkAuth middleware registered - all routes below require auth");
+app.get("/admin/users", checkRole(['admin', 'god']), async (req, res) => {
     try {
         // 1. ดึงข้อมูล User (เหมือนเดิม)
         const listUsersResult = await admin.auth().listUsers();
@@ -231,7 +236,7 @@ app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res)
  * (Admin) อัปเดตสถานะผู้ใช้ (อนุมัติ/ปฏิเสธ)
  * (ต้องเป็น Admin หรือ God)
  */
-app.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
+app.post("/admin/update-status/:uid", checkRole(['admin', 'god']), async (req, res) => {
     try {
         const { uid } = req.params;
         const { status } = req.body; // รับ 'approved' หรือ 'rejected'
@@ -250,7 +255,7 @@ app.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), as
  * (God) ตั้งค่า Role ผู้ใช้
  * (ต้องเป็น God เท่านั้น)
  */
-app.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res) => {
+app.post("/admin/set-role/:uid", checkRole(['god']), async (req, res) => {
     try {
         const { uid } = req.params;
         const { role } = req.body; // รับ 'user', 'admin', หรือ 'god'
