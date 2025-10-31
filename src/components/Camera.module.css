@@ -291,3 +291,40 @@
   color: #856404;
   font-size: 0.9rem;
 }
+
+.pending-job-group {
+  border-bottom: 1px solid #ccc;
+  width: 100%;
+}
+.pending-job-group:last-child {
+  border-bottom: none;
+}
+
+.pending-job-details {
+  padding: 5px 0 5px 20px; /* ย่อหน้าเล็กน้อย */
+  background-color: #f9f9f9; /* สีพื้นหลังต่าง */
+}
+
+.pending-topic-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 10px 10px 0; /* padding เฉพาะด้านซ้าย */
+  border-bottom: 1px solid #eee;
+  font-size: 0.9em;
+}
+
+.pending-topic-item:last-child {
+  border-bottom: none;
+}
+
+.pending-topic-actions {
+  display: flex;
+  flex-shrink: 0; /* ป้องกันปุ่มหด */
+}
+
+/* ทำให้ปุ่มดูรูปเล็กกระทัดรัด */
+.pending-topic-actions .topic-list-item-button {
+  padding: 8px;
+  font-size: 1rem;
+}

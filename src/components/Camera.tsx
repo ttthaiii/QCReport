@@ -1,10 +1,11 @@
-// Filename: src/components/Camera.tsx (REFACTORED - FIX Upload Job Context Bug)
+// Filename: src/components/Camera.tsx (REFACTORED - FIX Upload Job Context Bug + Pending Manager)
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { api, UploadPhotoData, ProjectConfig, MainCategory, SubCategory, Topic, SharedJob, ChecklistStatusResponse } from '../utils/api';
 import { addWatermark as createWatermark, WatermarkOptions } from '../utils/watermark';
 import * as persistentQueue from '../utils/persistentQueue';
 import styles from './Camera.module.css';
+import CustomModal from './CustomModal';
 
 import { 
   FiClipboard, FiSun, FiMapPin, FiCheckCircle, FiLoader, 
@@ -26,7 +27,11 @@ export interface PhotoQueueItem {
   addWatermark: boolean;
   timestamp: string;        
   location: string | null;  
-  uploadData: Omit<UploadPhotoData, 'photoBase64'>;
+  // ✅ [แก้ไข 1.1] อัปเดต Type ให้ตรงกับที่บันทึก
+  uploadData: Omit<UploadPhotoData, 'photoBase64'> & { 
+    jobLabel?: string; 
+    dynamicFields: Record<string, string>; // <-- ระบุให้ชัดเจน
+  };
   status: 'pending' | 'failed';
 }
 
@@ -61,6 +66,7 @@ async function reverseGeocodeNominatim(latitude: number, longitude: number): Pro
   }
 }
 
+// ✅ [แก้ไข 2] ย้าย 'pendingManager' เข้ามาใน Type ให้ถูกต้อง
 type WizardStep = 
   | 'type'
   | 'mainCat'
@@ -69,7 +75,8 @@ type WizardStep =
   | 'topicList'
   | 'dailyReview'
   | 'camera'
-  | 'uploading';
+  | 'uploading'
+  | 'pendingManager'; // <-- ย้ายมาไว้ที่นี่
 
 const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => {
   
@@ -92,6 +99,12 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
   const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(true);
   const [previewData, setPreviewData] = useState<{ url: string, timestamp?: string, location?: string | null } | null>(null);
+
+  const [modalState, setModalState] = useState<{
+    title: string;
+    message: string;
+    onConfirm?: () => void; 
+  } | null>(null);
 
   useEffect(() => {
     persistentQueue.saveQueue(projectId, photoQueue);
@@ -222,11 +235,12 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       const photoBase64 = await processNativePhoto(file); 
       const shouldAddWatermark = isNewCapture || addWatermarkToAttached; 
       
-      // [สำคัญ] เราต้องดึง JobID ณ ตอนที่ถ่ายรูป
-      const { id: jobId } = getCurrentJobIdentifier();
+      // ✅ [แก้ไข 1.2] ดึง cả id และ label
+      const { id: jobId, label: jobLabel } = getCurrentJobIdentifier();
       
       let key: string;
-      let uploadDataPayload: Omit<UploadPhotoData, 'photoBase64'>;
+      // ✅ [แก้ไข 1.3] อัปเดต Type ให้ตรง
+      let uploadDataPayload: PhotoQueueItem['uploadData'];
 
       if (reportType === 'QC' && currentTopic) {
         key = currentTopic;
@@ -234,11 +248,12 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           projectId, projectName: projectName || 'N/A', reportType, 
           timestamp: photoTimestamp, 
           location: locationString || 'ไม่สามารถระบุตำแหน่งได้',
-          jobId: jobId, // <-- [สำคัญ] บันทึก JobID ณ ตอนถ่าย
+          jobId: jobId, 
+          jobLabel: jobLabel, // ✅ [เพิ่ม] บันทึก Label
           mainCategory: selectedMainCategory, 
           subCategory: selectedSubCategory, 
           topic: key, 
-          dynamicFields
+          dynamicFields: dynamicFields // ✅ [แก้ไข 1.4] dynamicFields ถูกต้องแล้ว
         };
       } else if (reportType === 'Daily' && step === 'camera') {
         key = `daily_${Date.now()}`;
@@ -246,9 +261,10 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           projectId, projectName: projectName || 'N/A', reportType, 
           timestamp: photoTimestamp, 
           location: locationString || 'ไม่สามารถระบุตำแหน่งได้',
-          jobId: jobId, // <-- [สำคัญ] บันทึก JobID ณ ตอนถ่าย (daily_YYYY-MM-DD)
+          jobId: jobId, 
+          jobLabel: jobLabel, // ✅ [เพิ่ม] บันทึก Label
           description: '', 
-          dynamicFields: {}
+          dynamicFields: {} // ✅ [แก้ไข 1.5] dynamicFields ถูกต้องแล้ว
         };
       } else {
         throw new Error("Invalid state for photo capture.");
@@ -305,8 +321,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setUploadStatus(`กำลังอัปโหลด 0/${itemsToUpload.length}...`); 
     setStep('uploading');
     
-    // (โค้ดที่เหลือเหมือนเดิมทั้งหมด)
-    
     let successCount = 0; 
     const totalPhotosToUpload = itemsToUpload.length; 
     const topicsJustUploaded = new Map<string, boolean>();
@@ -334,19 +348,16 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         }
         
         // 3. [FIX] ใช้ 'uploadData' จาก Snapshot ที่เก็บไว้
-        //    (ซึ่งมี mainCategory, subCategory, topic ที่ถูกต้อง)
         //    และ "ยัด" photoBase64 ที่แปลงแล้วเข้าไป
         let finalUploadData: UploadPhotoData = {
             ...uploadData, // <-- ใช้ข้อมูล Snapshot ตอนถ่าย
             photoBase64: photoToUpload,
         };
 
-        // 4. [FIX] อัปเดตเฉพาะสิ่งที่อาจเปลี่ยน (Description, JobID)
+        // 4. [FIX] อัปเดตเฉพาะสิ่งที่อาจเปลี่ยน (Description)
         if (finalUploadData.reportType === 'Daily') {
           finalUploadData.description = dailyDescriptions.get(key) || uploadData.description;
         }
-        // (เราใช้ JobID จาก Snapshot อยู่แล้ว ซึ่งถูกต้อง)
-        // finalUploadData.jobId = currentJobId; // (ไม่จำเป็นต้องอัปเดต เพราะเรากรองมาแล้ว)
 
         setUploadStatus(`( ${index + 1}/${totalPhotosToUpload} ) กำลังอัปโหลด ${key}...`);
         
@@ -354,7 +365,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         const response = await api.uploadPhoto(finalUploadData); 
         
         if (!response.success) {
-          // (Error ที่คุณเห็น 'Missing QC fields.' จะถูกจับที่นี่)
           throw new Error(`อัปโหลดล้มเหลวที่รูป: ${key} (${response.error})`);
         }
         
@@ -414,6 +424,12 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     }
 
     setIsUploading(false);
+
+    // ✅ [แก้ไข 3.1] นับจำนวนที่ "ล้มเหลว" (failed) เฉพาะใน "งานปัจจุบัน" เท่านั้น
+    const failedCount = Array.from(photoQueue.values()).filter(
+        item => item.uploadData.jobId === currentJobId && item.status === 'failed'
+    ).length;
+
     setTimeout(() => {
       setDailyDescriptions(prevDesc => {
         const newDesc = new Map(prevDesc);
@@ -427,10 +443,17 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       
       setUploadStatus('');
       
-      if (photoQueue.size > 0) {
+      // ✅ [แก้ไข 3.2] เปลี่ยนเงื่อนไข Alert
+      if (failedCount > 0) {
+        // ถ้ามีรายการที่ล้มเหลวใน "งานนี้" จริงๆ ให้แจ้งเตือน
         setStep(reportType === 'QC' ? 'topicList' : 'dailyReview');
-        alert(`อัปโหลดล้มเหลว ${photoQueue.size} รายการ กรุณาลองอีกครั้ง`);
+        setModalState({
+          title: 'อัปโหลดไม่สำเร็จ',
+          message: `อัปโหลดสำหรับงานนี้ล้มเหลว ${failedCount} รายการ กรุณาลองอีกครั้ง`
+        });
       } else {
+        // ถ้า "งานนี้" สำเร็จหมด (ล้มเหลว 0) ให้กลับหน้าแรก
+        // (แม้ว่าจะมีงานอื่นค้างในคิวก็ตาม)
         setStep('type');
       }
     }, 2000);
@@ -538,10 +561,35 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         break; 
       case 'dailyReview': setStep('camera'); break; 
       case 'camera': goToTypeScreen(); break; 
+      // ✅ [เพิ่ม]
+      case 'pendingManager': goToTypeScreen(); break;
       default: goToTypeScreen(); 
     }
   };
   
+  const handleDeleteTopic = (photoKey: string, topicLabel: string) => {
+    setModalState({
+      title: 'ยืนยันการลบ',
+      message: `คุณต้องการลบรูปของ '${topicLabel}' ออกจากคิวใช่หรือไม่?`,
+      onConfirm: () => {
+        setPhotoQueue(prevQueue => {
+          const newQueue = new Map(prevQueue);
+          newQueue.delete(photoKey);
+          return newQueue;
+        });
+      }
+    });
+  };
+
+  // ✅ [เพิ่ม] ฟังก์ชันสำหรับดูรูป (ใช้ Modal เดิม)
+  const handlePreviewPhoto = (item: PhotoQueueItem) => {
+    setPreviewData({
+      url: item.base64,
+      timestamp: item.timestamp,
+      location: item.location
+    });
+  };
+
   const renderChecklistHeader = () => {
     if (reportType === 'QC') {
       const parts = [selectedMainCategory, selectedSubCategory, ...Object.values(dynamicFields).filter(item => !!item)];
@@ -618,6 +666,19 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   // --- Main Render ---
   return (
     <div className={styles['wizard-container']}>
+      {modalState && (
+        <CustomModal
+          title={modalState.title}
+          message={modalState.message}
+          onConfirm={modalState.onConfirm ? () => {
+              modalState.onConfirm!();
+              setModalState(null);
+            } : undefined
+          }
+          onClose={() => setModalState(null)}
+        />
+      )}
+
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => handleNativeFileSelected(e, true)} />
       <input ref={attachInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleNativeFileSelected(e, false)} />
       {renderPreviewModal()} 
@@ -651,7 +712,11 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 {qcItemsInQueue > 0 && (
                   <div 
                     className={styles.pendingQueueWarning} 
-                    onClick={() => handleSelectReportType('QC')}
+                    // ✅ [แก้ไข 4] เปลี่ยน onClick ให้ไปที่ 'pendingManager'
+                    onClick={() => {
+                      setReportType('QC');
+                      setStep('pendingManager'); // <-- Error 2 & 3 จะหายไป
+                    }}
                     role="button"
                     tabIndex={0}
                   >
@@ -659,7 +724,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                       <FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> 
                       คุณมี {qcItemsInQueue} รูป QC ที่ยังไม่ได้อัปโหลด
                     </h3>
-                    <p style={{ margin: 0, color: '#856404' }}>คลิกที่นี่เพื่อไปที่หน้า "รายงาน QC" และค้นหา Job ของคุณเพื่ออัปโหลด</p>
+                    {/* ✅ [แก้ไข] เปลี่ยนข้อความให้สื่อความหมายมากขึ้น */}
+                    <p style={{ margin: 0, color: '#856404' }}>คลิกที่นี่เพื่อ "จัดการ" รูปที่ค้างอยู่</p>
                   </div>
                 )}
                 {dailyItemsInQueue > 0 && (
@@ -800,7 +866,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack} style={{ width: '100%' }}> ย้อนกลับ </button>
                 <button 
                   className={styles['upload-all-button']} 
-                  // [FIX] กรองจำนวนปุ่มให้ตรงกับ Job ID ปัจจุบัน
                   disabled={Array.from(photoQueue.values()).filter(item => item.uploadData.jobId === getCurrentJobIdentifier().id).length === 0 || isUploading} 
                   onClick={handleUploadAll} 
                   style={{ width: '100%' }}
@@ -813,13 +878,74 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         </div>
       )}
 
+      {/* ✅ [เพิ่ม] หน้า Pending Manager */}
+      {step === 'pendingManager' && (
+        <div className={styles['wizard-step']}>
+          <h2><FiInbox style={{ verticalAlign: 'middle', marginRight: '8px' }} /> 
+            งาน {reportType === 'QC' ? 'QC' : 'Daily'} ที่ค้างในคิว
+          </h2> 
+          
+          <PendingJobsManager
+            queue={photoQueue}
+            reportType={reportType}
+            onGoToJob={(jobData) => {
+              if (jobData.reportType === 'QC') {
+                setReportType('QC'); 
+                setSelectedMainCategory(jobData.mainCategory || ''); 
+                setSelectedSubCategory(jobData.subCategory || ''); 
+                // ✅ [แก้ไข 5] Cast Type ตรงนี้
+                setDynamicFields((jobData.dynamicFields as Record<string, string>) || {});
+                setUploadedStatus(new Map()); 
+                setStep('topicList');
+              } else {
+                setReportType('Daily');
+                setStep('dailyReview');
+              }
+            }}
+
+            onConfirmDeleteJob={(jobId, jobLabel, itemCount) => {
+              setModalState({
+                title: 'ยืนยันการลบ',
+                message: `คุณต้องการลบ ${itemCount} รูป ของงาน '${jobLabel}' ออกจากคิวใช่หรือไม่?`,
+                onConfirm: () => {
+                  setPhotoQueue(prevQueue => {
+                    const newQueue = new Map(prevQueue);
+                    newQueue.forEach((item, key) => {
+                      if (item.uploadData.jobId === jobId) {
+                        newQueue.delete(key);
+                      }
+                    });
+                    return newQueue;
+                  });
+                }
+              });
+            }}
+            // ✅ [แก้ไข] เปลี่ยนชื่อ Prop และส่งข้อมูลมาสร้าง Modal
+            onConfirmDeleteTopic={(photoKey, topicLabel) => {
+              // ส่งต่อให้ฟังก์ชันที่เราสร้างไว้ในข้อ 3.3
+              handleDeleteTopic(photoKey, topicLabel); 
+            }}
+            onPreviewPhoto={handlePreviewPhoto}
+            // onDeleteTopic={handleDeleteTopic} // (ลบอันนี้)
+          />
+
+          <div className={styles['wizard-nav']}> 
+            <button 
+              className={`${styles['wizard-button']} ${styles.secondary}`} 
+              onClick={goBack} // <-- แก้ไขให้ goBack ไป TypeScreen
+            >
+              ย้อนกลับ
+            </button> 
+          </div>
+        </div>
+      )}
+
       {step === 'dailyReview' && (
         <div className={styles['wizard-step']}>
           <h2><FiEdit style={{ verticalAlign: 'middle', marginRight: '8px' }} /> จัดการรูป & คำบรรยาย (Daily)</h2> 
           
           <div className={styles['daily-review-list']}>
              {Array.from(photoQueue.entries())
-                  // [FIX] กรองให้ตรง Job ID (daily_YYYY-MM-DD)
                   .filter(([key, item]) => item.uploadData.jobId === getCurrentJobIdentifier().id)
                   .map(renderDailyReviewItem)
              }
@@ -838,7 +964,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             <button
               className={styles['upload-all-button']}
               onClick={handleUploadAll}
-              // [FIX] กรองจำนวนปุ่มให้ตรงกับ Job ID ปัจจุบัน
               disabled={isUploading || Array.from(photoQueue.values()).filter(item => item.uploadData.jobId === getCurrentJobIdentifier().id).length === 0}
             >
               📤 อัปโหลด ({Array.from(photoQueue.values()).filter(item => item.uploadData.jobId === getCurrentJobIdentifier().id).length})
@@ -879,7 +1004,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           </div>
           
           {(() => {
-            // [FIX] กรองจำนวนปุ่มให้ตรงกับ Job ID ปัจจุบัน
             const dailyQueueSize = Array.from(photoQueue.values()).filter(item => item.uploadData.jobId === getCurrentJobIdentifier().id).length;
             return (
               <>
@@ -912,6 +1036,166 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         </div>
       )}
 
+    </div>
+  );
+};
+
+// ✅ [เพิ่ม] Component ใหม่
+interface PendingJobsManagerProps {
+  queue: Map<string, PhotoQueueItem>;
+  reportType: 'QC' | 'Daily';
+  onGoToJob: (jobData: PhotoQueueItem['uploadData']) => void;
+  // ✅ [แก้ไข] อัปเดต Props
+  onConfirmDeleteJob: (jobId: string, jobLabel: string, itemCount: number) => void;
+  onConfirmDeleteTopic: (photoKey: string, topicLabel: string) => void;
+  onPreviewPhoto: (item: PhotoQueueItem) => void;
+}
+
+const PendingJobsManager: React.FC<PendingJobsManagerProps> = ({ 
+  queue, 
+  reportType, 
+  onGoToJob, 
+  onConfirmDeleteJob,
+  onConfirmDeleteTopic,
+  onPreviewPhoto
+}) => {
+
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+
+  const pendingJobs = useMemo(() => {
+    type JobGroup = {
+      jobId: string;
+      jobLabel: string;
+      items: PhotoQueueItem[];
+      firstItemData: PhotoQueueItem['uploadData'];
+    };
+    const groups = new Map<string, JobGroup>();
+
+    // ✅ [แก้ไข 6.2] เปลี่ยน Loop เป็น forEach
+    queue.forEach((item) => {
+      if (item.uploadData.reportType !== reportType) return; // 'continue'
+      
+      const jobId = item.uploadData.jobId;
+      if (!jobId) return; // 'continue'
+
+      if (!groups.has(jobId)) {
+        const label = item.uploadData.jobLabel || 
+                      (item.uploadData.mainCategory ? `${item.uploadData.mainCategory} / ${item.uploadData.subCategory}` : 'งานไม่ระบุชื่อ');
+        
+        groups.set(jobId, {
+          jobId: jobId,
+          jobLabel: label,
+          items: [],
+          firstItemData: item.uploadData,
+        });
+      }
+      groups.get(jobId)!.items.push(item);
+    });
+
+    return Array.from(groups.values());
+  }, [queue, reportType]);
+
+  if (pendingJobs.length === 0) {
+    return <p style={{textAlign: 'center', color: '#888', margin: '40px 0'}}>ไม่พบงานที่ค้างในคิว</p>;
+  }
+
+return (
+    <div className={styles['topic-list']}>
+      {pendingJobs.map((job) => (
+        <div key={job.jobId} className={styles['pending-job-group']}>
+          {/* === ส่วน Header ของ Accordion (Job) === */}
+          <div 
+            className={styles['recent-job-item']} 
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            {/* ทำให้ส่วนข้อความกดขยายได้ */}
+            <div 
+              style={{ flex: 1, cursor: 'pointer', padding: '10px 0' }}
+              onClick={() => setExpandedJobId(job.jobId === expandedJobId ? null : job.jobId)}
+            >
+              <span style={{ fontWeight: 'bold' }}>
+                {/* เพิ่มไอคอนลูกศร */}
+                {expandedJobId === job.jobId ? '▼' : '►'} {job.jobLabel}
+              </span>
+              <br />
+              <small style={{ color: '#555', paddingLeft: '20px' }}>
+                {job.items.length} รูปที่ยังไม่ได้อัปโหลด
+              </small>
+            </div>
+            
+            {/* ปุ่ม "ไปที่หน้านี้" (วาร์ป) */}
+            <button 
+              className={styles['topic-list-item-button']} 
+              title="ไปที่หน้านี้เพื่ออัปโหลด"
+              onClick={() => onGoToJob(job.firstItemData)}
+              style={{ marginRight: '5px' }}
+            >
+              📤
+            </button>
+            
+            {/* ปุ่ม "ลบทั้ง Job" */}
+            <button 
+              className={`${styles['topic-list-item-button']} ${styles.attach}`}
+              title="ลบรูปทั้งหมดของงานนี้"
+              onClick={() => {
+                // ✅ [แก้ไข] เรียก Prop ใหม่
+                onConfirmDeleteJob(job.jobId, job.jobLabel, job.items.length);
+              }}
+            >
+              <FiTrash2 />
+            </button>
+          </div>
+
+          {/* === ส่วน Body ของ Accordion (แสดง Topic/รูป) === */}
+          {expandedJobId === job.jobId && (
+            <div className={styles['pending-job-details']}>
+              {job.items.map((item) => {
+                // สร้าง Label สำหรับแต่ละรูป
+                let itemLabel = item.key;
+                if (item.uploadData.reportType === 'QC' && item.uploadData.topic) {
+                  itemLabel = `หัวข้อ: ${item.uploadData.topic}`;
+                } else if (item.uploadData.reportType === 'Daily') {
+                  itemLabel = item.uploadData.description 
+                    ? `(Daily) ${item.uploadData.description.substring(0, 30)}...`
+                    : `(Daily) รูปถ่าย ${new Date(item.timestamp).toLocaleTimeString('th-TH')}`;
+                }
+
+                return (
+                  <div key={item.key} className={styles['pending-topic-item']}>
+                    {/* ชื่อหัวข้อ/รูป */}
+                    <span style={{ color: item.status === 'failed' ? 'red' : 'inherit' }}>
+                      {itemLabel}
+                      {item.status === 'failed' && ' (ล้มเหลว)'}
+                    </span>
+                    
+                    {/* ปุ่มจัดการรายรูป */}
+                    <div className={styles['pending-topic-actions']}>
+                      <button 
+                        className={`${styles['topic-list-item-button']} ${styles.attach}`}
+                        title="ดูรูป"
+                        onClick={() => onPreviewPhoto(item)}
+                      >
+                        👁️
+                      </button>
+                      <button 
+                        className={`${styles['topic-list-item-button']} ${styles.attach}`}
+                        title="ลบรูปนี้"
+                        onClick={() => {
+                          // ✅ [แก้ไข] เรียก Prop ใหม่
+                          onConfirmDeleteTopic(item.key, itemLabel);
+                        }}
+                        style={{ marginLeft: '5px' }}
+                      >
+                        <FiTrash2 />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 };

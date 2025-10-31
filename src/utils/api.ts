@@ -247,8 +247,8 @@ export const api = {
         projectId: data.projectId,
         reportType: data.reportType,
         
-        // [FIX] เปลี่ยน 'photoBase64' เป็น 'photo'
-        photo: data.photoBase64, 
+        // ✅ [แก้ไข] Key ต้องเป็น 'photoBase64' ให้ตรงกับ index.ts
+        photoBase64: data.photoBase64, 
         
         // [FIX] รวม 'mainCategory' และ 'subCategory' เป็น 'category'
         category: data.reportType === 'QC' ? `${data.mainCategory} > ${data.subCategory}` : undefined,
