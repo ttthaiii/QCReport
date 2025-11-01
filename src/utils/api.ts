@@ -73,19 +73,14 @@ export interface SharedJob {
 // [แก้ไข] 2. ขยาย Type 'Photo' ให้มี Field ที่ PhotoGallery.tsx ต้องการ
 export interface Photo {
   id: string;
-  driveUrl: string; 
-  createdAt: string; 
+  driveUrl: string;
+  // (Fields ที่ Error ใน PhotoGallery.tsx)
+  createdAt: string; // (หรือ Date)
   reportType: 'QC' | 'Daily';
   topic?: string;
   description?: string;
   filename: string;
   location?: string;
-
-  // ----- 👇 เพิ่ม 3 Fields นี้เข้าไปครับ -----
-  timestamp?: any;   // หรือ string, Date (Type ที่ถูกต้องตามข้อมูลจริง)
-  imageUrl?: string;
-  storageUrl?: string;
-  // ----------------------------------------
 }
 
 export interface ApiResponse<T> {
@@ -147,7 +142,7 @@ export interface ChecklistStatusResponse {
 const IS_DEV = process.env.NODE_ENV === 'development';
 const NEW_PROJECT_ID = 'tts-smart-report-generator';
 const API_BASE_URL = IS_DEV 
-  ? 'http://localhost:5001/qcreport-54164/asia-southeast1/api' 
+  ? `http://localhost:5001/${NEW_PROJECT_ID}/asia-southeast1/api` 
   : '/api';
 
 

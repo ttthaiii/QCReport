@@ -60,18 +60,21 @@ function createStableReportId(
   return createHash('sha256').update(combinedString).digest('hex').substring(0, 20);
 }
 
+const NEW_PROJECT_ID = "tts2004-smart-report-generate";
+
 if (!admin.apps.length) {
   if (IS_EMULATOR) {
     console.log("🔧 Running in EMULATOR mode (with Service Account)");
-    const serviceAccount = require("../keys/qcreport-54164-4d8f26cbb52f.json");
+    // TODO: ควรเปลี่ยนไปใช้ Service Account ของโปรเจกต์ใหม่ด้วย
+    const serviceAccount = require("../keys/tts2004-smart-report-generate-firebase-adminsdk-fbsvc-6e20b0c418.json"); 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount), 
-      storageBucket: "qcreport-54164.appspot.com"
+      storageBucket: `${NEW_PROJECT_ID}.appspot.com` // <-- ✅ แก้ไขแล้ว
     });
   } else {
     console.log("🚀 Running in PRODUCTION mode");
     admin.initializeApp({
-      storageBucket: "qcreport-54164.appspot.com"
+      storageBucket: `${NEW_PROJECT_ID}.appspot.com` // <-- ✅ แก้ไขแล้ว
     });
   }
 }
@@ -183,18 +186,12 @@ app.get("/health", (req: Request, res: Response) => {
   res.json({ 
     status: "healthy",
     environment: IS_EMULATOR ? "emulator" : "production",
-    version: "8.2" // เปลี่ยนเวอร์ชัน
+    version: "8.0" // <-- [ใหม่] อัปเดตเวอร์ชัน
   });
-});
-
-app.get("/test-public", (req: Request, res: Response) => {
-  res.json({ success: true, message: "Public endpoint works!" });
 });
 
 // ✅ Get all active projects
 app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
-  console.log("📋 /projects endpoint called - NO AUTH REQUIRED"); // <-- เพิ่มบรรทัดนี้
-  
   try {
     const projectsSnapshot = await db
       .collection("projects")
@@ -222,9 +219,7 @@ app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
 
 app.use(checkAuth);
 
-console.log("🔐 checkAuth middleware registered - all routes below require auth"); 
-
-app.get("/admin/users", checkRole(['admin', 'god']), async (req, res) => {
+app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
   try {
     // 1. ดึงข้อมูล User (เหมือนเดิม)
     const listUsersResult = await admin.auth().listUsers();
@@ -273,7 +268,7 @@ app.get("/admin/users", checkRole(['admin', 'god']), async (req, res) => {
  * (Admin) อัปเดตสถานะผู้ใช้ (อนุมัติ/ปฏิเสธ)
  * (ต้องเป็น Admin หรือ God)
  */
-app.post("/admin/update-status/:uid", checkRole(['admin', 'god']), async (req, res) => {
+app.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), async (req, res): Promise<Response> => {
   try {
     const { uid } = req.params;
     const { status } = req.body; // รับ 'approved' หรือ 'rejected'
@@ -295,7 +290,7 @@ app.post("/admin/update-status/:uid", checkRole(['admin', 'god']), async (req, r
  * (God) ตั้งค่า Role ผู้ใช้
  * (ต้องเป็น God เท่านั้น)
  */
-app.post("/admin/set-role/:uid", checkRole(['god']), async (req, res) => {
+app.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res) => {
   try {
     const { uid } = req.params;
     const { role } = req.body; // รับ 'user', 'admin', หรือ 'god'
