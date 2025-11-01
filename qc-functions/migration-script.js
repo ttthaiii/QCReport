@@ -21,9 +21,7 @@ if (process.env.FIRESTORE_EMULATOR_HOST) {
 } else {
     console.log('🚀 Connecting to PRODUCTION Firestore...');
     // (โค้ด Production)
-admin.initializeApp(); 
 }
-
 const db = admin.firestore();
 const auth = admin.auth(); // Auth service
 
