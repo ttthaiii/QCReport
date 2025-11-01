@@ -53,7 +53,10 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
   const [view, setView] = useState<AdminView>('config');
   const [configView, setConfigView] = useState<ConfigView>('structure'); 
 
-  const [internalConfig, setInternalConfig] = useState<ProjectConfig | null>(projectConfig);
+  const [internalConfig, setInternalConfig] = useState<MainCategory[] | null>(
+    projectConfig?.mainCategories ?? null
+  );
+
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [newName, setNewName] = useState("");
   const [activeForm, setActiveForm] = useState<string | null>(null);
@@ -66,7 +69,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setInternalConfig(projectConfig);
+    setInternalConfig(projectConfig?.mainCategories ?? null);
   }, [projectConfig]);
 
   useEffect(() => {
@@ -115,7 +118,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
         name: response.data.name,
         subCategories: [] // เริ่มต้นด้วย SubCategories ว่าง
       };
-      setInternalConfig([ ...internalConfig, newMainCat ]);
+      setInternalConfig([...internalConfig, newMainCat]);
       
       setNewName("");
       setActiveForm(null);

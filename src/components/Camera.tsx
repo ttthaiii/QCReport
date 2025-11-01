@@ -111,7 +111,10 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   }, [projectId, photoQueue]);
 
   // (useMemo)
-  const mainCategories: MainCategory[] = useMemo(() => qcTopics || [], [qcTopics]);
+  const mainCategories: MainCategory[] = useMemo(
+  () => qcTopics?.mainCategories ?? [],
+  [qcTopics]
+  );
   const selectedMainCat: MainCategory | undefined = useMemo(() => mainCategories.find(m => m.name === selectedMainCategory), [mainCategories, selectedMainCategory]);
   const subCategories: SubCategory[] = useMemo(() => selectedMainCat?.subCategories || [], [selectedMainCat]);
   const selectedSubCat: SubCategory | undefined = useMemo(() => subCategories.find(s => s.name === selectedSubCategory), [subCategories, selectedSubCategory]);
@@ -252,7 +255,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           jobLabel: jobLabel, // ✅ [เพิ่ม] บันทึก Label
           mainCategory: selectedMainCategory, 
           subCategory: selectedSubCategory, 
-          topic: key, 
+          topic: key,
+          description: '',  
           dynamicFields: dynamicFields // ✅ [แก้ไข 1.4] dynamicFields ถูกต้องแล้ว
         };
       } else if (reportType === 'Daily' && step === 'camera') {
@@ -263,6 +267,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           location: locationString || 'ไม่สามารถระบุตำแหน่งได้',
           jobId: jobId, 
           jobLabel: jobLabel, // ✅ [เพิ่ม] บันทึก Label
+          topic: '',                  // ← เติมบรรทัดนี้ (ให้ค่าว่าง)
           description: '', 
           dynamicFields: {} // ✅ [แก้ไข 1.5] dynamicFields ถูกต้องแล้ว
         };

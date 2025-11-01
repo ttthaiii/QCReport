@@ -73,14 +73,19 @@ export interface SharedJob {
 // [แก้ไข] 2. ขยาย Type 'Photo' ให้มี Field ที่ PhotoGallery.tsx ต้องการ
 export interface Photo {
   id: string;
-  driveUrl: string;
-  // (Fields ที่ Error ใน PhotoGallery.tsx)
-  createdAt: string; // (หรือ Date)
+  driveUrl: string; 
+  createdAt: string; 
   reportType: 'QC' | 'Daily';
   topic?: string;
   description?: string;
   filename: string;
   location?: string;
+
+  // ----- 👇 เพิ่ม 3 Fields นี้เข้าไปครับ -----
+  timestamp?: any;   // หรือ string, Date (Type ที่ถูกต้องตามข้อมูลจริง)
+  imageUrl?: string;
+  storageUrl?: string;
+  // ----------------------------------------
 }
 
 export interface ApiResponse<T> {
