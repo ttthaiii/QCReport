@@ -53,7 +53,7 @@ const admin = __importStar(require("firebase-admin"));
 const storage_1 = require("firebase-admin/storage");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
-const express_1 = __importDefault(require("express"));
+const express_1 = __importDefault(require("express")); // [แก้ไข] import express Router ด้วย
 const cors_1 = __importDefault(require("cors"));
 const crypto_1 = require("crypto");
 // ✅ [แก้ไข] Import ReportSettings (ต้องสร้าง Interface นี้ใน pdf-generator.ts ด้วย)
@@ -84,7 +84,23 @@ function createStableReportId(reportType, mainCategory, subCategory, dynamicFiel
     // ใช้ Hash เพื่อให้ ID สั้นและไม่ซ้ำกันสำหรับแต่ละ Filter
     return (0, crypto_1.createHash)('sha256').update(combinedString).digest('hex').substring(0, 20);
 }
+// ✅ --- [เพิ่มใหม่] ---
+// ฟังก์ชันสร้าง ID ที่ไม่ซ้ำกันสำหรับ QC Photo (จาก projectId, category, topic, dynamicFields)
+function createStableQcId(projectId, category, // "Main > Sub"
+topic, dynamicFields) {
+    // 1. เรียง Key ของ dynamicFields เพื่อให้ ID คงที่เสมอ
+    const sortedFields = Object.keys(dynamicFields || {}).sort()
+        .map(key => `${key}=${dynamicFields[key]}`)
+        .join('&');
+    // 2. รวมทุกอย่าง
+    const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
+    // 3. Hash ID ให้อยู่ในรูปแบบที่ Firestore ใช้งานง่าย
+    return (0, crypto_1.createHash)('md5').update(rawId).digest('hex');
+}
+// ✅ --- [จบส่วนเพิ่มใหม่] ---
 const NEW_PROJECT_ID = "tts2004-smart-report-generate";
+// ✅ [แก้ไข] ระบุชื่อ Bucket ที่ถูกต้องของคุณที่นี่
+const CORRECT_BUCKET_NAME = "tts2004-smart-report-generate.firebasestorage.app";
 if (!admin.apps.length) {
     if (IS_EMULATOR) {
         console.log("🔧 Running in EMULATOR mode (with Service Account)");
@@ -92,21 +108,26 @@ if (!admin.apps.length) {
         const serviceAccount = require("../keys/tts2004-smart-report-generate-firebase-adminsdk-fbsvc-6e20b0c418.json");
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
-            storageBucket: `${NEW_PROJECT_ID}.appspot.com` // <-- ✅ แก้ไขแล้ว
+            storageBucket: CORRECT_BUCKET_NAME // <-- ✅ แก้ไขเป็นชื่อที่ถูกต้อง
         });
     }
     else {
         console.log("🚀 Running in PRODUCTION mode");
         admin.initializeApp({
-            storageBucket: `${NEW_PROJECT_ID}.appspot.com` // <-- ✅ แก้ไขแล้ว
+            storageBucket: CORRECT_BUCKET_NAME // <-- ✅ แก้ไขเป็นชื่อที่ถูกต้อง
         });
     }
 }
 const db = (0, firestore_1.getFirestore)();
-const app = (0, express_1.default)();
-app.use((0, cors_1.default)({ origin: true }));
-//app.use(cors({ origin: true }));
-const jsonParser = express_1.default.json({ limit: "10mb" });
+// --- [แก้ไข] ---
+// 1. สร้าง App หลัก
+const mainApp = (0, express_1.default)();
+mainApp.use((0, cors_1.default)({ origin: true }));
+// 2. ใช้ json parser กับ App หลัก เพื่อให้ทุก route รับ json body ได้
+mainApp.use(express_1.default.json({ limit: "10mb" }));
+// 3. สร้าง Router ใหม่สำหรับ API
+const apiRouter = express_1.default.Router();
+// --- จบการแก้ไข ---
 // --- API ROUTES ---
 const checkAuth = async (req, res, next) => {
     // 1.1 ตรวจสอบว่ามี Header 'Authorization' (ตั๋ว) ส่งมาไหม
@@ -158,8 +179,9 @@ const checkRole = (roles) => {
     };
 };
 // ... (คง Endpoint /health, /projects, /project-config, /projects/:projectId/report-settings ไว้เหมือนเดิม) ...
+// --- [แก้ไข] เปลี่ยน "app." ทั้งหมดเป็น "apiRouter." ---
 // ✅ Health check endpoint
-app.get("/health", (req, res) => {
+apiRouter.get("/health", (req, res) => {
     res.json({
         status: "healthy",
         environment: IS_EMULATOR ? "emulator" : "production",
@@ -167,7 +189,7 @@ app.get("/health", (req, res) => {
     });
 });
 // ✅ Get all active projects
-app.get("/projects", async (req, res) => {
+apiRouter.get("/projects", async (req, res) => {
     try {
         const projectsSnapshot = await db
             .collection("projects")
@@ -187,14 +209,17 @@ app.get("/projects", async (req, res) => {
         });
     }
 });
-app.use(checkAuth);
-app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
+// [แก้ไข] ใช้ middleware กับ apiRouter
+apiRouter.use(checkAuth);
+apiRouter.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
     try {
-        // 1. ดึงข้อมูล User (เหมือนเดิม)
-        const listUsersResult = await admin.auth().listUsers();
-        const firestoreUsersSnap = await db.collection('users').get();
+        // [แก้ไข] สั่งดึงข้อมูล 3 อย่างพร้อมกัน (Parallel)
+        const [listUsersResult, firestoreUsersSnap, projectsSnap] = await Promise.all([
+            admin.auth().listUsers(),
+            db.collection('users').get(),
+            db.collection('projects').get()
+        ]);
         // ✅ [ใหม่] 2. ดึงข้อมูล Projects ทั้งหมดมาสร้าง Map
-        const projectsSnap = await db.collection('projects').get();
         const projectsMap = new Map();
         projectsSnap.forEach(doc => {
             projectsMap.set(doc.id, doc.data().projectName || doc.id); // เก็บ projectName
@@ -231,7 +256,7 @@ app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res)
  * (Admin) อัปเดตสถานะผู้ใช้ (อนุมัติ/ปฏิเสธ)
  * (ต้องเป็น Admin หรือ God)
  */
-app.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
+apiRouter.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
     try {
         const { uid } = req.params;
         const { status } = req.body; // รับ 'approved' หรือ 'rejected'
@@ -250,7 +275,7 @@ app.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), as
  * (God) ตั้งค่า Role ผู้ใช้
  * (ต้องเป็น God เท่านั้น)
  */
-app.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res) => {
+apiRouter.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res) => {
     try {
         const { uid } = req.params;
         const { role } = req.body; // รับ 'user', 'admin', หรือ 'god'
@@ -269,7 +294,7 @@ app.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res)
     }
 });
 // ✅ Get project configuration
-app.get("/project-config/:projectId", async (req, res) => {
+apiRouter.get("/project-config/:projectId", async (req, res) => {
     const user = req.user;
     const { projectId } = req.params;
     // [ใหม่] ตรวจสอบสิทธิ์: User ทั่วไปสามารถดูได้เฉพาะ Config โครงการตัวเอง (ยกเว้น God)
@@ -277,7 +302,7 @@ app.get("/project-config/:projectId", async (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied to this project config.' });
     }
     try {
-        const { projectId } = req.params;
+        // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
         const projectConfigRef = db.collection("projectConfig").doc(projectId);
         const mainCategoriesPromise = projectConfigRef
             .collection("mainCategories")
@@ -348,14 +373,14 @@ app.get("/project-config/:projectId", async (req, res) => {
     }
 });
 // ✅ [ใหม่ V11.3] Get Project Report Settings
-app.get("/projects/:projectId/report-settings", async (req, res) => {
+apiRouter.get("/projects/:projectId/report-settings", async (req, res) => {
     const user = req.user;
     const { projectId } = req.params;
     if (user.role !== 'god' && user.assignedProjectId !== projectId) {
         return res.status(403).json({ success: false, error: 'Access denied to settings.' });
     }
     try {
-        const { projectId } = req.params;
+        // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
         const projectRef = db.collection("projects").doc(projectId);
         const projectDoc = await projectRef.get();
         if (!projectDoc.exists) {
@@ -378,7 +403,7 @@ app.get("/projects/:projectId/report-settings", async (req, res) => {
     }
 });
 // ✅ Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
-app.post("/projects/:projectId/report-settings", jsonParser, async (req, res) => {
+apiRouter.post("/projects/:projectId/report-settings", async (req, res) => {
     const user = req.user;
     const { projectId } = req.params;
     if (user.role === 'user') { // User ทั่วไปห้ามแก้ไข
@@ -388,11 +413,14 @@ app.post("/projects/:projectId/report-settings", jsonParser, async (req, res) =>
         return res.status(403).json({ success: false, error: 'Access denied.' });
     }
     try {
-        const { projectId } = req.params;
+        // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
         const newSettings = req.body;
-        if (typeof newSettings.photosPerPage !== 'number' || ![1, 2, 4, 6].includes(newSettings.photosPerPage)) {
-            console.warn("Invalid photosPerPage value received:", newSettings.photosPerPage);
-            newSettings.photosPerPage = 6;
+        // (Validate)
+        if (newSettings.qcPhotosPerPage && (typeof newSettings.qcPhotosPerPage !== 'number' || ![1, 2, 4, 6].includes(newSettings.qcPhotosPerPage))) {
+            newSettings.qcPhotosPerPage = 6;
+        }
+        if (newSettings.dailyPhotosPerPage && (typeof newSettings.dailyPhotosPerPage !== 'number' || ![1, 2, 4, 6].includes(newSettings.dailyPhotosPerPage))) {
+            newSettings.dailyPhotosPerPage = 6;
         }
         const projectRef = db.collection("projects").doc(projectId);
         await projectRef.set({ reportSettings: newSettings }, { merge: true });
@@ -409,7 +437,7 @@ app.post("/projects/:projectId/report-settings", jsonParser, async (req, res) =>
 });
 // ✅ Endpoint สำหรับ Upload Logo โครงการ
 // ✅ [แก้ไข V11.3] Endpoint สำหรับ Upload Logo โครงการ (แก้ไขปัญหา Busboy)
-app.post("/projects/:projectId/upload-logo", jsonParser, async (req, res) => {
+apiRouter.post("/projects/:projectId/upload-logo", async (req, res) => {
     // [ใหม่] ตรวจสอบสิทธิ์ (เฉพาะ Admin/God)
     const user = req.user;
     const { projectId } = req.params;
@@ -438,7 +466,7 @@ app.post("/projects/:projectId/upload-logo", jsonParser, async (req, res) => {
         // 3. แปลง Base64 กลับเป็น Buffer (เหมือนที่ทำกับ QC/Daily)
         const fileBuffer = Buffer.from(cleanBase64, "base64");
         // 4. อัปโหลด Buffer ไปยัง Storage
-        const bucket = (0, storage_1.getStorage)().bucket();
+        const bucket = (0, storage_1.getStorage)().bucket(CORRECT_BUCKET_NAME); // (ใช้ชื่อที่ถูกต้อง)
         const fileExtension = mimeType.split('/')[1] || 'png'; // เช่น 'png'
         const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
         const filePath = `logos/${projectId}/${uniqueFilename}`;
@@ -464,23 +492,28 @@ app.post("/projects/:projectId/upload-logo", jsonParser, async (req, res) => {
     }
 });
 // ✅ Upload photo with base64
-app.post("/upload-photo-base64", jsonParser, async (req, res) => {
+apiRouter.post("/upload-photo-base64", async (req, res) => {
     const user = req.user;
-    const { projectId } = req.body;
+    let projectIdFromBody = req.body.projectId; // (ใช้ let เพราะอาจต้องแก้)
     // 1. ตรวจสอบสถานะ "approved"
     if (user.status !== 'approved') {
         return res.status(403).json({ success: false, error: 'Account not approved.' });
     }
     // 2. ตรวจสอบว่าอัปโหลดเข้า Project ตัวเองหรือไม่ (ยกเว้น God)
-    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+    if (user.role !== 'god' && user.assignedProjectId !== projectIdFromBody) {
+        console.warn(`User ${user.email} (role ${user.role}) trying to upload to ${projectIdFromBody} but is assigned to ${user.assignedProjectId}`);
+        // (ทางเลือก: บังคับให้เป็น Project ID ของ User)
+        // projectIdFromBody = user.assignedProjectId;
+        // (ทางเลือก: ปฏิเสธ)
         return res.status(403).json({ success: false, error: 'Project mismatch. Cannot upload to this project.' });
     }
     try {
         // ✅✅✅ --- START OF FIX --- ✅✅✅
         const { photoBase64, // <-- [แก้ไข] เปลี่ยนจาก 'photo'
-        projectId, reportType, category, topic, description, location, dynamicFields } = req.body;
+        // projectId, (ใช้ projectIdFromBody แทน)
+        reportType, category, topic, description, location, dynamicFields } = req.body;
         // [แก้ไข] เปลี่ยน 'photo' เป็น 'photoBase64'
-        if (!photoBase64 || !projectId || !reportType) {
+        if (!photoBase64 || !projectIdFromBody || !reportType) {
             // ✅✅✅ --- END OF FIX --- ✅✅✅
             return res.status(400).json({
                 success: false,
@@ -489,6 +522,7 @@ app.post("/upload-photo-base64", jsonParser, async (req, res) => {
         }
         let filenamePrefix;
         let photoData;
+        let stableQcId = null; // (ตัวแปรสำหรับ ID ใหม่)
         if (reportType === 'QC') {
             if (!category || !topic) {
                 return res.status(400).json({
@@ -499,7 +533,7 @@ app.post("/upload-photo-base64", jsonParser, async (req, res) => {
             const sanitizedCategoryForPrefix = category.replace(/\s*>\s*/g, "_");
             filenamePrefix = `${sanitizedCategoryForPrefix}-${topic}`;
             photoData = {
-                projectId,
+                projectId: projectIdFromBody,
                 reportType,
                 category,
                 topic,
@@ -509,11 +543,15 @@ app.post("/upload-photo-base64", jsonParser, async (req, res) => {
                 driveUrl: '',
                 filePath: ''
             };
+            // ✅ --- [เพิ่มใหม่] ---
+            // สร้าง Stable ID สำหรับ 'latestQcPhotos'
+            stableQcId = createStableQcId(projectIdFromBody, category, topic, dynamicFields || {});
+            // ✅ --- [จบส่วนเพิ่มใหม่] ---
         }
         else if (reportType === 'Daily') {
             filenamePrefix = `Daily-${(description === null || description === void 0 ? void 0 : description.substring(0, 20)) || 'report'}`;
             photoData = {
-                projectId,
+                projectId: projectIdFromBody,
                 reportType,
                 description: description || "",
                 location: location || "",
@@ -544,11 +582,12 @@ app.post("/upload-photo-base64", jsonParser, async (req, res) => {
         if (imageBuffer.length < 100) {
             throw new Error('Invalid image data: buffer too small');
         }
-        if (imageBuffer[0] !== 0xFF || imageBuffer[1] !== 0xD8) {
-            console.error('❌ Invalid JPEG header:', imageBuffer.slice(0, 10));
-            throw new Error('Invalid image data: not a valid JPEG');
-        }
-        console.log('✅ Valid JPEG image detected');
+        // (Comment out JPEG check - might cause issues with PNGs/HEIC)
+        // if (imageBuffer[0] !== 0xFF || imageBuffer[1] !== 0xD8) {
+        //   console.error('❌ Invalid JPEG header:', imageBuffer.slice(0, 10));
+        //   throw new Error('Invalid image data: not a valid JPEG');
+        // }
+        // console.log('✅ Valid JPEG image detected');
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         const filename = `${filenamePrefix}-${timestamp}.jpg`.replace(/\s/g, "_");
         const storageCategoryPath = reportType === 'QC'
@@ -557,13 +596,22 @@ app.post("/upload-photo-base64", jsonParser, async (req, res) => {
         const storageResult = await (0, storage_2.uploadPhotoToStorage)({
             imageBuffer,
             filename,
-            projectId,
+            projectId: projectIdFromBody,
             category: storageCategoryPath
         });
         photoData.filename = storageResult.filename;
         photoData.driveUrl = storageResult.publicUrl;
         photoData.filePath = storageResult.filePath;
+        // 1. บันทึกลง Collection หลัก (qcPhotos หรือ dailyPhotos)
         const firestoreResult = await (0, firestore_2.logPhotoToFirestore)(photoData);
+        // ✅ --- [เพิ่มใหม่] ---
+        // 2. ถ้าเป็น QC, ให้อัปเดต 'latestQcPhotos' ด้วย
+        if (reportType === 'QC' && stableQcId) {
+            console.log(`Updating latestQcPhotos for ID: ${stableQcId}`);
+            await db.collection('latestQcPhotos').doc(stableQcId).set(Object.assign(Object.assign({}, photoData), { createdAt: firestore_1.FieldValue.serverTimestamp() // (สำคัญ: ใช้อันนี้เพื่ออัปเดตเวลา)
+             }));
+        }
+        // ✅ --- [จบส่วนเพิ่มใหม่] ---
         return res.json({
             success: true,
             data: Object.assign(Object.assign({}, firestoreResult), storageResult)
@@ -578,7 +626,7 @@ app.post("/upload-photo-base64", jsonParser, async (req, res) => {
     }
 });
 // ✅ [แก้ไข] Generate PDF report (v8 - with Dynamic Settings)
-app.post("/generate-report", jsonParser, async (req, res) => {
+apiRouter.post("/generate-report", async (req, res) => {
     var _a, _b;
     const user = req.user;
     const { projectId } = req.body;
@@ -633,7 +681,12 @@ app.post("/generate-report", jsonParser, async (req, res) => {
             const allTopics = topicsSnap.docs.map(doc => doc.data().name);
             if (allTopics.length === 0)
                 return res.status(404).json({ success: false, error: "No topics found." });
+            // ✅ --- [แก้ไข] ---
+            // (นี่คือจุดที่ Error เกิดขึ้น)
+            // เราจะเรียก getLatestPhotos (เวอร์ชันใหม่) ที่ไม่ต้องใช้ Index
+            console.log('Calling NEW getLatestPhotos function...');
             const foundPhotos = await (0, pdf_generator_1.getLatestPhotos)(projectId, mainCategory, subCategory, allTopics, dynamicFields || {});
+            // ✅ --- [จบการแก้ไข] ---
             const fullLayoutPhotos = (0, pdf_generator_1.createFullLayout)(allTopics, foundPhotos);
             const reportData = { projectId, projectName, mainCategory, subCategory, dynamicFields: dynamicFields || {} };
             const qcReportSettings = Object.assign(Object.assign({}, reportSettings), { photosPerPage: reportSettings.qcPhotosPerPage });
@@ -731,7 +784,7 @@ app.post("/generate-report", jsonParser, async (req, res) => {
         });
     }
 });
-app.get("/photos/:projectId", async (req, res) => {
+apiRouter.get("/photos/:projectId", async (req, res) => {
     // [ใหม่] (Optional) ตรวจสอบสิทธิ์
     const user = req.user;
     const { projectId } = req.params;
@@ -739,7 +792,7 @@ app.get("/photos/:projectId", async (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied.' });
     }
     try {
-        const { projectId } = req.params;
+        // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
         if (!projectId) {
             return res.status(400).json({
                 success: false,
@@ -788,7 +841,7 @@ const checkAdminOrGod = (req, res, next) => {
     }
     return next();
 };
-app.post("/project-config/:projectId/main-category/:mainCatId", jsonParser, checkAdminOrGod, async (req, res) => {
+apiRouter.post("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, mainCatId } = req.params;
         const { newName } = req.body;
@@ -820,7 +873,7 @@ app.post("/project-config/:projectId/main-category/:mainCatId", jsonParser, chec
         });
     }
 });
-app.delete("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGod, async (req, res) => {
+apiRouter.delete("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, mainCatId } = req.params;
         const docRef = db
@@ -845,7 +898,7 @@ app.delete("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGo
         });
     }
 });
-app.post("/project-config/:projectId/main-categories", jsonParser, checkAdminOrGod, async (req, res) => {
+apiRouter.post("/project-config/:projectId/main-categories", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newName } = req.body;
@@ -888,7 +941,7 @@ app.post("/project-config/:projectId/main-categories", jsonParser, checkAdminOrG
         });
     }
 });
-app.post("/project-config/:projectId/sub-categories", jsonParser, checkAdminOrGod, async (req, res) => {
+apiRouter.post("/project-config/:projectId/sub-categories", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newName, mainCategoryId, mainCategoryName } = req.body;
@@ -927,7 +980,7 @@ app.post("/project-config/:projectId/sub-categories", jsonParser, checkAdminOrGo
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/sub-category/:subCatId", jsonParser, checkAdminOrGod, async (req, res) => {
+apiRouter.post("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const { newName } = req.body;
@@ -948,7 +1001,7 @@ app.post("/project-config/:projectId/sub-category/:subCatId", jsonParser, checkA
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.delete("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod, async (req, res) => {
+apiRouter.delete("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const docRef = db
@@ -965,7 +1018,7 @@ app.delete("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod,
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/topics", jsonParser, checkAdminOrGod, async (req, res) => {
+apiRouter.post("/project-config/:projectId/topics", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { newTopicNames, subCategoryId, mainCategoryName, subCategoryName } = req.body;
@@ -1013,7 +1066,7 @@ app.post("/project-config/:projectId/topics", jsonParser, checkAdminOrGod, async
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/topic/:topicId", jsonParser, checkAdminOrGod, async (req, res) => {
+apiRouter.post("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, topicId } = req.params;
         const { newName } = req.body;
@@ -1034,7 +1087,7 @@ app.post("/project-config/:projectId/topic/:topicId", jsonParser, checkAdminOrGo
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.delete("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (req, res) => {
+apiRouter.delete("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, topicId } = req.params;
         const docRef = db
@@ -1051,7 +1104,7 @@ app.delete("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/project-config/:projectId/sub-category/:subCatId/fields", jsonParser, checkAdminOrGod, async (req, res) => {
+apiRouter.post("/project-config/:projectId/sub-category/:subCatId/fields", checkAdminOrGod, async (req, res) => {
     try {
         const { projectId, subCatId } = req.params;
         const { fields } = req.body;
@@ -1086,7 +1139,7 @@ app.post("/project-config/:projectId/sub-category/:subCatId/fields", jsonParser,
         });
     }
 });
-app.get("/projects/:projectId/shared-jobs", async (req, res) => {
+apiRouter.get("/projects/:projectId/shared-jobs", async (req, res) => {
     // [ใหม่] (Optional) ตรวจสอบสิทธิ์
     const user = req.user;
     const { projectId } = req.params;
@@ -1094,7 +1147,7 @@ app.get("/projects/:projectId/shared-jobs", async (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied.' });
     }
     try {
-        const { projectId } = req.params;
+        // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
         const jobsSnapshot = await db
             .collection("projects") // <-- [สำคัญ] แก้ไข Collection หลักให้ถูกต้อง (ถ้าจำเป็น)
             .doc(projectId)
@@ -1122,49 +1175,59 @@ async function checkHasNewPhotos(projectId, reportData, reportCreatedAt) {
     if (!reportCreatedAt)
         return false;
     try {
-        let photoQuery;
         if (reportData.reportType === 'QC') {
-            // สร้าง Query สำหรับ qcPhotos
-            photoQuery = db.collection('qcPhotos')
-                .where('projectId', '==', projectId)
-                .where('category', '==', `${reportData.mainCategory} > ${reportData.subCategory}`);
-            // เพิ่ม Filter Dynamic Fields
-            if (reportData.dynamicFields) {
-                Object.keys(reportData.dynamicFields).forEach(key => {
-                    const value = reportData.dynamicFields[key];
-                    if (value) {
-                        photoQuery = photoQuery.where(`dynamicFields.${key}`, '==', value);
+            // ✅ [แก้ไข] เปลี่ยนมาใช้ latestQcPhotos
+            // เราจะตรวจสอบทีละ topic ว่ามีรูปที่ใหม่กว่ารายงานหรือไม่
+            // 1. หา Topics ทั้งหมดจาก projectConfig
+            const allTopics = await (0, pdf_generator_1.getTopicsForFilter)(db, projectId, reportData.mainCategory, reportData.subCategory);
+            if (allTopics.length === 0)
+                return false;
+            // 2. สร้าง category และ stableId สำหรับแต่ละ topic
+            const category = `${reportData.mainCategory} > ${reportData.subCategory}`;
+            for (const topic of allTopics) {
+                const stableId = createStableQcId(projectId, category, topic, reportData.dynamicFields || {});
+                // 3. ดึงรูปล่าสุดของหัวข้อนี้
+                const latestPhotoDoc = await db.collection('latestQcPhotos').doc(stableId).get();
+                if (latestPhotoDoc.exists) {
+                    const photoData = latestPhotoDoc.data();
+                    const photoCreatedAt = photoData === null || photoData === void 0 ? void 0 : photoData.createdAt;
+                    // 4. เช็คว่ารูปนี้ใหม่กว่ารายงานหรือไม่
+                    if (photoCreatedAt && photoCreatedAt.toMillis() > reportCreatedAt.toMillis()) {
+                        console.log(`✅ Found new photo for topic "${topic}"`);
+                        return true; // เจอรูปใหม่แล้ว!
                     }
-                });
+                }
             }
+            return false; // ไม่มีรูปใหม่
         }
         else if (reportData.reportType === 'Daily') {
             if (!reportData.reportDate)
                 return false; // ถ้า report ไม่มีวันที่ ก็เช็คไม่ได้
             // สร้าง Query สำหรับ dailyPhotos
-            // [ข้อควรระวัง] เราต้อง *สมมติ* ว่า dailyPhotos มี field 'reportDate' (YYYY-MM-DD)
-            // ซึ่งถูกเพิ่มเข้าไปตอนอัปโหลดรูป (ถ้าไม่มี field นี้ Logic นี้ต้องปรับใหม่)
-            photoQuery = db.collection('dailyPhotos')
+            const startDate = new Date(`${reportData.reportDate}T00:00:00+07:00`);
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 1);
+            const photoQuery = db.collection('dailyPhotos')
                 .where('projectId', '==', projectId)
-                // [สมมติฐาน] กรองด้วย 'reportDate' เพื่อให้ตรงกับ Scope ของรายงาน
-                .where('reportDate', '==', reportData.reportDate);
+                .where('createdAt', '>=', startDate)
+                .where('createdAt', '<', endDate);
+            // --- [สำคัญ] ค้นหารูปที่ใหม่กว่ารายงานฉบับนี้ ---
+            const snapshot = await photoQuery
+                .where('createdAt', '>', reportCreatedAt)
+                .limit(1)
+                .get();
+            return !snapshot.empty;
         }
         else {
             return false; // ไม่ใช่ Type ที่รู้จัก
         }
-        // --- [สำคัญ] ค้นหารูปที่ใหม่กว่ารายงานฉบับนี้ ---
-        const snapshot = await photoQuery
-            .where('createdAt', '>', reportCreatedAt) // <-- เงื่อนไขหลัก
-            .limit(1) // ขอแค่ 1 รูปก็พอ
-            .get();
-        return !snapshot.empty; // ถ้าเจอ (ไม่ว่าง) = true, ถ้าไม่เจอ (ว่าง) = false
     }
     catch (error) {
         console.error(`Error checking new photos for report:`, error);
         return false; // ถ้า Error ให้คืน false (ปลอดภัยกว่า)
     }
 }
-app.get("/projects/:projectId/generated-reports", async (req, res) => {
+apiRouter.get("/projects/:projectId/generated-reports", async (req, res) => {
     // [ใหม่] (Optional) ตรวจสอบสิทธิ์
     const user = req.user;
     const { projectId } = req.params;
@@ -1172,7 +1235,7 @@ app.get("/projects/:projectId/generated-reports", async (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied.' });
     }
     try {
-        const { projectId } = req.params;
+        // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
         const _a = req.query, { reportType, mainCategory, subCategory, date } = _a, 
         // เพิ่มการอ่าน dynamicFields จาก query string
         dynamicFieldsQuery = __rest(_a, ["reportType", "mainCategory", "subCategory", "date"]) // ตัวแปรนี้จะเก็บ dynamicFields ทั้งหมด เช่น { 'dynamicFields[field1]': 'value1' }
@@ -1213,11 +1276,7 @@ app.get("/projects/:projectId/generated-reports", async (req, res) => {
                 query = query.where('reportDate', '==', date);
             }
             else {
-                // ถ้าเป็น Daily แต่ไม่ส่ง date มา อาจจะคืนค่าว่าง หรือ error
-                console.warn("Daily report requested without date filter.");
-                // อาจจะไม่ต้องทำอะไร ปล่อยให้ query ดึง Daily ทั้งหมดมา (เรียงตามวันที่สร้าง)
-                // หรือถ้าต้องการให้ error ก็ uncomment บรรทัดล่าง
-                // return res.status(400).json({ success: false, error: "'date' query parameter is required for Daily reports." });
+                // (No filter needed)
             }
         }
         // --- ดึงข้อมูลและเรียงลำดับ ---
@@ -1235,6 +1294,7 @@ app.get("/projects/:projectId/generated-reports", async (req, res) => {
             const data = doc.data();
             const reportCreatedAt = data.createdAt;
             // --- [สำคัญ] เรียกใช้ฟังก์ชัน Helper ที่เราสร้าง ---
+            // (นี่อาจจะเป็นจุดที่ช้า ถ้า Query ซับซ้อน)
             const hasNewPhotos = await checkHasNewPhotos(projectId, data, reportCreatedAt);
             // --- จบส่วนแก้ไข ---
             return {
@@ -1270,7 +1330,7 @@ app.get("/projects/:projectId/generated-reports", async (req, res) => {
     }
 });
 // 2. POST /projects/:projectId/shared-jobs - สร้างหรืออัปเดตงาน
-app.post("/projects/:projectId/shared-jobs", jsonParser, async (req, res) => {
+apiRouter.post("/projects/:projectId/shared-jobs", async (req, res) => {
     // [ใหม่] (Optional) ตรวจสอบสิทธิ์
     const user = req.user;
     const { projectId } = req.params;
@@ -1278,7 +1338,7 @@ app.post("/projects/:projectId/shared-jobs", jsonParser, async (req, res) => {
         return res.status(403).json({ success: false, error: 'Access denied.' });
     }
     try {
-        const { projectId } = req.params;
+        // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
         // ตอนนี้ TypeScript รู้จัก 'SharedJob' แล้ว
         const jobData = req.body;
         // ตรวจสอบข้อมูลเบื้องต้น
@@ -1304,7 +1364,7 @@ app.post("/projects/:projectId/shared-jobs", jsonParser, async (req, res) => {
         });
     }
 });
-app.get("/admin/pending-users", async (req, res) => {
+apiRouter.get("/admin/pending-users", async (req, res) => {
     const user = req.user;
     // เฉพาะ Admin หรือ God เท่านั้น
     if (user.role === 'user') {
@@ -1325,7 +1385,7 @@ app.get("/admin/pending-users", async (req, res) => {
     }
 });
 // API สำหรับ Admin: อนุมัติ User
-app.post("/admin/approve-user/:uidToApprove", async (req, res) => {
+apiRouter.post("/admin/approve-user/:uidToApprove", async (req, res) => {
     var _a;
     const user = req.user;
     const { uidToApprove } = req.params;
@@ -1353,7 +1413,7 @@ app.post("/admin/approve-user/:uidToApprove", async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-app.post("/checklist-status", jsonParser, async (req, res) => {
+apiRouter.post("/checklist-status", async (req, res) => {
     const user = req.user;
     const { projectId, reportType, // <-- [ใหม่] รับ reportType
     mainCategory, subCategory, dynamicFields, date // <-- [ใหม่] รับ date
@@ -1412,10 +1472,14 @@ app.post("/checklist-status", jsonParser, async (req, res) => {
         });
     }
 });
+// --- [แก้ไข] ---
+// 4. บอก App หลัก ให้ใช้ apiRouter ที่ path "/api"
+mainApp.use("/api", apiRouter);
+// --- จบการแก้ไข ---
 // ✅ Export Cloud Function
 exports.api = (0, https_1.onRequest)({
     region: "asia-southeast1",
     memory: "2GiB",
     timeoutSeconds: 540,
-}, app);
+}, mainApp); // <-- [แก้ไข] export mainApp
 //# sourceMappingURL=index.js.map

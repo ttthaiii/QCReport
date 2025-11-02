@@ -75,9 +75,20 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     }
   }, [formData.mainCategory, formData.subCategory, qcTopics, reportType]); 
 
-  // --- 4. [ลบ] useEffect ที่โหลด List อัตโนมัติ ---
-  // (useEffect [fetchGeneratedReports] ถูกลบออกไปแล้ว)
-
+  useEffect(() => {
+    if (reportType === 'QC') {
+      // QC: ต้องมี mainCategory และ subCategory
+      if (formData.mainCategory && formData.subCategory) {
+        // Auto-search แบบไม่กรอง dynamic fields (แสดงทั้งหมด)
+        handleAutoSearch();
+      }
+    } else if (reportType === 'Daily') {
+      // Daily: ต้องมี date
+      if (selectedDate) {
+        handleAutoSearch();
+      }
+    }
+  }, [reportType, formData.mainCategory, formData.subCategory, selectedDate]);
 
   // --- 5. Data Fetching Functions ---
 
@@ -109,6 +120,30 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     setIsLoadingList(false);
   }, [projectId, reportType, selectedDate, formData.mainCategory, formData.subCategory, dynamicFields]);
 
+  const handleAutoSearch = useCallback(async () => {
+    setIsLoadingList(true);
+    setListError(null);
+    setGeneratedReport(null);
+
+    const filterCriteria = {
+      reportType,
+      mainCategory: reportType === 'QC' ? formData.mainCategory : undefined,
+      subCategory: reportType === 'QC' ? formData.subCategory : undefined,
+      // ไม่ส่ง dynamicFields → แสดงทั้งหมด
+      date: reportType === 'Daily' && selectedDate ? selectedDate.toISOString().split('T')[0] : undefined
+    };
+
+    const response = await api.getGeneratedReports(projectId, filterCriteria);
+
+    if (response.success && response.data) {
+      setGeneratedReportsList(response.data);
+    } else {
+      setListError(response.error || 'เกิดข้อผิดพลาดในการโหลดรายงาน');
+      setGeneratedReportsList([]);
+    }
+    setIsLoadingList(false);
+  }, [projectId, reportType, formData.mainCategory, formData.subCategory, selectedDate]);
+    
   // ✅ [ใหม่] (5.2) โหลด "สถานะรูปภาพ" (Preview Box #1.5)
   const fetchPreviewStatus = useCallback(async () => {
     setIsPreviewLoading(true);
@@ -141,16 +176,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   // --- 6. Event Handlers ---
 
   // ✅ [ใหม่] (6.1) ปุ่ม "ค้นหา" (จะรัน 2 ฟังก์ชัน)
-  const handleSearch = async () => {
-    if (!isFieldsComplete()) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
-      return;
-    }
-    // สั่งให้โหลดทั้ง 2 ส่วนพร้อมกัน
-    await Promise.all([
-      fetchPreviewStatus(),
-      fetchGeneratedReports()
-    ]);
+  const handleSearch = () => {
+    fetchGeneratedReports(); // เรียกฟังก์ชันที่มีอยู่แล้ว (มีการกรอง dynamicFields)
   };
 
   // (6.2) ปุ่ม "สร้างรายงาน" (เหมือนเดิม)

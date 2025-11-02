@@ -3,7 +3,7 @@ import * as admin from "firebase-admin";
 import { getStorage } from 'firebase-admin/storage';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onRequest } from "firebase-functions/v2/https";
-import express, { Request, Response } from "express";
+import express, { Request, Response } from "express"; // [แก้ไข] import express Router ด้วย
 import cors from "cors";
 import { createHash } from 'crypto';
 
@@ -13,7 +13,7 @@ import {
   createFullLayout, 
   generatePDF, 
   generateDailyPDFWrapper,
-  uploadPDFToStorage,
+  uploadPDFToStorage, // (ตรวจสอบให้แน่ใจว่าไฟล์ pdf-generator มีฟังก์ชันนี้)
   getUploadedTopicStatus,
   getDailyPhotosByDate,
   ReportSettings, // <-- [ใหม่] Import
@@ -23,6 +23,39 @@ import {
 
 import { PhotoData as FirestorePhotoData, logPhotoToFirestore } from "./api/firestore";
 import { uploadPhotoToStorage as uploadImageToStorage } from "./api/storage";
+
+export interface SharedJob {
+  id: string; // ID ของ Job (เช่น mainId_subId_fields)
+  label: string; // ชื่อที่แสดงผล (เช่น "โครงสร้าง / กำแพงลิฟต์ / k/k/k")
+  reportType: 'QC' | 'Daily';
+  mainCategory: string;
+  subCategory: string;
+  dynamicFields: Record<string, string>;
+  
+  // สถานะ
+  completedTopics: number;
+  totalTopics: number;
+  status: 'pending' | 'completed'; // เพิ่มสถานะ
+  
+  // การเรียงลำดับ
+  lastUpdatedAt: string; // ISO Timestamp
+}
+
+export interface GeneratedReportInfo {
+  reportId: string;
+  reportType: 'QC' | 'Daily';
+  createdAt: string; // ISO Timestamp string (Backend อาจจะส่ง Timestamp object มา)
+  filename: string;
+  publicUrl: string;
+  storagePath: string;
+  mainCategory?: string;
+  subCategory?: string;
+  dynamicFields?: Record<string, string>;
+  reportDate?: string; // YYYY-MM-DD
+  photosFound: number;
+  totalTopics?: number; // Only for QC
+  hasNewPhotos?: boolean;
+}
 
 const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
 
@@ -60,7 +93,33 @@ function createStableReportId(
   return createHash('sha256').update(combinedString).digest('hex').substring(0, 20);
 }
 
+// ✅ --- [เพิ่มใหม่] ---
+// ฟังก์ชันสร้าง ID ที่ไม่ซ้ำกันสำหรับ QC Photo (จาก projectId, category, topic, dynamicFields)
+function createStableQcId(
+  projectId: string,
+  category: string, // "Main > Sub"
+  topic: string,
+  dynamicFields: Record<string, string>
+): string {
+  
+  // 1. เรียง Key ของ dynamicFields เพื่อให้ ID คงที่เสมอ
+  const sortedFields = Object.keys(dynamicFields || {}).sort()
+    .map(key => `${key}=${dynamicFields[key]}`)
+    .join('&');
+    
+  // 2. รวมทุกอย่าง
+  const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
+  
+  // 3. Hash ID ให้อยู่ในรูปแบบที่ Firestore ใช้งานง่าย
+  return createHash('md5').update(rawId).digest('hex');
+}
+// ✅ --- [จบส่วนเพิ่มใหม่] ---
+
+
 const NEW_PROJECT_ID = "tts2004-smart-report-generate";
+
+// ✅ [แก้ไข] ระบุชื่อ Bucket ที่ถูกต้องของคุณที่นี่
+const CORRECT_BUCKET_NAME = "tts2004-smart-report-generate.firebasestorage.app";
 
 if (!admin.apps.length) {
   if (IS_EMULATOR) {
@@ -69,55 +128,30 @@ if (!admin.apps.length) {
     const serviceAccount = require("../keys/tts2004-smart-report-generate-firebase-adminsdk-fbsvc-6e20b0c418.json"); 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount), 
-      storageBucket: `${NEW_PROJECT_ID}.appspot.com` // <-- ✅ แก้ไขแล้ว
+      storageBucket: CORRECT_BUCKET_NAME // <-- ✅ แก้ไขเป็นชื่อที่ถูกต้อง
     });
   } else {
     console.log("🚀 Running in PRODUCTION mode");
     admin.initializeApp({
-      storageBucket: `${NEW_PROJECT_ID}.appspot.com` // <-- ✅ แก้ไขแล้ว
+      storageBucket: CORRECT_BUCKET_NAME // <-- ✅ แก้ไขเป็นชื่อที่ถูกต้อง
     });
   }
 }
 
-export interface SharedJob {
-  id: string; // ID ของ Job (เช่น mainId_subId_fields)
-  label: string; // ชื่อที่แสดงผล (เช่น "โครงสร้าง / กำแพงลิฟต์ / k/k/k")
-  reportType: 'QC' | 'Daily';
-  mainCategory: string;
-  subCategory: string;
-  dynamicFields: Record<string, string>;
-  
-  // สถานะ
-  completedTopics: number;
-  totalTopics: number;
-  status: 'pending' | 'completed'; // เพิ่มสถานะ
-  
-  // การเรียงลำดับ
-  lastUpdatedAt: string; // ISO Timestamp
-}
-
-export interface GeneratedReportInfo {
-  reportId: string;
-  reportType: 'QC' | 'Daily';
-  createdAt: string; // ISO Timestamp string (Backend อาจจะส่ง Timestamp object มา)
-  filename: string;
-  publicUrl: string;
-  storagePath: string;
-  mainCategory?: string;
-  subCategory?: string;
-  dynamicFields?: Record<string, string>;
-  reportDate?: string; // YYYY-MM-DD
-  photosFound: number;
-  totalTopics?: number; // Only for QC
-  hasNewPhotos?: boolean;
-}
-
 const db = getFirestore();
-const app = express();
-app.use(cors({ origin: true }));
 
-//app.use(cors({ origin: true }));
-const jsonParser = express.json({ limit: "10mb" });
+// --- [แก้ไข] ---
+// 1. สร้าง App หลัก
+const mainApp = express();
+mainApp.use(cors({ origin: true }));
+// 2. ใช้ json parser กับ App หลัก เพื่อให้ทุก route รับ json body ได้
+mainApp.use(express.json({ limit: "10mb" }));
+
+// 3. สร้าง Router ใหม่สำหรับ API
+const apiRouter = express.Router();
+// --- จบการแก้ไข ---
+
+
 // --- API ROUTES ---
 
 const checkAuth = async (req: Request, res: Response, next: Function) => {
@@ -181,8 +215,11 @@ const checkRole = (roles: Array<'admin' | 'god'>) => {
 };
 
 // ... (คง Endpoint /health, /projects, /project-config, /projects/:projectId/report-settings ไว้เหมือนเดิม) ...
+
+// --- [แก้ไข] เปลี่ยน "app." ทั้งหมดเป็น "apiRouter." ---
+
 // ✅ Health check endpoint
-app.get("/health", (req: Request, res: Response) => {
+apiRouter.get("/health", (req: Request, res: Response) => {
   res.json({ 
     status: "healthy",
     environment: IS_EMULATOR ? "emulator" : "production",
@@ -191,7 +228,7 @@ app.get("/health", (req: Request, res: Response) => {
 });
 
 // ✅ Get all active projects
-app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
+apiRouter.get("/projects", async (req: Request, res: Response): Promise<Response> => {
   try {
     const projectsSnapshot = await db
       .collection("projects")
@@ -217,16 +254,19 @@ app.get("/projects", async (req: Request, res: Response): Promise<Response> => {
   }
 });
 
-app.use(checkAuth);
+// [แก้ไข] ใช้ middleware กับ apiRouter
+apiRouter.use(checkAuth);
 
-app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
+apiRouter.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
   try {
-    // 1. ดึงข้อมูล User (เหมือนเดิม)
-    const listUsersResult = await admin.auth().listUsers();
-    const firestoreUsersSnap = await db.collection('users').get();
+    // [แก้ไข] สั่งดึงข้อมูล 3 อย่างพร้อมกัน (Parallel)
+    const [listUsersResult, firestoreUsersSnap, projectsSnap] = await Promise.all([
+      admin.auth().listUsers(),
+      db.collection('users').get(),
+      db.collection('projects').get()
+    ]);
     
     // ✅ [ใหม่] 2. ดึงข้อมูล Projects ทั้งหมดมาสร้าง Map
-    const projectsSnap = await db.collection('projects').get();
     const projectsMap = new Map<string, string>();
     projectsSnap.forEach(doc => {
       projectsMap.set(doc.id, doc.data().projectName || doc.id); // เก็บ projectName
@@ -268,7 +308,7 @@ app.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req, res)
  * (Admin) อัปเดตสถานะผู้ใช้ (อนุมัติ/ปฏิเสธ)
  * (ต้องเป็น Admin หรือ God)
  */
-app.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), async (req, res): Promise<Response> => {
+apiRouter.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), async (req, res): Promise<Response> => {
   try {
     const { uid } = req.params;
     const { status } = req.body; // รับ 'approved' หรือ 'rejected'
@@ -290,7 +330,7 @@ app.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god']), as
  * (God) ตั้งค่า Role ผู้ใช้
  * (ต้องเป็น God เท่านั้น)
  */
-app.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res) => {
+apiRouter.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res) => {
   try {
     const { uid } = req.params;
     const { role } = req.body; // รับ 'user', 'admin', หรือ 'god'
@@ -313,7 +353,7 @@ app.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res)
 });
 
 // ✅ Get project configuration
-app.get("/project-config/:projectId", async (req: Request, res: Response): Promise<Response> => {
+apiRouter.get("/project-config/:projectId", async (req: Request, res: Response): Promise<Response> => {
   const user = (req as any).user;
   const { projectId } = req.params;
 
@@ -323,7 +363,7 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
   }
 
   try {
-    const { projectId } = req.params;
+    // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
     const projectConfigRef = db.collection("projectConfig").doc(projectId);
 
     const mainCategoriesPromise = projectConfigRef
@@ -404,7 +444,7 @@ app.get("/project-config/:projectId", async (req: Request, res: Response): Promi
 });
 
 // ✅ [ใหม่ V11.3] Get Project Report Settings
-app.get("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
+apiRouter.get("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
   const user = (req as any).user;
   const { projectId } = req.params;
   if (user.role !== 'god' && user.assignedProjectId !== projectId) {
@@ -412,7 +452,7 @@ app.get("/projects/:projectId/report-settings", async (req: Request, res: Respon
   }
 
   try {
-    const { projectId } = req.params;
+    // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
     const projectRef = db.collection("projects").doc(projectId);
     const projectDoc = await projectRef.get();
 
@@ -440,7 +480,7 @@ app.get("/projects/:projectId/report-settings", async (req: Request, res: Respon
 });
 
 // ✅ Get Project Report Settings (V2 - อัปเดต Defaults & Logo)
-app.post("/projects/:projectId/report-settings", jsonParser, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/projects/:projectId/report-settings", async (req: Request, res: Response): Promise<Response> => {
   const user = (req as any).user;
   const { projectId } = req.params;
   if (user.role === 'user') { // User ทั่วไปห้ามแก้ไข
@@ -451,12 +491,15 @@ app.post("/projects/:projectId/report-settings", jsonParser, async (req: Request
   }
 
   try {
-    const { projectId } = req.params;
+    // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
     const newSettings = req.body; 
 
-    if (typeof newSettings.photosPerPage !== 'number' || ![1, 2, 4, 6].includes(newSettings.photosPerPage)) {
-         console.warn("Invalid photosPerPage value received:", newSettings.photosPerPage);
-         newSettings.photosPerPage = 6;
+    // (Validate)
+    if (newSettings.qcPhotosPerPage && (typeof newSettings.qcPhotosPerPage !== 'number' || ![1, 2, 4, 6].includes(newSettings.qcPhotosPerPage))) {
+      newSettings.qcPhotosPerPage = 6;
+    }
+    if (newSettings.dailyPhotosPerPage && (typeof newSettings.dailyPhotosPerPage !== 'number' || ![1, 2, 4, 6].includes(newSettings.dailyPhotosPerPage))) {
+      newSettings.dailyPhotosPerPage = 6;
     }
 
     const projectRef = db.collection("projects").doc(projectId);
@@ -477,7 +520,7 @@ app.post("/projects/:projectId/report-settings", jsonParser, async (req: Request
 
 // ✅ Endpoint สำหรับ Upload Logo โครงการ
 // ✅ [แก้ไข V11.3] Endpoint สำหรับ Upload Logo โครงการ (แก้ไขปัญหา Busboy)
-app.post("/projects/:projectId/upload-logo", jsonParser, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/projects/:projectId/upload-logo", async (req: Request, res: Response): Promise<Response> => {
   
   // [ใหม่] ตรวจสอบสิทธิ์ (เฉพาะ Admin/God)
   const user = (req as any).user;
@@ -514,7 +557,7 @@ app.post("/projects/:projectId/upload-logo", jsonParser, async (req: Request, re
     const fileBuffer = Buffer.from(cleanBase64, "base64");
     
     // 4. อัปโหลด Buffer ไปยัง Storage
-    const bucket = getStorage().bucket();
+    const bucket = getStorage().bucket(CORRECT_BUCKET_NAME); // (ใช้ชื่อที่ถูกต้อง)
     const fileExtension = mimeType.split('/')[1] || 'png'; // เช่น 'png'
     const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
     const filePath = `logos/${projectId}/${uniqueFilename}`;
@@ -546,9 +589,9 @@ app.post("/projects/:projectId/upload-logo", jsonParser, async (req: Request, re
 });
 
 // ✅ Upload photo with base64
-app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/upload-photo-base64", async (req: Request, res: Response): Promise<Response> => {
   const user = (req as any).user;
-  const { projectId } = req.body;
+  let projectIdFromBody = req.body.projectId; // (ใช้ let เพราะอาจต้องแก้)
 
   // 1. ตรวจสอบสถานะ "approved"
   if (user.status !== 'approved') {
@@ -556,7 +599,11 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
   }
   
   // 2. ตรวจสอบว่าอัปโหลดเข้า Project ตัวเองหรือไม่ (ยกเว้น God)
-  if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+  if (user.role !== 'god' && user.assignedProjectId !== projectIdFromBody) {
+     console.warn(`User ${user.email} (role ${user.role}) trying to upload to ${projectIdFromBody} but is assigned to ${user.assignedProjectId}`);
+     // (ทางเลือก: บังคับให้เป็น Project ID ของ User)
+     // projectIdFromBody = user.assignedProjectId;
+     // (ทางเลือก: ปฏิเสธ)
      return res.status(403).json({ success: false, error: 'Project mismatch. Cannot upload to this project.' });
   }
 
@@ -564,7 +611,7 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
     // ✅✅✅ --- START OF FIX --- ✅✅✅
     const { 
       photoBase64, // <-- [แก้ไข] เปลี่ยนจาก 'photo'
-      projectId, 
+      // projectId, (ใช้ projectIdFromBody แทน)
       reportType, 
       category, 
       topic, 
@@ -574,7 +621,7 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
     } = req.body;
     
     // [แก้ไข] เปลี่ยน 'photo' เป็น 'photoBase64'
-    if (!photoBase64 || !projectId || !reportType) { 
+    if (!photoBase64 || !projectIdFromBody || !reportType) { 
     // ✅✅✅ --- END OF FIX --- ✅✅✅
       return res.status(400).json({ 
         success: false, 
@@ -584,6 +631,7 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
     
     let filenamePrefix: string;
     let photoData: FirestorePhotoData;
+    let stableQcId: string | null = null; // (ตัวแปรสำหรับ ID ใหม่)
     
     if (reportType === 'QC') {
       if (!category || !topic) {
@@ -597,7 +645,7 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
       filenamePrefix = `${sanitizedCategoryForPrefix}-${topic}`;
       
       photoData = { 
-        projectId, 
+        projectId: projectIdFromBody, 
         reportType, 
         category, 
         topic, 
@@ -607,11 +655,22 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
         driveUrl: '', 
         filePath: ''
       };
+
+      // ✅ --- [เพิ่มใหม่] ---
+      // สร้าง Stable ID สำหรับ 'latestQcPhotos'
+      stableQcId = createStableQcId(
+        projectIdFromBody, 
+        category, 
+        topic, 
+        dynamicFields || {}
+      );
+      // ✅ --- [จบส่วนเพิ่มใหม่] ---
+
     } else if (reportType === 'Daily') {
       filenamePrefix = `Daily-${description?.substring(0, 20) || 'report'}`;
       
       photoData = { 
-        projectId, 
+        projectId: projectIdFromBody, 
         reportType, 
         description: description || "", 
         location: location || "", 
@@ -646,12 +705,13 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
       throw new Error('Invalid image data: buffer too small');
     }
     
-    if (imageBuffer[0] !== 0xFF || imageBuffer[1] !== 0xD8) {
-      console.error('❌ Invalid JPEG header:', imageBuffer.slice(0, 10));
-      throw new Error('Invalid image data: not a valid JPEG');
-    }
+    // (Comment out JPEG check - might cause issues with PNGs/HEIC)
+    // if (imageBuffer[0] !== 0xFF || imageBuffer[1] !== 0xD8) {
+    //   console.error('❌ Invalid JPEG header:', imageBuffer.slice(0, 10));
+    //   throw new Error('Invalid image data: not a valid JPEG');
+    // }
     
-    console.log('✅ Valid JPEG image detected');
+    // console.log('✅ Valid JPEG image detected');
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `${filenamePrefix}-${timestamp}.jpg`.replace(/\s/g, "_");
@@ -663,7 +723,7 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
     const storageResult = await uploadImageToStorage({ 
       imageBuffer, 
       filename, 
-      projectId, 
+      projectId: projectIdFromBody, 
       category: storageCategoryPath 
     });
     
@@ -671,7 +731,19 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
     photoData.driveUrl = storageResult.publicUrl;
     photoData.filePath = storageResult.filePath;
 
+    // 1. บันทึกลง Collection หลัก (qcPhotos หรือ dailyPhotos)
     const firestoreResult = await logPhotoToFirestore(photoData);
+    
+    // ✅ --- [เพิ่มใหม่] ---
+    // 2. ถ้าเป็น QC, ให้อัปเดต 'latestQcPhotos' ด้วย
+    if (reportType === 'QC' && stableQcId) {
+      console.log(`Updating latestQcPhotos for ID: ${stableQcId}`);
+      await db.collection('latestQcPhotos').doc(stableQcId).set({
+        ...photoData,
+        createdAt: FieldValue.serverTimestamp() // (สำคัญ: ใช้อันนี้เพื่ออัปเดตเวลา)
+      });
+    }
+    // ✅ --- [จบส่วนเพิ่มใหม่] ---
     
     return res.json({ 
       success: true, 
@@ -690,7 +762,7 @@ app.post("/upload-photo-base64", jsonParser, async (req: Request, res: Response)
 });
 
 // ✅ [แก้ไข] Generate PDF report (v8 - with Dynamic Settings)
-app.post("/generate-report", jsonParser, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/generate-report", async (req: Request, res: Response): Promise<Response> => {
   const user = (req as any).user;
   const { projectId } = req.body;
 
@@ -757,7 +829,14 @@ app.post("/generate-report", jsonParser, async (req: Request, res: Response): Pr
       const topicsSnap = await projectConfigRef.collection("topics").where("subCategoryId", "==", subCatId).where("isArchived", "==", false).get();
       const allTopics: string[] = topicsSnap.docs.map(doc => doc.data().name as string);
       if (allTopics.length === 0) return res.status(404).json({ success: false, error: "No topics found."});
+      
+      // ✅ --- [แก้ไข] ---
+      // (นี่คือจุดที่ Error เกิดขึ้น)
+      // เราจะเรียก getLatestPhotos (เวอร์ชันใหม่) ที่ไม่ต้องใช้ Index
+      console.log('Calling NEW getLatestPhotos function...');
       const foundPhotos = await getLatestPhotos(projectId, mainCategory, subCategory, allTopics, dynamicFields || {});
+      // ✅ --- [จบการแก้ไข] ---
+
       const fullLayoutPhotos = createFullLayout(allTopics, foundPhotos);
       
       const reportData = { projectId, projectName, mainCategory, subCategory, dynamicFields: dynamicFields || {} };
@@ -878,7 +957,7 @@ app.post("/generate-report", jsonParser, async (req: Request, res: Response): Pr
   }
 });
 
-app.get("/photos/:projectId", async (req: Request, res: Response): Promise<Response> => {
+apiRouter.get("/photos/:projectId", async (req: Request, res: Response): Promise<Response> => {
   // [ใหม่] (Optional) ตรวจสอบสิทธิ์
   const user = (req as any).user;
   const { projectId } = req.params;
@@ -887,7 +966,7 @@ app.get("/photos/:projectId", async (req: Request, res: Response): Promise<Respo
   }
 
   try {
-    const { projectId } = req.params;
+    // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
     
     if (!projectId) {
       return res.status(400).json({ 
@@ -954,7 +1033,7 @@ const checkAdminOrGod = (req: Request, res: Response, next: Function) => {
   return next();
 };
 
-app.post("/project-config/:projectId/main-category/:mainCatId", jsonParser, checkAdminOrGod,async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGod,async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, mainCatId } = req.params;
     const { newName } = req.body;
@@ -992,7 +1071,7 @@ app.post("/project-config/:projectId/main-category/:mainCatId", jsonParser, chec
   }
 });
 
-app.delete("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.delete("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, mainCatId } = req.params;
 
@@ -1022,7 +1101,7 @@ app.delete("/project-config/:projectId/main-category/:mainCatId", checkAdminOrGo
   }
 });
 
-app.post("/project-config/:projectId/main-categories", jsonParser, checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/project-config/:projectId/main-categories", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const { newName } = req.body;
@@ -1074,7 +1153,7 @@ app.post("/project-config/:projectId/main-categories", jsonParser, checkAdminOrG
   }
 });
 
-app.post("/project-config/:projectId/sub-categories", jsonParser, checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/project-config/:projectId/sub-categories", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const { newName, mainCategoryId, mainCategoryName } = req.body;
@@ -1121,7 +1200,7 @@ app.post("/project-config/:projectId/sub-categories", jsonParser, checkAdminOrGo
   }
 });
 
-app.post("/project-config/:projectId/sub-category/:subCatId", jsonParser, checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
     const { newName } = req.body;
@@ -1147,7 +1226,7 @@ app.post("/project-config/:projectId/sub-category/:subCatId", jsonParser, checkA
   }
 });
 
-app.delete("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.delete("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
 
@@ -1169,7 +1248,7 @@ app.delete("/project-config/:projectId/sub-category/:subCatId", checkAdminOrGod,
   }
 });
 
-app.post("/project-config/:projectId/topics", jsonParser, checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/project-config/:projectId/topics", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId } = req.params;
     const { newTopicNames, subCategoryId, mainCategoryName, subCategoryName } = req.body; 
@@ -1227,7 +1306,7 @@ app.post("/project-config/:projectId/topics", jsonParser, checkAdminOrGod, async
   }
 });
 
-app.post("/project-config/:projectId/topic/:topicId", jsonParser, checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, topicId } = req.params;
     const { newName } = req.body;
@@ -1253,7 +1332,7 @@ app.post("/project-config/:projectId/topic/:topicId", jsonParser, checkAdminOrGo
   }
 });
 
-app.delete("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.delete("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, topicId } = req.params;
 
@@ -1275,7 +1354,7 @@ app.delete("/project-config/:projectId/topic/:topicId", checkAdminOrGod, async (
   }
 });
 
-app.post("/project-config/:projectId/sub-category/:subCatId/fields", jsonParser, checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/project-config/:projectId/sub-category/:subCatId/fields", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
   try {
     const { projectId, subCatId } = req.params;
     const { fields } = req.body;
@@ -1317,7 +1396,7 @@ app.post("/project-config/:projectId/sub-category/:subCatId/fields", jsonParser,
   }
 });
 
-app.get("/projects/:projectId/shared-jobs", async (req: Request, res: Response): Promise<Response> => {
+apiRouter.get("/projects/:projectId/shared-jobs", async (req: Request, res: Response): Promise<Response> => {
   // [ใหม่] (Optional) ตรวจสอบสิทธิ์
   const user = (req as any).user;
   const { projectId } = req.params;
@@ -1326,7 +1405,7 @@ app.get("/projects/:projectId/shared-jobs", async (req: Request, res: Response):
   }
 
   try {
-    const { projectId } = req.params;
+    // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
 
     const jobsSnapshot = await db
       .collection("projects") // <-- [สำคัญ] แก้ไข Collection หลักให้ถูกต้อง (ถ้าจำเป็น)
@@ -1367,46 +1446,72 @@ async function checkHasNewPhotos(
   if (!reportCreatedAt) return false;
 
   try {
-    let photoQuery: admin.firestore.Query;
-
     if (reportData.reportType === 'QC') {
-      // สร้าง Query สำหรับ qcPhotos
-      photoQuery = db.collection('qcPhotos')
-        .where('projectId', '==', projectId)
-        .where('category', '==', `${reportData.mainCategory} > ${reportData.subCategory}`);
-
-      // เพิ่ม Filter Dynamic Fields
-      if (reportData.dynamicFields) {
-        Object.keys(reportData.dynamicFields).forEach(key => {
-          const value = reportData.dynamicFields[key];
-          if (value) {
-            photoQuery = photoQuery.where(`dynamicFields.${key}`, '==', value);
+      // ✅ [แก้ไข] เปลี่ยนมาใช้ latestQcPhotos
+      // เราจะตรวจสอบทีละ topic ว่ามีรูปที่ใหม่กว่ารายงานหรือไม่
+      
+      // 1. หา Topics ทั้งหมดจาก projectConfig
+      const allTopics = await getTopicsForFilter(
+        db, 
+        projectId, 
+        reportData.mainCategory, 
+        reportData.subCategory
+      );
+      
+      if (allTopics.length === 0) return false;
+      
+      // 2. สร้าง category และ stableId สำหรับแต่ละ topic
+      const category = `${reportData.mainCategory} > ${reportData.subCategory}`;
+      
+      for (const topic of allTopics) {
+        const stableId = createStableQcId(
+          projectId,
+          category,
+          topic,
+          reportData.dynamicFields || {}
+        );
+        
+        // 3. ดึงรูปล่าสุดของหัวข้อนี้
+        const latestPhotoDoc = await db.collection('latestQcPhotos').doc(stableId).get();
+        
+        if (latestPhotoDoc.exists) {
+          const photoData = latestPhotoDoc.data();
+          const photoCreatedAt = photoData?.createdAt;
+          
+          // 4. เช็คว่ารูปนี้ใหม่กว่ารายงานหรือไม่
+          if (photoCreatedAt && photoCreatedAt.toMillis() > reportCreatedAt.toMillis()) {
+            console.log(`✅ Found new photo for topic "${topic}"`);
+            return true; // เจอรูปใหม่แล้ว!
           }
-        });
+        }
       }
+      
+      return false; // ไม่มีรูปใหม่
 
     } else if (reportData.reportType === 'Daily') {
       if (!reportData.reportDate) return false; // ถ้า report ไม่มีวันที่ ก็เช็คไม่ได้
 
       // สร้าง Query สำหรับ dailyPhotos
-      // [ข้อควรระวัง] เราต้อง *สมมติ* ว่า dailyPhotos มี field 'reportDate' (YYYY-MM-DD)
-      // ซึ่งถูกเพิ่มเข้าไปตอนอัปโหลดรูป (ถ้าไม่มี field นี้ Logic นี้ต้องปรับใหม่)
-      photoQuery = db.collection('dailyPhotos')
+      const startDate = new Date(`${reportData.reportDate}T00:00:00+07:00`);
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 1);
+
+      const photoQuery = db.collection('dailyPhotos')
         .where('projectId', '==', projectId)
-        // [สมมติฐาน] กรองด้วย 'reportDate' เพื่อให้ตรงกับ Scope ของรายงาน
-        .where('reportDate', '==', reportData.reportDate);
+        .where('createdAt', '>=', startDate)
+        .where('createdAt', '<', endDate);
+
+      // --- [สำคัญ] ค้นหารูปที่ใหม่กว่ารายงานฉบับนี้ ---
+      const snapshot = await photoQuery
+        .where('createdAt', '>', reportCreatedAt)
+        .limit(1)
+        .get();
+
+      return !snapshot.empty;
 
     } else {
       return false; // ไม่ใช่ Type ที่รู้จัก
     }
-
-    // --- [สำคัญ] ค้นหารูปที่ใหม่กว่ารายงานฉบับนี้ ---
-    const snapshot = await photoQuery
-      .where('createdAt', '>', reportCreatedAt) // <-- เงื่อนไขหลัก
-      .limit(1) // ขอแค่ 1 รูปก็พอ
-      .get();
-
-    return !snapshot.empty; // ถ้าเจอ (ไม่ว่าง) = true, ถ้าไม่เจอ (ว่าง) = false
 
   } catch (error) {
     console.error(`Error checking new photos for report:`, error);
@@ -1414,7 +1519,7 @@ async function checkHasNewPhotos(
   }
 }
 
-app.get("/projects/:projectId/generated-reports", async (req: Request, res: Response): Promise<Response> => {
+apiRouter.get("/projects/:projectId/generated-reports", async (req: Request, res: Response): Promise<Response> => {
   // [ใหม่] (Optional) ตรวจสอบสิทธิ์
   const user = (req as any).user;
   const { projectId } = req.params;
@@ -1423,7 +1528,7 @@ app.get("/projects/:projectId/generated-reports", async (req: Request, res: Resp
   }
 
   try {
-    const { projectId } = req.params;
+    // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
     const {
       reportType,
       mainCategory,
@@ -1471,11 +1576,7 @@ app.get("/projects/:projectId/generated-reports", async (req: Request, res: Resp
       if (date) {
         query = query.where('reportDate', '==', date as string);
       } else {
-        // ถ้าเป็น Daily แต่ไม่ส่ง date มา อาจจะคืนค่าว่าง หรือ error
-        console.warn("Daily report requested without date filter.");
-        // อาจจะไม่ต้องทำอะไร ปล่อยให้ query ดึง Daily ทั้งหมดมา (เรียงตามวันที่สร้าง)
-        // หรือถ้าต้องการให้ error ก็ uncomment บรรทัดล่าง
-        // return res.status(400).json({ success: false, error: "'date' query parameter is required for Daily reports." });
+        // (No filter needed)
       }
     }
 
@@ -1498,6 +1599,7 @@ app.get("/projects/:projectId/generated-reports", async (req: Request, res: Resp
       const reportCreatedAt = data.createdAt as admin.firestore.Timestamp;
 
       // --- [สำคัญ] เรียกใช้ฟังก์ชัน Helper ที่เราสร้าง ---
+      // (นี่อาจจะเป็นจุดที่ช้า ถ้า Query ซับซ้อน)
       const hasNewPhotos = await checkHasNewPhotos(projectId, data, reportCreatedAt);
       // --- จบส่วนแก้ไข ---
 
@@ -1537,7 +1639,7 @@ app.get("/projects/:projectId/generated-reports", async (req: Request, res: Resp
 });
 
 // 2. POST /projects/:projectId/shared-jobs - สร้างหรืออัปเดตงาน
-app.post("/projects/:projectId/shared-jobs", jsonParser, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/projects/:projectId/shared-jobs", async (req: Request, res: Response): Promise<Response> => {
   // [ใหม่] (Optional) ตรวจสอบสิทธิ์
   const user = (req as any).user;
   const { projectId } = req.params;
@@ -1546,7 +1648,7 @@ app.post("/projects/:projectId/shared-jobs", jsonParser, async (req: Request, re
   }
   
   try {
-    const { projectId } = req.params;
+    // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
     // ตอนนี้ TypeScript รู้จัก 'SharedJob' แล้ว
     const jobData = req.body as SharedJob;
 
@@ -1577,7 +1679,7 @@ app.post("/projects/:projectId/shared-jobs", jsonParser, async (req: Request, re
   }
 });
 
-app.get("/admin/pending-users", async (req: Request, res: Response) => {
+apiRouter.get("/admin/pending-users", async (req: Request, res: Response) => {
   const user = (req as any).user;
 
   // เฉพาะ Admin หรือ God เท่านั้น
@@ -1603,7 +1705,7 @@ app.get("/admin/pending-users", async (req: Request, res: Response) => {
 });
 
 // API สำหรับ Admin: อนุมัติ User
-app.post("/admin/approve-user/:uidToApprove", async (req: Request, res: Response) => {
+apiRouter.post("/admin/approve-user/:uidToApprove", async (req: Request, res: Response) => {
   const user = (req as any).user;
   const { uidToApprove } = req.params;
 
@@ -1637,7 +1739,7 @@ app.post("/admin/approve-user/:uidToApprove", async (req: Request, res: Response
   }
 });
 
-app.post("/checklist-status", jsonParser, async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/checklist-status", async (req: Request, res: Response): Promise<Response> => {
   const user = (req as any).user;
   const { 
     projectId, 
@@ -1712,9 +1814,15 @@ app.post("/checklist-status", jsonParser, async (req: Request, res: Response): P
   }
 });
 
+// --- [แก้ไข] ---
+// 4. บอก App หลัก ให้ใช้ apiRouter ที่ path "/api"
+mainApp.use("/api", apiRouter);
+// --- จบการแก้ไข ---
+
+
 // ✅ Export Cloud Function
 export const api = onRequest({ 
   region: "asia-southeast1", 
   memory: "2GiB",
   timeoutSeconds: 540,
-}, app);
+}, mainApp); // <-- [แก้ไข] export mainApp

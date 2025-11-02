@@ -328,3 +328,125 @@
   padding: 8px;
   font-size: 1rem;
 }
+
+.watermark-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@media (min-width: 768px) {
+  .watermark-modal-overlay {
+    align-items: center; /* บน desktop แสดงกลางจอ */
+  }
+}
+
+.watermark-modal-content {
+  background: white;
+  border-radius: 16px 16px 0 0;
+  padding: 24px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  animation: slideUp 0.3s ease-out;
+}
+
+@media (min-width: 768px) {
+  .watermark-modal-content {
+    border-radius: 16px; /* บน desktop โค้งทุกมุม */
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.watermark-modal-title {
+  margin: 0 0 20px 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+}
+
+.watermark-modal-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.watermark-modal-button:hover {
+  background: #e9ecef;
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.watermark-modal-button:active {
+  transform: translateY(0);
+}
+
+.watermark-modal-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.watermark-modal-text {
+  text-align: left;
+  flex: 1;
+}
+
+.watermark-modal-text strong {
+  display: block;
+  font-size: 1.1rem;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.watermark-modal-text small {
+  display: block;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.watermark-modal-cancel {
+  width: 100%;
+  padding: 14px;
+  background: white;
+  color: #666;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  margin-top: 8px;
+  transition: background-color 0.2s;
+}
+
+.watermark-modal-cancel:hover {
+  background: #f8f9fa;
+}
