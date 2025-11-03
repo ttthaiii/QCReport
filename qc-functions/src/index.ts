@@ -9,16 +9,16 @@ import { createHash } from 'crypto';
 
 // ✅ [แก้ไข] Import ReportSettings (ต้องสร้าง Interface นี้ใน pdf-generator.ts ด้วย)
 import { 
-  getLatestPhotos, 
-  createFullLayout, 
-  generatePDF, 
+  getLatestPhotos,
+  createFullLayout,
+  generatePDF,
   generateDailyPDFWrapper,
   uploadPDFToStorage, // (ตรวจสอบให้แน่ใจว่าไฟล์ pdf-generator มีฟังก์ชันนี้)
   getUploadedTopicStatus,
   getDailyPhotosByDate,
   ReportSettings, // <-- [ใหม่] Import
   DEFAULT_SETTINGS,
-  getTopicsForFilter, 
+  getTopicsForFilter,
 } from './services/pdf-generator';
 
 import { PhotoData as FirestorePhotoData, logPhotoToFirestore } from "./api/firestore";
@@ -97,20 +97,15 @@ function createStableReportId(
 // ฟังก์ชันสร้าง ID ที่ไม่ซ้ำกันสำหรับ QC Photo (จาก projectId, category, topic, dynamicFields)
 function createStableQcId(
   projectId: string,
-  category: string, // "Main > Sub"
+  category: string,
   topic: string,
   dynamicFields: Record<string, string>
 ): string {
-  
-  // 1. เรียง Key ของ dynamicFields เพื่อให้ ID คงที่เสมอ
+  // ✅ แปลง values เป็นตัวเล็กเพื่อให้ case-insensitive
   const sortedFields = Object.keys(dynamicFields || {}).sort()
-    .map(key => `${key}=${dynamicFields[key]}`)
+    .map(key => `${key}=${(dynamicFields[key] || '').toLowerCase().trim()}`)  // ✅ toLowerCase() + trim()
     .join('&');
-    
-  // 2. รวมทุกอย่าง
   const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
-  
-  // 3. Hash ID ให้อยู่ในรูปแบบที่ Firestore ใช้งานง่าย
   return createHash('md5').update(rawId).digest('hex');
 }
 // ✅ --- [จบส่วนเพิ่มใหม่] ---
@@ -192,9 +187,9 @@ const checkAuth = async (req: Request, res: Response, next: Function) => {
     return next(); 
     
     } catch (error) {
-    console.error("Auth Error: Invalid token.", error);
-    return res.status(403).json({ success: false, error: 'Unauthorized: Invalid token.' });
-  }
+    console.error("Auth Error: Invalid token.", error);
+    return res.status(403).json({ success: false, error: 'Unauthorized: Invalid token.' });
+  }
   return;
 };
 
@@ -945,6 +940,7 @@ apiRouter.post("/generate-report", async (req: Request, res: Response): Promise<
       data: {
         ...responseData,
         publicUrl: uploadResult.publicUrl,
+        firepath: uploadResult.filePath
       }
     });
 
@@ -1445,12 +1441,14 @@ async function checkHasNewPhotos(
   // ถ้าไม่มีเวลาอ้างอิง ก็ไม่ต้องเช็ค
   if (!reportCreatedAt) return false;
 
-  try {
+try {
     if (reportData.reportType === 'QC') {
-      // ✅ [แก้ไข] เปลี่ยนมาใช้ latestQcPhotos
-      // เราจะตรวจสอบทีละ topic ว่ามีรูปที่ใหม่กว่ารายงานหรือไม่
+      // ✅ [แก้ไข] ใช้ latestQcPhotos แทน qcPhotos
+      const category = `${reportData.mainCategory} > ${reportData.subCategory}`;
       
-      // 1. หา Topics ทั้งหมดจาก projectConfig
+      console.log(`🔍 Checking for new photos in: ${category}`);
+      
+      // 1. หา Topics ทั้งหมด
       const allTopics = await getTopicsForFilter(
         db, 
         projectId, 
@@ -1458,12 +1456,16 @@ async function checkHasNewPhotos(
         reportData.subCategory
       );
       
-      if (allTopics.length === 0) return false;
+      if (allTopics.length === 0) {
+        console.log('⚠️ No topics found for this category');
+        return false;
+      }
       
-      // 2. สร้าง category และ stableId สำหรับแต่ละ topic
-      const category = `${reportData.mainCategory} > ${reportData.subCategory}`;
+      console.log(`🔍 Checking ${allTopics.length} topics for new photos...`);
       
+      // 2. ตรวจสอบแต่ละหัวข้อ
       for (const topic of allTopics) {
+        // สร้าง stableId แบบเดียวกับตอนอัปโหลด
         const stableId = createStableQcId(
           projectId,
           category,
@@ -1471,27 +1473,35 @@ async function checkHasNewPhotos(
           reportData.dynamicFields || {}
         );
         
-        // 3. ดึงรูปล่าสุดของหัวข้อนี้
+        // 3. ดึงรูปล่าสุด
         const latestPhotoDoc = await db.collection('latestQcPhotos').doc(stableId).get();
         
         if (latestPhotoDoc.exists) {
           const photoData = latestPhotoDoc.data();
           const photoCreatedAt = photoData?.createdAt;
           
-          // 4. เช็คว่ารูปนี้ใหม่กว่ารายงานหรือไม่
-          if (photoCreatedAt && photoCreatedAt.toMillis() > reportCreatedAt.toMillis()) {
-            console.log(`✅ Found new photo for topic "${topic}"`);
-            return true; // เจอรูปใหม่แล้ว!
+          // 4. เช็คว่ารูปใหม่กว่ารายงานหรือไม่
+          if (photoCreatedAt) {
+            const photoTime = photoCreatedAt.toMillis();
+            const reportTime = reportCreatedAt.toMillis();
+            
+            if (photoTime > reportTime) {
+              console.log(`✅ Found new photo for topic "${topic}"`);
+              console.log(`   Photo time: ${new Date(photoTime).toISOString()}`);
+              console.log(`   Report time: ${new Date(reportTime).toISOString()}`);
+              return true;
+            }
           }
         }
       }
       
-      return false; // ไม่มีรูปใหม่
+      console.log('ℹ️ No new photos found');
+      return false;
 
     } else if (reportData.reportType === 'Daily') {
-      if (!reportData.reportDate) return false; // ถ้า report ไม่มีวันที่ ก็เช็คไม่ได้
+      // Daily Report - ใช้ logic เดิม
+      if (!reportData.reportDate) return false;
 
-      // สร้าง Query สำหรับ dailyPhotos
       const startDate = new Date(`${reportData.reportDate}T00:00:00+07:00`);
       const endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + 1);
@@ -1499,23 +1509,26 @@ async function checkHasNewPhotos(
       const photoQuery = db.collection('dailyPhotos')
         .where('projectId', '==', projectId)
         .where('createdAt', '>=', startDate)
-        .where('createdAt', '<', endDate);
-
-      // --- [สำคัญ] ค้นหารูปที่ใหม่กว่ารายงานฉบับนี้ ---
-      const snapshot = await photoQuery
+        .where('createdAt', '<', endDate)
         .where('createdAt', '>', reportCreatedAt)
-        .limit(1)
-        .get();
+        .limit(1);
 
-      return !snapshot.empty;
+      const snapshot = await photoQuery.get();
+      
+      if (!snapshot.empty) {
+        console.log('✅ Found new daily photo');
+        return true;
+      }
+      
+      return false;
 
     } else {
-      return false; // ไม่ใช่ Type ที่รู้จัก
+      return false;
     }
 
   } catch (error) {
-    console.error(`Error checking new photos for report:`, error);
-    return false; // ถ้า Error ให้คืน false (ปลอดภัยกว่า)
+    console.error(`❌ Error checking new photos for report:`, error);
+    return false;
   }
 }
 
@@ -1612,6 +1625,7 @@ apiRouter.get("/projects/:projectId/generated-reports", async (req: Request, res
         filename: data.filename,
         publicUrl: data.publicUrl,
         storagePath: data.storagePath,
+        firepath: data.storagePath,
         mainCategory: data.mainCategory,
         subCategory: data.subCategory,
         dynamicFields: data.dynamicFields,
@@ -1813,6 +1827,8 @@ apiRouter.post("/checklist-status", async (req: Request, res: Response): Promise
     });
   }
 });
+
+
 
 // --- [แก้ไข] ---
 // 4. บอก App หลัก ให้ใช้ apiRouter ที่ path "/api"

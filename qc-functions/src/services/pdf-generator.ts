@@ -223,6 +223,15 @@ export async function getLatestPhotos(
     const data = doc.data() as FirestorePhotoData;
     const imageBase64 = data.driveUrl ? await fetchAndEncodeImage(data.driveUrl) : null;
     
+    // ✅ Debug: ตรวจสอบว่า Base64 ถูกสร้างหรือไม่
+    if (imageBase64) {
+      const base64Length = imageBase64.length;
+      const isValidBase64 = imageBase64.startsWith('data:image/');
+      console.log(`     📸 Base64 encoded: ${base64Length} chars, Valid: ${isValidBase64}`);
+    } else {
+      console.log(`     ⚠️ Failed to encode image for topic: "${topic}"`);
+    }
+    
     return {
       topic: topic,
       imageBase64: imageBase64,
@@ -233,7 +242,23 @@ export async function getLatestPhotos(
   });
   
   const photos = await Promise.all(photoPromises);
-  return photos.filter((p): p is PhotoData => p !== null);
+  const foundPhotos = photos.filter((p): p is PhotoData => p !== null);
+
+  console.log(`✅ Found ${foundPhotos.length} photos out of ${allTopics.length} topics`);
+
+  // ✅ Debug ข้อมูลแต่ละรูป
+  foundPhotos.forEach((photo, index) => {
+    console.log(`  Photo ${index + 1}:`);
+    console.log(`    - Topic: ${photo.topic}`);
+    console.log(`    - Has Base64: ${!!photo.imageBase64}`);
+    console.log(`    - Is Placeholder: ${photo.isPlaceholder}`);
+    if (photo.imageBase64) {
+      console.log(`    - Base64 length: ${photo.imageBase64.length}`);
+      console.log(`    - Starts with: ${photo.imageBase64.substring(0, 30)}...`);
+    }
+  });
+
+  return foundPhotos;
 }
 
 export function createFullLayoutPhotos(
@@ -508,7 +533,12 @@ function getInlineCSS(): string {
   `;
 }
 
-function createDynamicHeader(reportData: ReportData | DailyReportData, pageNumber: number, totalPages: number): string {
+function createDynamicHeader(
+  reportData: ReportData | DailyReportData, 
+  pageNumber: number, 
+  totalPages: number,
+  projectLogoBase64: string | null = null
+): string {
   const currentDate = getCurrentThaiDate();
   
   // Check if it's QC Report or Daily Report
@@ -545,12 +575,15 @@ function createDynamicHeader(reportData: ReportData | DailyReportData, pageNumbe
     const row2Fields = fieldEntries.slice(0, row2FieldCount);
     const row3Fields = fieldEntries.slice(row2FieldCount, row2FieldCount + row3FieldCount);
     
+    // ✅ สร้าง logo section โดยใช้โลโก้จาก settings (ถ้ามี) หรือใช้ default
+    const logoSection = projectLogoBase64 
+      ? `<img src="${projectLogoBase64}" alt="Project Logo" style="max-width: 150px; max-height: 60px; object-fit: contain;" />`
+      : `<div class="logo-central-pattana"><span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span></div>`;
+    
     return `
       <header class="header">
         <div class="logo-section">
-          <div class="logo-central-pattana">
-            <span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span>
-          </div>
+          ${logoSection}
         </div>
         
         <div class="header-box">
@@ -628,12 +661,16 @@ function createDynamicHeader(reportData: ReportData | DailyReportData, pageNumbe
   } else {
     // Daily Report Header
     const dailyData = reportData as DailyReportData;
+    
+    // ✅ สร้าง logo section โดยใช้โลโก้จาก settings (ถ้ามี) หรือใช้ default
+    const logoSection = projectLogoBase64 
+      ? `<img src="${projectLogoBase64}" alt="Project Logo" style="max-width: 150px; max-height: 60px; object-fit: contain;" />`
+      : `<div class="logo-central-pattana"><span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span></div>`;
+    
     return `
       <header class="header">
         <div class="logo-section">
-          <div class="logo-central-pattana">
-            <span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span>
-          </div>
+          ${logoSection}
         </div>
         
         <div class="header-box">
@@ -698,21 +735,42 @@ function createPhotosGrid(photos: FullLayoutPhoto[], pageIndex: number): string 
   return `<div class="photos-grid">${photoItems}</div>`;
 }
 
-function createOptimizedHTML(reportData: PDFReportData, photos: FullLayoutPhoto[]): string {
+function createOptimizedHTML(
+  reportData: PDFReportData, 
+  photos: FullLayoutPhoto[],
+  projectLogoBase64: string | null = null
+): string {
   const photosPerPage = 6;
   const pages: FullLayoutPhoto[][] = [];
+  
+  // ✅ Debug: ตรวจสอบรูปก่อน slice
+  console.log(`\n📄 Creating HTML for ${photos.length} photos:`);
+  photos.forEach((photo, index) => {
+    console.log(`  ${index + 1}. ${photo.topic}`);
+    console.log(`     - Has image: ${!!photo.imageBase64}`);
+    console.log(`     - Is placeholder: ${photo.isPlaceholder}`);
+  });
   
   for (let i = 0; i < photos.length; i += photosPerPage) {
     const pagePhotos = photos.slice(i, i + photosPerPage);
     pages.push(pagePhotos);
   }
 
-  const pageHTML = pages.map((pagePhotos, pageIndex) => `
+  console.log(`📄 Total pages: ${pages.length}`);
+
+  const pageHTML = pages.map((pagePhotos, pageIndex) => {
+    // ✅ Debug: แต่ละหน้ามีรูปอะไรบ้าง
+    console.log(`\nPage ${pageIndex + 1} has ${pagePhotos.length} photos:`);
+    pagePhotos.forEach((photo, index) => {
+      console.log(`  ${index + 1}. ${photo.topic} - Has image: ${!!photo.imageBase64}`);
+    });
+    
+    return `
     <div class="page ${pageIndex < pages.length - 1 ? 'page-break' : ''}">
-      ${createDynamicHeader(reportData, pageIndex + 1, pages.length)}
+      ${createDynamicHeader(reportData, pageIndex + 1, pages.length, projectLogoBase64)}
       ${createPhotosGrid(pagePhotos, pageIndex)}
     </div>
-  `).join('');
+  `}).join('');
 
   return `
     <!DOCTYPE html>
@@ -793,7 +851,16 @@ export async function generatePDF(
 ): Promise<Buffer> {
   
   console.log(`📊 Generating QC Report PDF...`);
-  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos);
+  
+  // ✅ ดึงโลโก้จาก settings
+  const projectLogoBase64 = await fetchProjectLogo(settings.projectLogoUrl);
+  if (projectLogoBase64) {
+    console.log(`✅ Project logo loaded successfully`);
+  } else {
+    console.log(`ℹ️ No project logo provided, using default`);
+  }
+  
+  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64);
   return generateOptimizedPDF(finalHtml);
 }
 
@@ -804,7 +871,16 @@ export async function generateDailyPDFWrapper(
 ): Promise<Buffer> {
   
   console.log(`📊 Generating Daily Report PDF...`);
-  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos);
+  
+  // ✅ ดึงโลโก้จาก settings
+  const projectLogoBase64 = await fetchProjectLogo(settings.projectLogoUrl);
+  if (projectLogoBase64) {
+    console.log(`✅ Project logo loaded successfully`);
+  } else {
+    console.log(`ℹ️ No project logo provided, using default`);
+  }
+  
+  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64);
   return generateOptimizedPDF(finalHtml);
 }
 

@@ -11,16 +11,7 @@ interface PhotoGalleryProps {
   projectId: string;
 }
 
-// (ฟังก์ชัน getDisplayUrl เหมือนเดิม)
-const getDisplayUrl = (driveUrl: string): string => {
-  const USE_CDN = false;
-  const CDN_ENDPOINT = 'https://bim-tracking-cdn.ttthaiii30.workers.dev';
-  if (USE_CDN) {
-    const url = new URL(driveUrl);
-    return `${CDN_ENDPOINT}${url.pathname}`;
-  }
-  return driveUrl;
-};
+const cdnUrl = (process.env.REACT_APP_CDN_URL || '').replace(/\/$/, '');
 
 const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -79,16 +70,21 @@ const PhotoGallery: React.FC<PhotoGalleryProps> = ({ projectId }) => {
                   const datePart = date.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
                   const timePart = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
                   const formattedTimestamp = `${datePart} ${timePart}`;
+                  
+                  // ✅ ถ้ามี CDN URL ใช้ CDN, ถ้าไม่มีใช้ Firebase โดยตรง
+                  const displayUrl = cdnUrl && photo.firepath 
+                    ? `${cdnUrl}/${photo.firepath.replace(/^\//, '')}`
+                    : photo.driveUrl;
 
                   return (
-                    <div key={photo.id} className={styles.photoCard}>
-                      <a href={getDisplayUrl(photo.driveUrl)} target="_blank" rel="noopener noreferrer">
-                        <div className={styles.photoImageContainer}>
-                          <img 
-                            src={getDisplayUrl(photo.driveUrl)}
-                            alt={photo.filename} 
-                            className={styles.photoImage}
-                          />
+                      <div key={photo.id} className={styles.photoCard}>
+                        <a href={displayUrl} target="_blank" rel="noopener noreferrer">
+                          <div className={styles.photoImageContainer}>
+                            <img 
+                              src={displayUrl}
+                              alt={photo.filename} 
+                              className={styles.photoImage}
+                            />
                           <div className={styles.watermarkOverlay}>
                             <span>{formattedTimestamp}</span>
                             <span>{photo.location || 'ไม่สามารถระบุตำแหน่งได้'}</span>

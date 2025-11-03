@@ -97,7 +97,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [dailyDescriptions, setDailyDescriptions] = useState<Map<string, string>>(new Map());
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
-  const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(true);
+  const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(false);
   const [showWatermarkModal, setShowWatermarkModal] = useState<boolean>(false);
   const [pendingAttachTopic, setPendingAttachTopic] = useState<string>('');
   const [previewData, setPreviewData] = useState<{ url: string, timestamp?: string, location?: string | null } | null>(null);
@@ -468,7 +468,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setDailyDescriptions(new Map());
     setSelectedMainCategory(''); setSelectedSubCategory(''); setDynamicFields({});
     setUploadedStatus(new Map()); setStep('type');
-    setAddWatermarkToAttached(true); 
     fetchSharedJobs(); 
   };
   
@@ -481,7 +480,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       setDailyDescriptions(new Map());
       setSelectedMainCategory(''); setSelectedSubCategory(''); setDynamicFields({});
       setUploadedStatus(new Map()); setStep('type');
-      setAddWatermarkToAttached(true); 
       fetchSharedJobs();
       setReportType(type);
       if (type === 'QC') setStep('mainCat');
@@ -523,14 +521,18 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const handleAttachWithWatermark = () => {
     setShowWatermarkModal(false);
     setAddWatermarkToAttached(true); // ตั้งค่าให้เพิ่มลายน้ำ
-    attachInputRef.current?.click(); // เปิด file picker
+    
+    // ✅ [แก้ไข] ต้องมั่นใจว่าเรียก "attachInputRef"
+    attachInputRef.current?.click(); 
   };
 
   // ฟังก์ชันเมื่อ User เลือก "ไม่เพิ่มลายน้ำ"
   const handleAttachWithoutWatermark = () => {
     setShowWatermarkModal(false);
     setAddWatermarkToAttached(false); // ตั้งค่าไม่เพิ่มลายน้ำ
-    attachInputRef.current?.click(); // เปิด file picker
+    
+    // ✅ [แก้ไข] ต้องมั่นใจว่าเรียก "attachInputRef" (ไม่ใช่ cameraInputRef)
+    attachInputRef.current?.click(); 
   };
 
   // ฟังก์ชันเมื่อ User ยกเลิก

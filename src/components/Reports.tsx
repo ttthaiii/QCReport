@@ -19,6 +19,7 @@ interface ReportsProps {
   projectConfig: ProjectConfig | null;
 }
 
+const cdnUrl = (process.env.REACT_APP_CDN_URL || '').replace(/\/$/, '');
 const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig }) => {
   
   // --- 1. STATES ---
@@ -176,8 +177,9 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   // --- 6. Event Handlers ---
 
   // ✅ [ใหม่] (6.1) ปุ่ม "ค้นหา" (จะรัน 2 ฟังก์ชัน)
-  const handleSearch = () => {
-    fetchGeneratedReports(); // เรียกฟังก์ชันที่มีอยู่แล้ว (มีการกรอง dynamicFields)
+  const handleSearch = async () => {
+    await fetchPreviewStatus();    // เช็ครูปก่อน
+    await fetchGeneratedReports(); // แล้วค่อยโหลดรายงาน
   };
 
   // (6.2) ปุ่ม "สร้างรายงาน" (เหมือนเดิม)
@@ -266,6 +268,11 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
     }) + ' น.';
+    
+    const pdfUrl = cdnUrl && report.firepath
+                 ? `${cdnUrl}/${report.firepath.replace(/^\//, '')}`
+                 : `${report.publicUrl}?v=${new Date(report.createdAt).getTime()}`;
+    
     return (
         <div key={report.reportId} className={styles.reportListItem}>
             <div className={styles.reportInfo}>
@@ -284,10 +291,10 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                     {isGenerating ? <FiLoader className={styles.iconSpin} /> : <FiRefreshCw />} 
                   </button>
                 )}
-                <a href={`${report.publicUrl}?v=${new Date(report.createdAt).getTime()}`} target="_blank" rel="noopener noreferrer" className={styles.reportButtonView} title="เปิดดู PDF" >
+                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={styles.reportButtonView} title="เปิดดู PDF" >
                   <FiFileText /> 
                 </a>
-                <a href={`${report.publicUrl}?v=${new Date(report.createdAt).getTime()}`} download={report.filename} className={styles.reportButtonDownload} title="ดาวน์โหลด PDF" >
+                <a href={pdfUrl} download={report.filename} className={styles.reportButtonDownload} title="ดาวน์โหลด PDF" >
                   <FiDownload /> 
                 </a>
             </div>
@@ -481,8 +488,21 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
             )}
           </div>
           <div className={styles.generatedActions}>
-            <a href={generatedReport.publicUrl} target="_blank" rel="noopener noreferrer" className={styles.generatedButton}><FiFileText style={{ verticalAlign: 'middle', marginRight: '4px' }} /> เปิดดู PDF</a> 
-            <a href={generatedReport.publicUrl} download={generatedReport.filename} className={styles.generatedButtonDownload}><FiDownload style={{ verticalAlign: 'middle', marginRight: '4px' }} /> ดาวน์โหลด PDF</a> 
+
+            {/* ✨ [แก้ไข] สร้างตัวแปร pdfUrl โดยเช็ค firepath ก่อน */}
+            {(() => {
+            const pdfUrl = cdnUrl && generatedReport.firepath
+                 ? `${cdnUrl}/${generatedReport.firepath.replace(/^\//, '')}`
+                 : generatedReport.publicUrl;
+              
+              return (
+                <>
+                  <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={styles.generatedButton}><FiFileText style={{ verticalAlign: 'middle', marginRight: '4px' }} /> เปิดดู PDF</a> 
+                  <a href={pdfUrl} download={generatedReport.filename} className={styles.generatedButtonDownload}><FiDownload style={{ verticalAlign: 'middle', marginRight: '4px' }} /> ดาวน์โหลด PDF</a> 
+                </>
+              );
+            })()}
+
           </div>
         </div>
       )}

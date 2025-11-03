@@ -81,6 +81,7 @@ export interface Photo {
   description?: string;
   filename: string;
   location?: string;
+  firepath: string;
 }
 
 export interface ApiResponse<T> {
@@ -100,9 +101,14 @@ export interface GeneratedReportInfo {
   subCategory?: string;
   dynamicFields?: Record<string, string>;
   reportDate?: string;
+  date?: string; // ← เพิ่มบรรทัดนี้ (alias สำหรับ reportDate)
   photosFound: number;
   totalTopics?: number;
   hasNewPhotos?: boolean;
+  firepath?: string;
+  hasReport?: boolean;
+  newPhotosCount?: number;
+  id?: string; // ← เพิ่มบรรทัดนี้
 }
 
 const DEFAULT_REPORT_SETTINGS: ReportSettings = {
@@ -493,4 +499,24 @@ export const api = {
         return { success: false, error: error.message, data: [] };
       }
     },
+    // ดึงรายงานทั้งหมด (ทั้งที่มีและยังไม่มี)
+    getAllPossibleReports: async (payload: {
+      projectId: string;
+      reportType: 'QC' | 'Daily';
+      mainCategory?: string;
+      subCategory?: string;
+      dynamicFields?: { [key: string]: string };
+      date?: string;
+    }): Promise<ApiResponse<GeneratedReportInfo[]>> => {
+      try {
+        const data = await fetchWithAuth('/reports/all-possible', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        return data;
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    }, 
 };
+
