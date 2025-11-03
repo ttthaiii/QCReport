@@ -10,7 +10,7 @@
       {
         "source": "/api/**",
         "function": "api",
-        "region": "asia-southeast1"
+        "region": "asia-southeast1" 
       },
       {
         "source": "**",

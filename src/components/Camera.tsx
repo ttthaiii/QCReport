@@ -97,7 +97,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [dailyDescriptions, setDailyDescriptions] = useState<Map<string, string>>(new Map());
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
-  const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(false);
+  const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(true);
   const [showWatermarkModal, setShowWatermarkModal] = useState<boolean>(false);
   const [pendingAttachTopic, setPendingAttachTopic] = useState<string>('');
   const [previewData, setPreviewData] = useState<{ url: string, timestamp?: string, location?: string | null } | null>(null);
@@ -509,7 +509,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const handleStartPhotoForTopic = (topic: string, type: 'capture' | 'attach') => { 
     setCurrentTopic(topic); 
     if (type === 'capture') { 
-      // ถ่ายรูปใหม่ → บังคับมีลายน้ำเสมอ
       cameraInputRef.current?.click(); 
     } else { 
       // แนบรูป → แสดง Modal ให้เลือก
@@ -521,18 +520,14 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const handleAttachWithWatermark = () => {
     setShowWatermarkModal(false);
     setAddWatermarkToAttached(true); // ตั้งค่าให้เพิ่มลายน้ำ
-    
-    // ✅ [แก้ไข] ต้องมั่นใจว่าเรียก "attachInputRef"
-    attachInputRef.current?.click(); 
+    attachInputRef.current?.click(); // เปิด file picker
   };
 
   // ฟังก์ชันเมื่อ User เลือก "ไม่เพิ่มลายน้ำ"
   const handleAttachWithoutWatermark = () => {
     setShowWatermarkModal(false);
     setAddWatermarkToAttached(false); // ตั้งค่าไม่เพิ่มลายน้ำ
-    
-    // ✅ [แก้ไข] ต้องมั่นใจว่าเรียก "attachInputRef" (ไม่ใช่ cameraInputRef)
-    attachInputRef.current?.click(); 
+    attachInputRef.current?.click(); // เปิด file picker
   };
 
   // ฟังก์ชันเมื่อ User ยกเลิก
@@ -883,6 +878,11 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 })}
               </div>
 
+              <div className={styles['watermark-toggle']}>
+                <input type="checkbox" id="wm-toggle-qc" checked={addWatermarkToAttached} onChange={(e) => setAddWatermarkToAttached(e.target.checked)} />
+                <label htmlFor="wm-toggle-qc"> เพิ่มลายน้ำ (Timestamp/Location) ให้กับ "รูปที่แนบ" </label>
+              </div>
+
               <div className={styles['button-grid-container']}>
                 <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack} style={{ width: '100%' }}> ย้อนกลับ </button>
                 <button 
@@ -1012,14 +1012,16 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             
             <button 
               className={`${styles.wizardButton} ${styles.secondary}`} 
-              onClick={() => {
-                setPendingAttachTopic('');  // Daily ไม่มี topic เฉพาะ
-                setShowWatermarkModal(true); // เปิด Modal
-              }}
+              onClick={() => attachInputRef.current?.click()}
             >
               <span style={{ fontSize: '2.5rem' }}><FiPaperclip /></span>
               <br/> แนบรูป
             </button>
+          </div>
+      
+          <div className={styles['watermark-toggle']} style={{ marginTop: '20px', textAlign: 'center' }}>
+            <input type="checkbox" id="wm-toggle-daily" checked={addWatermarkToAttached} onChange={(e) => setAddWatermarkToAttached(e.target.checked)} />
+            <label htmlFor="wm-toggle-daily"> เพิ่มลายน้ำให้กับ "รูปที่แนบ" </label>
           </div>
           
           {(() => {
@@ -1054,44 +1056,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           )}
         </div>
       )}
-      {showWatermarkModal && (
-        <div className={styles['watermark-modal-overlay']} onClick={handleCancelWatermarkModal}>
-          <div className={styles['watermark-modal-content']} onClick={(e) => e.stopPropagation()}>
-            <h3 className={styles['watermark-modal-title']}>
-              📎 เลือกการแนบรูปภาพ
-            </h3>
-            
-            <button 
-              className={styles['watermark-modal-button']}
-              onClick={handleAttachWithWatermark}
-            >
-              <span className={styles['watermark-modal-icon']}>🏷️</span>
-              <div className={styles['watermark-modal-text']}>
-                <strong>เพิ่มลายน้ำ</strong>
-                <small>วันเวลา + ตำแหน่ง</small>
-              </div>
-            </button>
-            
-            <button 
-              className={styles['watermark-modal-button']}
-              onClick={handleAttachWithoutWatermark}
-            >
-              <span className={styles['watermark-modal-icon']}>📷</span>
-              <div className={styles['watermark-modal-text']}>
-                <strong>ไม่เพิ่มลายน้ำ</strong>
-                <small>ใช้รูปต้นฉบับ</small>
-              </div>
-            </button>
-            
-            <button 
-              className={styles['watermark-modal-cancel']}
-              onClick={handleCancelWatermarkModal}
-            >
-              ยกเลิก
-            </button>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

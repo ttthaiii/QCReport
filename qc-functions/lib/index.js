@@ -86,12 +86,15 @@ function createStableReportId(reportType, mainCategory, subCategory, dynamicFiel
 }
 // ✅ --- [เพิ่มใหม่] ---
 // ฟังก์ชันสร้าง ID ที่ไม่ซ้ำกันสำหรับ QC Photo (จาก projectId, category, topic, dynamicFields)
-function createStableQcId(projectId, category, topic, dynamicFields) {
-    // ✅ แปลง values เป็นตัวเล็กเพื่อให้ case-insensitive
+function createStableQcId(projectId, category, // "Main > Sub"
+topic, dynamicFields) {
+    // 1. เรียง Key ของ dynamicFields เพื่อให้ ID คงที่เสมอ
     const sortedFields = Object.keys(dynamicFields || {}).sort()
-        .map(key => `${key}=${(dynamicFields[key] || '').toLowerCase().trim()}`) // ✅ toLowerCase() + trim()
+        .map(key => `${key}=${dynamicFields[key]}`)
         .join('&');
+    // 2. รวมทุกอย่าง
     const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
+    // 3. Hash ID ให้อยู่ในรูปแบบที่ Firestore ใช้งานง่าย
     return (0, crypto_1.createHash)('md5').update(rawId).digest('hex');
 }
 // ✅ --- [จบส่วนเพิ่มใหม่] ---
@@ -770,7 +773,7 @@ apiRouter.post("/generate-report", async (req, res) => {
         // 3.3 ส่ง Response กลับ
         return res.json({
             success: true,
-            data: Object.assign(Object.assign({}, responseData), { publicUrl: uploadResult.publicUrl, firepath: uploadResult.filePath })
+            data: Object.assign(Object.assign({}, responseData), { publicUrl: uploadResult.publicUrl })
         });
     }
     catch (error) {
@@ -1173,68 +1176,55 @@ async function checkHasNewPhotos(projectId, reportData, reportCreatedAt) {
         return false;
     try {
         if (reportData.reportType === 'QC') {
-            // ✅ [แก้ไข] ใช้ latestQcPhotos แทน qcPhotos
-            const category = `${reportData.mainCategory} > ${reportData.subCategory}`;
-            console.log(`🔍 Checking for new photos in: ${category}`);
-            // 1. หา Topics ทั้งหมด
+            // ✅ [แก้ไข] เปลี่ยนมาใช้ latestQcPhotos
+            // เราจะตรวจสอบทีละ topic ว่ามีรูปที่ใหม่กว่ารายงานหรือไม่
+            // 1. หา Topics ทั้งหมดจาก projectConfig
             const allTopics = await (0, pdf_generator_1.getTopicsForFilter)(db, projectId, reportData.mainCategory, reportData.subCategory);
-            if (allTopics.length === 0) {
-                console.log('⚠️ No topics found for this category');
+            if (allTopics.length === 0)
                 return false;
-            }
-            console.log(`🔍 Checking ${allTopics.length} topics for new photos...`);
-            // 2. ตรวจสอบแต่ละหัวข้อ
+            // 2. สร้าง category และ stableId สำหรับแต่ละ topic
+            const category = `${reportData.mainCategory} > ${reportData.subCategory}`;
             for (const topic of allTopics) {
-                // สร้าง stableId แบบเดียวกับตอนอัปโหลด
                 const stableId = createStableQcId(projectId, category, topic, reportData.dynamicFields || {});
-                // 3. ดึงรูปล่าสุด
+                // 3. ดึงรูปล่าสุดของหัวข้อนี้
                 const latestPhotoDoc = await db.collection('latestQcPhotos').doc(stableId).get();
                 if (latestPhotoDoc.exists) {
                     const photoData = latestPhotoDoc.data();
                     const photoCreatedAt = photoData === null || photoData === void 0 ? void 0 : photoData.createdAt;
-                    // 4. เช็คว่ารูปใหม่กว่ารายงานหรือไม่
-                    if (photoCreatedAt) {
-                        const photoTime = photoCreatedAt.toMillis();
-                        const reportTime = reportCreatedAt.toMillis();
-                        if (photoTime > reportTime) {
-                            console.log(`✅ Found new photo for topic "${topic}"`);
-                            console.log(`   Photo time: ${new Date(photoTime).toISOString()}`);
-                            console.log(`   Report time: ${new Date(reportTime).toISOString()}`);
-                            return true;
-                        }
+                    // 4. เช็คว่ารูปนี้ใหม่กว่ารายงานหรือไม่
+                    if (photoCreatedAt && photoCreatedAt.toMillis() > reportCreatedAt.toMillis()) {
+                        console.log(`✅ Found new photo for topic "${topic}"`);
+                        return true; // เจอรูปใหม่แล้ว!
                     }
                 }
             }
-            console.log('ℹ️ No new photos found');
-            return false;
+            return false; // ไม่มีรูปใหม่
         }
         else if (reportData.reportType === 'Daily') {
-            // Daily Report - ใช้ logic เดิม
             if (!reportData.reportDate)
-                return false;
+                return false; // ถ้า report ไม่มีวันที่ ก็เช็คไม่ได้
+            // สร้าง Query สำหรับ dailyPhotos
             const startDate = new Date(`${reportData.reportDate}T00:00:00+07:00`);
             const endDate = new Date(startDate);
             endDate.setDate(startDate.getDate() + 1);
             const photoQuery = db.collection('dailyPhotos')
                 .where('projectId', '==', projectId)
                 .where('createdAt', '>=', startDate)
-                .where('createdAt', '<', endDate)
+                .where('createdAt', '<', endDate);
+            // --- [สำคัญ] ค้นหารูปที่ใหม่กว่ารายงานฉบับนี้ ---
+            const snapshot = await photoQuery
                 .where('createdAt', '>', reportCreatedAt)
-                .limit(1);
-            const snapshot = await photoQuery.get();
-            if (!snapshot.empty) {
-                console.log('✅ Found new daily photo');
-                return true;
-            }
-            return false;
+                .limit(1)
+                .get();
+            return !snapshot.empty;
         }
         else {
-            return false;
+            return false; // ไม่ใช่ Type ที่รู้จัก
         }
     }
     catch (error) {
-        console.error(`❌ Error checking new photos for report:`, error);
-        return false;
+        console.error(`Error checking new photos for report:`, error);
+        return false; // ถ้า Error ให้คืน false (ปลอดภัยกว่า)
     }
 }
 apiRouter.get("/projects/:projectId/generated-reports", async (req, res) => {
@@ -1316,7 +1306,6 @@ apiRouter.get("/projects/:projectId/generated-reports", async (req, res) => {
                 filename: data.filename,
                 publicUrl: data.publicUrl,
                 storagePath: data.storagePath,
-                firepath: data.storagePath,
                 mainCategory: data.mainCategory,
                 subCategory: data.subCategory,
                 dynamicFields: data.dynamicFields,
