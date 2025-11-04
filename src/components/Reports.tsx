@@ -20,6 +20,19 @@ interface ReportsProps {
 }
 
 const cdnUrl = (process.env.REACT_APP_CDN_URL || '').replace(/\/$/, '');
+const formatDateToYYYYMMDD = (date: Date | null): string | undefined => {
+  if (!date) return undefined;
+  
+  // สร้าง Date ใหม่และตั้งเวลาเป็นเที่ยงวัน (หลีกเลี่ยงปัญหา timezone)
+  const safeDate = new Date(date);
+  safeDate.setHours(12, 0, 0, 0);
+  
+  const year = safeDate.getFullYear();
+  const month = String(safeDate.getMonth() + 1).padStart(2, '0');
+  const day = String(safeDate.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+};
 const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig }) => {
   
   // --- 1. STATES ---
@@ -104,7 +117,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       mainCategory: reportType === 'QC' ? formData.mainCategory : undefined,
       subCategory: reportType === 'QC' ? formData.subCategory : undefined,
       dynamicFields: reportType === 'QC' ? dynamicFields : undefined,
-      date: reportType === 'Daily' && selectedDate ? selectedDate.toISOString().split('T')[0] : undefined
+      date: reportType === 'Daily' ? formatDateToYYYYMMDD(selectedDate) : undefined // ✅
     };
 
     const response = await api.getGeneratedReports(projectId, filterCriteria);
@@ -130,8 +143,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       reportType,
       mainCategory: reportType === 'QC' ? formData.mainCategory : undefined,
       subCategory: reportType === 'QC' ? formData.subCategory : undefined,
-      // ไม่ส่ง dynamicFields → แสดงทั้งหมด
-      date: reportType === 'Daily' && selectedDate ? selectedDate.toISOString().split('T')[0] : undefined
+      date: reportType === 'Daily' ? formatDateToYYYYMMDD(selectedDate) : undefined // ✅
     };
 
     const response = await api.getGeneratedReports(projectId, filterCriteria);
@@ -157,7 +169,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       mainCategory: reportType === 'QC' ? formData.mainCategory : undefined,
       subCategory: reportType === 'QC' ? formData.subCategory : undefined,
       dynamicFields: reportType === 'QC' ? dynamicFields : undefined,
-      date: reportType === 'Daily' && selectedDate ? selectedDate.toISOString().split('T')[0] : undefined
+      date: reportType === 'Daily' ? formatDateToYYYYMMDD(selectedDate) : undefined // ✅
     };
 
     try {

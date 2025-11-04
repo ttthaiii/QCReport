@@ -150,32 +150,47 @@ export async function getDailyPhotosByDate(
   
   const db = admin.firestore();
   
-  const startDate = new Date(`${date}T00:00:00+07:00`);
-  const endDate = new Date(startDate);
-  endDate.setDate(startDate.getDate() + 1);
+  // ✅ แก้ไข: ใช้ Timestamp แทน Date
+  const startDate = admin.firestore.Timestamp.fromDate(
+    new Date(`${date}T00:00:00+07:00`)
+  );
+  const endDate = admin.firestore.Timestamp.fromDate(
+    new Date(`${date}T23:59:59+07:00`) // ✅ ถึงสิ้นวัน
+  );
 
-  console.log(`Fetching Daily photos for ${projectId} between ${startDate.toISOString()} and ${endDate.toISOString()}`);
+  console.log(`🔍 Fetching Daily photos for ${projectId}`);
+  console.log(`   - Date: ${date}`);
+  console.log(`   - Start: ${startDate.toDate().toISOString()}`);
+  console.log(`   - End: ${endDate.toDate().toISOString()}`);
   
   const photosSnapshot = await db.collection("dailyPhotos")
     .where("projectId", "==", projectId)
     .where("createdAt", ">=", startDate)
-    .where("createdAt", "<", endDate)
-    .orderBy("createdAt", "asc")
+    .where("createdAt", "<=", endDate) // ✅ เปลี่ยนเป็น <= เพื่อรวมสิ้นวัน
+    //.orderBy("createdAt", "asc")
     .get();
 
-  console.log(`Found ${photosSnapshot.docs.length} daily photos.`);
+  console.log(`✅ Found ${photosSnapshot.docs.length} daily photos`);
+  
+  // ✅ เพิ่ม Debug แต่ละรูป
+  photosSnapshot.docs.forEach((doc, i) => {
+    const data = doc.data();
+    const createdAt = (data.createdAt as admin.firestore.Timestamp).toDate();
+    console.log(`   Photo ${i + 1}: ${doc.id} at ${createdAt.toISOString()}`);
+  });
 
   const photos: FullLayoutPhoto[] = await Promise.all(
     photosSnapshot.docs.map(async (doc, index) => {
       const data = doc.data() as FirestorePhotoData;
-      const createdAt = (data.createdAt as Timestamp).toDate();
-      const timeString = createdAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+      const createdAt = (data.createdAt as admin.firestore.Timestamp).toDate();
       
       const topicName = data.description 
-        ? `${timeString} - ${data.description}`
-        : `${timeString} - (No Description)`;
+        ? data.description                           // แสดงแค่ "คำอธิบาย"
+        : `(No Description)`;  
         
-      const imageBase64 = data.driveUrl ? await fetchAndEncodeImage(data.driveUrl) : null;
+      const imageBase64 = data.driveUrl 
+        ? await fetchAndEncodeImage(data.driveUrl) 
+        : null;
       
       return {
         topic: topicName,
@@ -188,6 +203,7 @@ export async function getDailyPhotosByDate(
     })
   );
 
+  console.log(`📊 Processed ${photos.length} photos`);
   return photos;
 }
 
@@ -396,13 +412,13 @@ function getInlineCSS(): string {
       .header {
         position: relative;
         margin-bottom: 15px;
-        padding-top: 22px;
+        padding-top: 40px; /* ✅ เพิ่มจาก 22px เป็น 70px */
       }
-      
+
       .logo-section {
         position: absolute;
-        top: 0;
-        right: 0;
+        top: 10px; /* ✅ เพิ่ม top: 10px เพื่อเว้นระยะจากขอบบน */
+        right: 10px; /* ✅ เพิ่ม right: 10px เพื่อเว้นระยะจากขอบขวา */
         z-index: 10;
       }
       
@@ -615,18 +631,23 @@ function createDynamicHeader(
             </div>
           </div>
           
-          <!-- แถวที่ 2: Dynamic Fields (แสดงไม่เกิน 3 fields) -->
+          <!-- แถวที่ 2: Dynamic Fields -->
           ${row2Fields.length > 0 ? `
           <div class="info-section">
-            ${row2Fields.map(([key, value]) => `
-            <div class="info-column info-left">
+            ${row2Fields.map(([key, value], index) => `
+            <div class="info-column ${index < 2 ? 'info-left' : 'info-right'}">
               <div class="info-item">
                 <span class="label">${key}:</span>
                 <span class="value">${value}</span>
               </div>
             </div>
             `).join('')}
-            ${row2Fields.length < 3 ? `<div class="info-column info-left"></div>`.repeat(3 - row2Fields.length) : ''}
+            ${row2Fields.length < 3 ? 
+              Array.from({ length: 3 - row2Fields.length }, (_, i) => 
+                `<div class="info-column ${row2Fields.length + i < 2 ? 'info-left' : 'info-right'}"></div>`
+              ).join('') 
+              : ''
+            }
           </div>
           ` : ''}
           
@@ -720,14 +741,16 @@ function createPhotosGrid(photos: FullLayoutPhoto[], pageIndex: number): string 
       `;
     }
     
+    const hasNoDescription = photo.topic.includes('(No Description)');
+
     return `
       <div class="photo-item">
         <div class="photo-wrapper has-image">
           <img src="${photo.imageBase64}" alt="${photo.topic}" />
         </div>
-        <div class="photo-caption">
+        ${!hasNoDescription ? `<div class="photo-caption">    
           <strong>${displayNumber}.</strong> ${photo.topic}
-        </div>
+        </div>` : ''}                                       
       </div>
     `;
   }).join('');

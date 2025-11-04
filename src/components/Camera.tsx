@@ -84,6 +84,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [step, setStep] = useState<WizardStep>('type');
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
+  const watermarkPreferenceRef = useRef<boolean>(false); // ✅ เพิ่ม ref เก็บค่าจริง
   const [isProcessingPhoto, setIsProcessingPhoto] = useState<boolean>(false);
   const [photoQueue, setPhotoQueue] = useState<Map<string, PhotoQueueItem>>(() => persistentQueue.loadQueue(projectId));
   const [currentTopic, setCurrentTopic] = useState<string>(''); 
@@ -97,10 +98,15 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [dailyDescriptions, setDailyDescriptions] = useState<Map<string, string>>(new Map());
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
-  const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(true);
+  const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(false);
   const [showWatermarkModal, setShowWatermarkModal] = useState<boolean>(false);
   const [pendingAttachTopic, setPendingAttachTopic] = useState<string>('');
-  const [previewData, setPreviewData] = useState<{ url: string, timestamp?: string, location?: string | null } | null>(null);
+  const [previewData, setPreviewData] = useState<{ 
+    url: string, 
+    timestamp?: string, 
+    location?: string | null,
+    addWatermark?: boolean  // ✅ เพิ่ม
+  } | null>(null);
 
   const [modalState, setModalState] = useState<{
     title: string;
@@ -133,15 +139,34 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   useEffect(() => { fetchSharedJobs(); }, [fetchSharedJobs]);
 
-  // (getCurrentJobIdentifier)
+  const sanitizeForFirestoreId = (str: string): string => {
+    return str.replace(/[\/\.\$\[\]#]/g, '_');
+  };
+
   const getCurrentJobIdentifier = (): { id: string, label: string } => { 
     if (reportType === 'QC') { 
-      const fieldValues = Object.values(dynamicFields).filter(item => !!item).join('_') || 'default'; 
-      const mainId = selectedMainCat?.id || selectedMainCategory; 
-      const subId = selectedSubCat?.id || selectedSubCategory; 
+      // ✅ แก้ไข: ใช้ลำดับจาก requiredDynamicFields แทน Object.values()
+      const fieldValues = requiredDynamicFields
+        .map(fieldName => dynamicFields[fieldName] || '') // เรียงตาม config
+        .filter(item => !!item)
+        .map(sanitizeForFirestoreId)
+        .join('_') || 'default'; 
+      
+      const mainId = sanitizeForFirestoreId(selectedMainCat?.id || selectedMainCategory);
+      const subId = sanitizeForFirestoreId(selectedSubCat?.id || selectedSubCategory);
+      
       const id = `${mainId}_${subId}_${fieldValues}`; 
-      const label = [selectedMainCategory, selectedSubCategory, ...Object.values(dynamicFields).filter(item => !!item)].join(' / '); 
-      return { id, label: label }; 
+      
+      // ✅ label ก็ต้องเรียงตาม requiredDynamicFields เหมือนกัน
+      const label = [
+        selectedMainCategory, 
+        selectedSubCategory, 
+        ...requiredDynamicFields
+          .map(fieldName => dynamicFields[fieldName])
+          .filter(item => !!item)
+      ].join(' / ');
+      
+      return { id, label }; 
     } else { 
       const dateStr = new Date().toISOString().split('T')[0]; 
       return { id: `daily_${dateStr}`, label: 'รายงานประจำวัน' }; 
@@ -210,7 +235,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   };
   
   // (handleNativeFileSelected - แก้ไขแล้ว)
-  const handleNativeFileSelected = async ( event: React.ChangeEvent<HTMLInputElement>, isNewCapture: boolean ) => { 
+  const handleNativeFileSelected = async ( event: React.ChangeEvent<HTMLInputElement>, isNewCapture: boolean, forceWatermark?: boolean ) => { 
     const file = event.target.files?.[0]; 
     if (event.target) event.target.value = ""; 
     if (!file) return; 
@@ -235,7 +260,9 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     
     try { 
       const photoBase64 = await processNativePhoto(file); 
-      const shouldAddWatermark = isNewCapture || addWatermarkToAttached; 
+      // ✅ แก้ไข: ใช้ค่าจาก ref แทน state เพื่อหลีกเลี่ยง timing issue
+      const shouldAddWatermark = isNewCapture ? true : watermarkPreferenceRef.current;
+      console.log('🎨 shouldAddWatermark:', shouldAddWatermark, '| isNewCapture:', isNewCapture, '| watermarkPreferenceRef:', watermarkPreferenceRef.current); 
       
       // ✅ [แก้ไข 1.2] ดึง cả id และ label
       const { id: jobId, label: jobLabel } = getCurrentJobIdentifier();
@@ -330,7 +357,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     for (let index = 0; index < itemsToUpload.length; index++) {
       const photoItem = itemsToUpload[index];
       const { key, base64, addWatermark, location, timestamp, uploadData, status } = photoItem;
-      
+      console.log('📤 Uploading:', key, '| addWatermark:', addWatermark);
+
       if (status === 'failed') {
          setPhotoQueue(prev => new Map(prev).set(key, { ...photoItem, status: 'pending' }));
       }
@@ -507,27 +535,39 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setStep('topicList'); 
   };
   const handleStartPhotoForTopic = (topic: string, type: 'capture' | 'attach') => { 
+    console.log('🔍 handleStartPhotoForTopic called:', { topic, type });
     setCurrentTopic(topic); 
     if (type === 'capture') { 
+      // ถ่ายรูปใหม่ → บังคับมีลายน้ำเสมอ
+      console.log('📸 Opening camera input');
       cameraInputRef.current?.click(); 
     } else { 
       // แนบรูป → แสดง Modal ให้เลือก
+      console.log('📎 Opening watermark modal');
       setPendingAttachTopic(topic);
       setShowWatermarkModal(true);
     } 
   };
   // ฟังก์ชันเมื่อ User เลือก "เพิ่มลายน้ำ"
   const handleAttachWithWatermark = () => {
+    console.log('✅ User selected: เพิ่มลายน้ำ');
     setShowWatermarkModal(false);
     setAddWatermarkToAttached(true); // ตั้งค่าให้เพิ่มลายน้ำ
-    attachInputRef.current?.click(); // เปิด file picker
+    watermarkPreferenceRef.current = true; // ✅ ตั้งค่า ref ด้วย
+    
+    // ✅ [แก้ไข] ต้องมั่นใจว่าเรียก "attachInputRef"
+    attachInputRef.current?.click(); 
   };
 
   // ฟังก์ชันเมื่อ User เลือก "ไม่เพิ่มลายน้ำ"
   const handleAttachWithoutWatermark = () => {
+    console.log('❌ User selected: ไม่เพิ่มลายน้ำ');
     setShowWatermarkModal(false);
     setAddWatermarkToAttached(false); // ตั้งค่าไม่เพิ่มลายน้ำ
-    attachInputRef.current?.click(); // เปิด file picker
+    watermarkPreferenceRef.current = false; // ✅ ตั้งค่า ref ด้วย
+    
+    // ✅ [แก้ไข] ต้องมั่นใจว่าเรียก "attachInputRef" (ไม่ใช่ cameraInputRef)
+    attachInputRef.current?.click(); 
   };
 
   // ฟังก์ชันเมื่อ User ยกเลิก
@@ -607,7 +647,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setPreviewData({
       url: item.base64,
       timestamp: item.timestamp,
-      location: item.location
+      location: item.location,
+      addWatermark: item.addWatermark  // ✅ เพิ่ม
     });
   };
 
@@ -628,7 +669,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         onClick={() => setPreviewData({
           url: photoItem.base64,
           timestamp: photoItem.timestamp,
-          location: photoItem.location
+          location: photoItem.location,
+          addWatermark: photoItem.addWatermark  // ✅ เพิ่ม
         })}
         style={{ cursor: 'pointer' }}
         title="กดเพื่อดูรูปขนาดใหญ่"
@@ -655,34 +697,39 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   );
   
   const renderPreviewModal = () => {
-      if (!previewData) return null;
-      let formattedTimestamp = '';
-      if (previewData.timestamp) {
-        const date = new Date(previewData.timestamp);
-        const datePart = date.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const timePart = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-        formattedTimestamp = `${datePart} ${timePart}`;
-      }
-      const locationLines = previewData.location ? previewData.location.split('\n').filter(line => !!line.trim()) : ['ไม่สามารถระบุตำแหน่งได้'];
-      return (
-        <div className={styles['preview-modal-overlay']} onClick={() => setPreviewData(null)}>
-          <div className={styles['preview-modal-content']} onClick={(e) => e.stopPropagation()}>
-            <div className={styles['preview-image-container']}>
-              <img src={previewData.url} alt="Preview" />
-              {(formattedTimestamp || previewData.location) && (
-                <div className={styles['preview-watermark-overlay']}>
-                  {formattedTimestamp && <span>{formattedTimestamp}</span>}
-                  {locationLines.map((line, index) => ( <span key={index}>{line}</span> ))}
-                </div>
-              )}
-            </div>
-            <button className={styles['preview-modal-close']} onClick={() => setPreviewData(null)}>
-              <FiX /> 
-            </button>
+    if (!previewData) return null;
+    
+    let formattedTimestamp = '';
+    if (previewData.timestamp) {
+      const date = new Date(previewData.timestamp);
+      const datePart = date.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const timePart = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      formattedTimestamp = `${datePart} ${timePart}`;
+    }
+    
+    const locationLines = previewData.location ? previewData.location.split('\n').filter(line => !!line.trim()) : ['ไม่สามารถระบุตำแหน่งได้'];
+    
+    return (
+      <div className={styles['preview-modal-overlay']} onClick={() => setPreviewData(null)}>
+        <div className={styles['preview-modal-content']} onClick={(e) => e.stopPropagation()}>
+          <div className={styles['preview-image-container']}>
+            <img src={previewData.url} alt="Preview" />
+            
+            {/* ✅ แก้ไข: แสดง Overlay เฉพาะเมื่อ addWatermark = true */}
+            {previewData.addWatermark && (formattedTimestamp || previewData.location) && (
+              <div className={styles['preview-watermark-overlay']}>
+                {formattedTimestamp && <span>{formattedTimestamp}</span>}
+                {locationLines.map((line, index) => ( <span key={index}>{line}</span> ))}
+              </div>
+            )}
           </div>
+          <button className={styles['preview-modal-close']} onClick={() => setPreviewData(null)}>
+            <FiX /> 
+          </button>
         </div>
-      );
-    };
+      </div>
+    );
+  };
 
   // --- Main Render ---
   return (
@@ -860,7 +907,12 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                       <span className={styles['topic-list-item-status']}>{statusIcon}</span>
                       <span 
                         className={`${styles['topic-list-item-name']} ${isQueued ? styles.viewable : ''}`}
-                        onClick={() => isQueued && queueItem ? setPreviewData({ url: queueItem.base64, timestamp: queueItem.timestamp, location: queueItem.location }) : undefined}
+                        onClick={() => isQueued && queueItem ? setPreviewData({ 
+                          url: queueItem.base64, 
+                          timestamp: queueItem.timestamp, 
+                          location: queueItem.location,
+                          addWatermark: queueItem.addWatermark  // ✅ เพิ่ม
+                        }) : undefined}
                         title={isQueued ? 'กดเพื่อดูรูป' : topicName}
                         style={{ color: isQueued ? statusColor : 'inherit' }} 
                       >
@@ -876,11 +928,6 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                     </div>
                   );
                 })}
-              </div>
-
-              <div className={styles['watermark-toggle']}>
-                <input type="checkbox" id="wm-toggle-qc" checked={addWatermarkToAttached} onChange={(e) => setAddWatermarkToAttached(e.target.checked)} />
-                <label htmlFor="wm-toggle-qc"> เพิ่มลายน้ำ (Timestamp/Location) ให้กับ "รูปที่แนบ" </label>
               </div>
 
               <div className={styles['button-grid-container']}>
@@ -1012,16 +1059,14 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             
             <button 
               className={`${styles.wizardButton} ${styles.secondary}`} 
-              onClick={() => attachInputRef.current?.click()}
+              onClick={() => {
+                setPendingAttachTopic('');  // Daily ไม่มี topic เฉพาะ
+                setShowWatermarkModal(true); // เปิด Modal
+              }}
             >
               <span style={{ fontSize: '2.5rem' }}><FiPaperclip /></span>
               <br/> แนบรูป
             </button>
-          </div>
-      
-          <div className={styles['watermark-toggle']} style={{ marginTop: '20px', textAlign: 'center' }}>
-            <input type="checkbox" id="wm-toggle-daily" checked={addWatermarkToAttached} onChange={(e) => setAddWatermarkToAttached(e.target.checked)} />
-            <label htmlFor="wm-toggle-daily"> เพิ่มลายน้ำให้กับ "รูปที่แนบ" </label>
           </div>
           
           {(() => {
@@ -1056,7 +1101,44 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           )}
         </div>
       )}
-
+      {showWatermarkModal && (
+        <div className={styles['watermark-modal-overlay']} onClick={handleCancelWatermarkModal}>
+          <div className={styles['watermark-modal-content']} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles['watermark-modal-title']}>
+              📎 เลือกการแนบรูปภาพ
+            </h3>
+            
+            <button 
+              className={styles['watermark-modal-button']}
+              onClick={handleAttachWithWatermark}
+            >
+              <span className={styles['watermark-modal-icon']}>🏷️</span>
+              <div className={styles['watermark-modal-text']}>
+                <strong>เพิ่มลายน้ำ</strong>
+                <small>วันเวลา + ตำแหน่ง</small>
+              </div>
+            </button>
+            
+            <button 
+              className={styles['watermark-modal-button']}
+              onClick={handleAttachWithoutWatermark}
+            >
+              <span className={styles['watermark-modal-icon']}>📷</span>
+              <div className={styles['watermark-modal-text']}>
+                <strong>ไม่เพิ่มลายน้ำ</strong>
+                <small>ใช้รูปต้นฉบับ</small>
+              </div>
+            </button>
+            
+            <button 
+              className={styles['watermark-modal-cancel']}
+              onClick={handleCancelWatermarkModal}
+            >
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
