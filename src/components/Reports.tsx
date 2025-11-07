@@ -6,6 +6,7 @@ import { api, ProjectConfig, MainCategory, SubCategory, GeneratedReportInfo, Che
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Reports.module.css';
+import AutocompleteInput from './AutocompleteInput';
 
 import { 
   FiClipboard, FiSun, FiPlus, FiRefreshCw, FiCheckCircle, 
@@ -54,7 +55,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
   const [previewStatus, setPreviewStatus] = useState<ChecklistStatusResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-
+  const [fieldSuggestions, setFieldSuggestions] = useState<Record<string, string[]>>({});
 
   // --- 3. useEffects for Filters (ปรับปรุงเล็กน้อย) ---
   useEffect(() => {
@@ -103,7 +104,6 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       }
     }
   }, [reportType, formData.mainCategory, formData.subCategory, selectedDate]);
-
   // --- 5. Data Fetching Functions ---
 
   // (5.1) โหลด "รายการรายงานที่เคยสร้าง" (List #2)
@@ -237,23 +237,38 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     mainCategory?: string;
     subCategory?: string;
     dynamicFields?: Record<string, string>;
-    date?: string; 
+    date?: string;
   }) => {
     setIsGenerating(true);
-    setGeneratedReport(null); 
+    setGeneratedReport(null);
+    setListError(null);
+
     try {
-      const reportData = { projectId, projectName, ...filterData };
-      const response = await api.generateReport(reportData);
+      // ✅ แก้ไข: รวม projectId เข้าไปใน object
+      const response = await api.generateReport({ 
+        projectId,      // ← เพิ่มบรรทัดนี้
+        projectName,    // ← เพิ่มบรรทัดนี้ (optional)
+        ...filterData 
+      });
+
       if (response.success && response.data) {
         setGeneratedReport(response.data);
-        alert(`✅ สร้างรายงานสำเร็จ!\nไฟล์: ${response.data.filename}`);
-        fetchGeneratedReports(); // โหลด List ใหม่
+        alert('สร้างรายงานสำเร็จ! 🎉');
+        
+        // ✅ แสดง loading ขณะ refetch
+        setIsPreviewLoading(true);
+        setIsLoadingList(true);
+        
+        await Promise.all([
+          fetchPreviewStatus(),
+          fetchGeneratedReports()
+        ]);
+        
       } else {
-        throw new Error(response.error || 'Failed to generate report');
+        throw new Error(response.error || 'ไม่สามารถสร้างรายงานได้');
       }
     } catch (error) {
-      console.error('Error generating report:', error);
-      alert('เกิดข้อผิดพลาดในการสร้างรายงาน: ' + (error as Error).message);
+      alert('เกิดข้อผิดพลาด: ' + (error as Error).message);
     } finally {
       setIsGenerating(false);
     }
@@ -263,7 +278,10 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   const subCategories: SubCategory[] = selectedMainCat ? selectedMainCat.subCategories : [];
   const requiredDynamicFields: string[] = subCategories.find(s => s.name === formData.subCategory)?.dynamicFields || [];
   const handleRegenerateReport = async (report: GeneratedReportInfo) => {
+    // ✅ แก้ไข: รวม projectId เข้าไปด้วย
     const filterDataFromReport = {
+      projectId,      // ← เพิ่มบรรทัดนี้
+      projectName,    // ← เพิ่มบรรทัดนี้
       reportType: report.reportType,
       mainCategory: report.mainCategory,
       subCategory: report.subCategory,
@@ -272,6 +290,34 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     };
     await runGenerateReport(filterDataFromReport);
   };
+
+  useEffect(() => {
+    const fetchFieldSuggestions = async () => {
+      const selectedSubCat = subCategories.find(s => s.name === formData.subCategory);
+      
+      if (selectedSubCat?.id) {
+        console.log('🔍 [Reports] Fetching suggestions for:', selectedSubCat.id);
+        
+        const response = await api.getDynamicFieldValues(projectId, selectedSubCat.id);
+        
+        console.log('📦 [Reports] Response:', response);
+        
+        if (response.success && response.data) {
+          console.log('✅ [Reports] Setting suggestions:', response.data);
+          setFieldSuggestions(response.data);
+        } else {
+          console.warn('⚠️ [Reports] Failed to load suggestions');
+          setFieldSuggestions({});
+        }
+      } else {
+        setFieldSuggestions({});
+      }
+    };
+    
+    if (reportType === 'QC' && formData.subCategory) {
+      fetchFieldSuggestions();
+    }
+  }, [projectId, reportType, formData.subCategory, subCategories]);
   
   // (renderReportItem เหมือนเดิม)
   const renderReportItem = (report: GeneratedReportInfo) => {
@@ -420,7 +466,13 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                   {requiredDynamicFields.map((fieldName: string) => (
                     <div key={fieldName}>
                       <label className={styles.smallLabel}>{fieldName}:</label>
-                      <input type="text" value={dynamicFields[fieldName] || ''} onChange={(e) => handleDynamicFieldChange(fieldName, e.target.value)} placeholder={`ระบุ${fieldName}...`} className={styles.formInput} />
+                        <AutocompleteInput
+                          value={dynamicFields[fieldName] || ''}
+                          onChange={(value) => handleDynamicFieldChange(fieldName, value)}
+                          suggestions={fieldSuggestions[fieldName] || []}
+                          placeholder={`ระบุ${fieldName}...`}
+                          className={styles.formInput}
+                        />
                     </div>
                   ))}
                 </div>

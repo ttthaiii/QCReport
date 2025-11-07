@@ -6,6 +6,7 @@ import { addWatermark as createWatermark, WatermarkOptions } from '../utils/wate
 import * as persistentQueue from '../utils/persistentQueue';
 import styles from './Camera.module.css';
 import CustomModal from './CustomModal';
+import AutocompleteInput from './AutocompleteInput';
 
 import { 
   FiClipboard, FiSun, FiMapPin, FiCheckCircle, FiLoader, 
@@ -101,6 +102,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [addWatermarkToAttached, setAddWatermarkToAttached] = useState<boolean>(false);
   const [showWatermarkModal, setShowWatermarkModal] = useState<boolean>(false);
   const [pendingAttachTopic, setPendingAttachTopic] = useState<string>('');
+  const [fieldSuggestions, setFieldSuggestions] = useState<Record<string, string[]>>({});
   const [previewData, setPreviewData] = useState<{ 
     url: string, 
     timestamp?: string, 
@@ -125,6 +127,39 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const selectedSubCat: SubCategory | undefined = useMemo(() => subCategories.find(s => s.name === selectedSubCategory), [subCategories, selectedSubCategory]);
   const topics: Topic[] = useMemo(() => selectedSubCat?.topics || [], [selectedSubCat]);
   const requiredDynamicFields: string[] = useMemo(() => selectedSubCat?.dynamicFields || [], [selectedSubCat]);
+  
+  useEffect(() => {
+    const fetchFieldSuggestions = async () => {
+      // ✅ ใช้ selectedSubCategory แทน formData.subCategory
+      const selectedSubCat = subCategories.find(s => s.name === selectedSubCategory);
+      
+      if (selectedSubCat?.id) {
+        console.log('🔍 [Camera] Fetching suggestions for:', selectedSubCat.id);
+        
+        const response = await api.getDynamicFieldValues(projectId, selectedSubCat.id);
+        
+        console.log('📦 [Camera] Response:', response);
+        
+        if (response.success && response.data) {
+          console.log('✅ [Camera] Setting suggestions:', response.data);
+          setFieldSuggestions(response.data);
+        } else {
+          console.warn('⚠️ [Camera] Failed to load suggestions');
+          setFieldSuggestions({});
+        }
+      } else {
+        console.log('❌ [Camera] No subCategory selected');
+        setFieldSuggestions({});
+      }
+    };
+    
+    // ✅ ใช้ selectedSubCategory แทน formData.subCategory
+    if (reportType === 'QC' && selectedSubCategory) {
+      fetchFieldSuggestions();
+    } else {
+      setFieldSuggestions({});
+    }
+  }, [projectId, reportType, selectedSubCategory, subCategories]);
 
   // (fetchSharedJobs)
   const fetchSharedJobs = useCallback(async () => {
@@ -175,9 +210,10 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   
   // (fetchChecklistStatus - แก้ไขแล้ว)
   const fetchChecklistStatus = useCallback(async ( mainCat: string, subCat: string, fields: Record<string, string> ) => { 
-    if (!mainCat || !subCat) return; 
-    setIsChecklistLoading(true); 
-    setUploadedStatus(new Map()); 
+  if (!mainCat || !subCat) {
+      setIsChecklistLoading(false); // <-- ✅ 2. เพิ่ม Fallback เผื่อไว้
+      return; 
+    }
     try { 
       const response = await api.getChecklistStatus({ 
         projectId: projectId, 
@@ -199,11 +235,34 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     setIsChecklistLoading(false); 
   }, [projectId]); 
 
-  useEffect(() => { 
-    if (step === 'topicList' && reportType === 'QC') { 
-      fetchChecklistStatus(selectedMainCategory, selectedSubCategory, dynamicFields); 
-    } 
-  }, [step, reportType, selectedMainCategory, selectedSubCategory, dynamicFields, fetchChecklistStatus]);
+  // เพิ่ม debounce helper
+  function debounce<T extends (...args: any[]) => any>(
+    func: T,
+    wait: number
+  ): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout | null = null;
+    return (...args: Parameters<T>) => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    };
+  }
+
+  // แก้ไข fetchChecklistStatus
+  const fetchChecklistStatusDebounced = useMemo(
+    () => debounce(fetchChecklistStatus, 500), 
+    [fetchChecklistStatus]
+  );
+
+  // ✅ ใช้ debounced version ใน useEffect
+  useEffect(() => {
+    if (step === 'topicList' && reportType === 'QC') {
+      fetchChecklistStatusDebounced(
+        selectedMainCategory, 
+        selectedSubCategory, 
+        dynamicFields
+      );
+    }
+  }, [step, reportType, selectedMainCategory, selectedSubCategory, dynamicFields, fetchChecklistStatusDebounced]);
 
   // (processNativePhoto)
   const processNativePhoto = (file: File): Promise<string> => { 
@@ -531,7 +590,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     } 
   };
   const handleDynamicFieldsSubmit = () => { 
-    setUploadedStatus(new Map()); 
+    setUploadedStatus(new Map());
+    setIsChecklistLoading(true);
     setStep('topicList'); 
   };
   const handleStartPhotoForTopic = (topic: string, type: 'capture' | 'attach') => { 
@@ -863,7 +923,12 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           {requiredDynamicFields.map((fieldName: string) => (
             <div className={styles['form-group']} key={fieldName}>
               <label>{fieldName}</label>
-              <input type="text" value={dynamicFields[fieldName] || ''} onChange={(e) => handleDynamicFieldChange(fieldName, e.target.value)} placeholder={`ระบุ${fieldName}...`} />
+                <AutocompleteInput
+                  value={dynamicFields[fieldName] || ''}
+                  onChange={(value) => handleDynamicFieldChange(fieldName, value)}
+                  suggestions={fieldSuggestions[fieldName] || []}
+                  placeholder={`ระบุ${fieldName}...`}
+                />
             </div>
           ))}
           <div className={styles['wizard-nav']}>

@@ -293,9 +293,79 @@ apiRouter.get("/admin/users", checkAuth, checkRole(['admin', 'god']), async (req
       };
     });
 
-    res.status(200).json({ success: true, data: combinedUsers });
+    // ✅ --- [เพิ่มส่วนนี้] ---
+    // 4. กรองข้อมูลตาม Role ของ "ผู้ที่ร้องขอ" (Requester)
+    const requesterUser = (req as any).user;
+    
+    if (requesterUser.role === 'admin') {
+      // ถ้าเป็น Admin, กรองให้เหลือเฉพาะโครงการของตัวเอง
+      const adminProjectId = requesterUser.assignedProjectId;
+      const filteredUsers = combinedUsers.filter(user => 
+        user.assignedProjectId === adminProjectId
+      );
+      
+      res.status(200).json({ success: true, data: filteredUsers });
+    
+    } else if (requesterUser.role === 'god') {
+      // ถ้าเป็น God, ส่งให้ทั้งหมด (แบบเดิม)
+      res.status(200).json({ success: true, data: combinedUsers });
+    
+    } else {
+      // (เผื่อไว้สำหรับ Role อื่นๆ ที่อาจหลุดเข้ามา)
+      res.status(403).json({ success: false, error: "Insufficient permissions." });
+    }
+    // ✅ --- [จบส่วนที่เพิ่ม] ---
+
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+apiRouter.post("/projects", checkAuth, checkRole(['god']), async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { projectName } = req.body;
+    if (!projectName || typeof projectName !== 'string' || projectName.trim() === '') {
+      return res.status(400).json({ success: false, error: "Missing 'projectName'." });
+    }
+
+    const trimmedName = projectName.trim();
+
+    // 1. สร้าง Doc ใน 'projects' (ให้ Firestore สร้าง ID)
+    const newProjectRef = db.collection('projects').doc(); // สร้าง Ref ID ใหม่
+    
+    // 2. สร้าง Doc ใน 'projectConfig' โดยใช้ ID เดียวกัน
+    const newConfigRef = db.collection('projectConfig').doc(newProjectRef.id);
+
+    // 3. ใช้ Batch Write เพื่อให้มั่นใจว่าสร้างสำเร็จทั้งคู่
+    const batch = db.batch();
+    
+    batch.set(newProjectRef, {
+      projectName: trimmedName,
+      isActive: true,
+      reportSettings: DEFAULT_SETTINGS // (ใช้ DEFAULT_SETTINGS ที่ import มา)
+    });
+
+    // สร้าง Config เริ่มต้น (ว่างเปล่า)
+    // (สำคัญมาก! ไม่งั้นหน้า Admin Config จะพังเมื่อพยายามอ่าน 'collections')
+    batch.set(newConfigRef, {
+      // ปล่อยว่างไว้ ให้ Admin ไปสร้าง MainCategory เองทีหลัง
+    }); 
+
+    await batch.commit();
+
+    // ส่งข้อมูลโปรเจกต์ใหม่กลับไป
+    const newProjectData = {
+      id: newProjectRef.id,
+      projectName: trimmedName,
+      isActive: true,
+      reportSettings: DEFAULT_SETTINGS
+    };
+
+    return res.status(201).json({ success: true, data: newProjectData });
+
+  } catch (error: any) {
+    console.error("Error creating new project:", error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -397,17 +467,49 @@ apiRouter.get("/project-config/:projectId", async (req: Request, res: Response):
     });
 
     const subCategoriesMap = new Map<string, any[]>();
-    subSnap.forEach(doc => {
+    subSnap.forEach(doc => { // <-- **แก้ไขภายในลูปนี้**
       const subData = doc.data();
       const mainId = subData.mainCategoryId;
       if (!subCategoriesMap.has(mainId)) {
         subCategoriesMap.set(mainId, []);
       }
+      
+      // ✅ --- START: ส่วนที่แก้ไข ---
+      
+      // 1. ดึงหัวข้อที่เรียงตามตัวอักษร (แบบเดิม)
+      const alphabeticalTopics = topicsMap.get(doc.id) || [];
+      
+      // 2. ดึงลำดับที่ถูกต้อง (ที่เพิ่งบันทึก)
+      const customOrder = subData.topicOrder as string[] | undefined;
+
+      let sortedTopics = alphabeticalTopics; // ใช้แบบเดิม ถ้าไม่มี customOrder
+      
+      // 3. ถ้ามี customOrder ให้จัดเรียงใหม่เดี๋ยวนี้
+      if (customOrder) {
+        sortedTopics = alphabeticalTopics.sort((a, b) => {
+          const indexA = customOrder.indexOf(a.name);
+          const indexB = customOrder.indexOf(b.name);
+          
+          // ถ้าเจอทั้งคู่ใน Array, เรียงตาม Array
+          if (indexA !== -1 && indexB !== -1) {
+            return indexA - indexB;
+          }
+          // ถ้าเจอแค่ A, ให้ A มาก่อน
+          if (indexA !== -1) return -1;
+          // ถ้าเจอแค่ B, ให้ B มาก่อน
+          if (indexB !== -1) return 1;
+          // ถ้าไม่เจอทั้งคู่ (เช่น topic ที่ถูกลบไปแล้ว) ก็เรียงตามตัวอักษร
+          return a.name.localeCompare(b.name);
+        });
+      }
+      
+      // ✅ --- END: ส่วนที่แก้ไข ---
+
       subCategoriesMap.get(mainId)!.push({
         id: doc.id,
         name: subData.name,
         dynamicFields: subData.dynamicFields || [],
-        topics: topicsMap.get(doc.id) || [],
+        topics: sortedTopics, // <-- 4. ใช้ตัวแปรที่จัดเรียงแล้ว
       });
     });
 
@@ -820,9 +922,8 @@ apiRouter.post("/generate-report", async (req: Request, res: Response): Promise<
       const mainCatId = mainCatSnap.docs[0].id;
       const subCatSnap = await projectConfigRef.collection("subCategories").where("name", "==", subCategory).where("mainCategoryId", "==", mainCatId).limit(1).get();
       if (subCatSnap.empty) return res.status(404).json({ success: false, error: "Sub category not found." });
-      const subCatId = subCatSnap.docs[0].id;
-      const topicsSnap = await projectConfigRef.collection("topics").where("subCategoryId", "==", subCatId).where("isArchived", "==", false).get();
-      const allTopics: string[] = topicsSnap.docs.map(doc => doc.data().name as string);
+      console.log(`[generate-report] Calling getTopicsForFilter to get sorted topics...`);
+      const allTopics: string[] = await getTopicsForFilter(db, projectId, mainCategory, subCategory);
       if (allTopics.length === 0) return res.status(404).json({ success: false, error: "No topics found."});
       
       // ✅ --- [แก้ไข] ---
@@ -1119,10 +1220,13 @@ apiRouter.post("/project-config/:projectId/main-categories", checkAdminOrGod, as
       .doc(newId);
       
     const existingDoc = await docRef.get();
-    if (existingDoc.exists) {
+
+    // [แก้ไข] ตรวจสอบว่าเอกสารนั้น "มีอยู่ และ ใช้งานอยู่ (active)" หรือไม่
+    if (existingDoc.exists && existingDoc.data()?.isArchived === false) {
+        // ถ้ามีอยู่ และ isArchived เป็น false (คือยังใช้งานอยู่) ถึงจะเป็นการซ้ำจริง
         return res.status(409).json({
             success: false,
-            error: `หมวดหมู่ชื่อ '${trimmedName}' (ID: ${newId}) มีอยู่แล้ว`
+            error: `หมวดหมู่ชื่อ '${trimmedName}' (ID: ${newId}) ที่ "ใช้งานอยู่" มีอยู่แล้ว`
         });
     }
       
@@ -1171,10 +1275,12 @@ apiRouter.post("/project-config/:projectId/sub-categories", checkAdminOrGod, asy
       .doc(newId);
       
     const existingDoc = await docRef.get();
-    if (existingDoc.exists) {
+
+    // [แก้ไข] ตรวจสอบว่า "มีอยู่ และ ใช้งานอยู่" หรือไม่
+    if (existingDoc.exists && existingDoc.data()?.isArchived === false) {
         return res.status(409).json({
             success: false,
-            error: `หมวดหมู่ย่อยชื่อ '${trimmedName}' (ID: ${newId}) มีอยู่แล้ว`
+            error: `หมวดหมู่ย่อยชื่อ '${trimmedName}' (ID: ${newId}) ที่ "ใช้งานอยู่" มีอยู่แล้ว`
         });
     }
       
@@ -1277,7 +1383,7 @@ apiRouter.post("/project-config/:projectId/topics", checkAdminOrGod, async (req:
           isArchived: false
       };
       
-      batch.create(docRef, newData);
+      batch.set(docRef, newData); // <-- [แก้ไข] เปลี่ยนเป็น .set() เพื่อให้เขียนทับได้
       addedTopics.push({ id: newId, ...newData });
     }
     
@@ -1389,6 +1495,35 @@ apiRouter.post("/project-config/:projectId/sub-category/:subCatId/fields", check
       success: false, 
       error: (error as Error).message 
     });
+  }
+});
+
+apiRouter.post("/project-config/:projectId/sub-category/:subCatId/topic-order", checkAdminOrGod, async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { projectId, subCatId } = req.params;
+    const { topicOrder } = req.body; // นี่คือ Array ของ string
+
+    if (!Array.isArray(topicOrder)) {
+      return res.status(400).json({ success: false, error: "'topicOrder' ต้องเป็น Array." });
+    }
+    
+    const docRef = db
+      .collection("projectConfig")
+      .doc(projectId)
+      .collection("subCategories")
+      .doc(subCatId);
+      
+    // บันทึก Array ลง field ใหม่
+    await docRef.update({
+      topicOrder: topicOrder 
+    });
+    
+    console.log(`✅ Topic order updated for: ${projectId}/${subCatId}`);
+    return res.json({ success: true, data: { id: subCatId, topicOrder: topicOrder } });
+
+  } catch (error) {
+    console.error("Error updating topic order:", error);
+    return res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
@@ -1754,6 +1889,9 @@ apiRouter.post("/admin/approve-user/:uidToApprove", async (req: Request, res: Re
 });
 
 apiRouter.post("/checklist-status", async (req: Request, res: Response): Promise<Response> => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   const user = (req as any).user;
   const { 
     projectId, 
@@ -1829,6 +1967,99 @@ apiRouter.post("/checklist-status", async (req: Request, res: Response): Promise
 });
 
 
+apiRouter.get("/projects/:projectId/dynamic-field-values", async (req: Request, res: Response): Promise<Response> => {
+  const user = (req as any).user;
+  const { projectId } = req.params;
+  const { subCategoryId } = req.query;
+
+  console.log('🔍 GET /dynamic-field-values called:', { projectId, subCategoryId });
+
+  // Check permissions
+  if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+     return res.status(403).json({ success: false, error: 'Access denied.' });
+  }
+
+  try {
+    if (!subCategoryId) {
+      return res.json({ success: true, data: {} });
+    }
+
+    // ✅ [แก้ไข 1] Query ข้อมูลจาก latestQcPhotos แทน qcPhotos (เร็วกว่า)
+    const snapshot = await db.collection('latestQcPhotos')
+      .where('projectId', '==', projectId)
+      .get();
+    
+    console.log(`📊 Found ${snapshot.size} photos in latestQcPhotos`);
+    
+    // ✅ [แก้ไข 2] รวบรวมค่า dynamicFields โดยเช็ค category ที่ตรงกับ subCategory
+    const fieldValuesMap = new Map<string, Set<string>>();
+    let matchCount = 0;
+    
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const category = data.category as string;
+      
+      // ✅ [แก้ไข 3] ปรับ logic การเช็ค category
+      // category format: "งานโครงสร้าง > งานเสา"
+      // subCategoryId format: "งานโครงสร้าง-งานเสา" (slug)
+      
+      if (category) {
+        // แปลง category เป็น slug เพื่อเปรียบเทียบ
+        const categorySlug = category
+          .replace(/\s*>\s*/g, '-')
+          .toLowerCase()
+          .replace(/\s+/g, '-');
+        
+        const targetSlug = (subCategoryId as string).toLowerCase();
+        
+        console.log(`Comparing: "${categorySlug}" vs "${targetSlug}"`);
+        
+        if (categorySlug.includes(targetSlug) || targetSlug.includes(categorySlug)) {
+          matchCount++;
+          const dynamicFields = data.dynamicFields as Record<string, string>;
+          
+          if (dynamicFields && typeof dynamicFields === 'object') {
+            Object.entries(dynamicFields).forEach(([fieldName, value]) => {
+              if (!fieldValuesMap.has(fieldName)) {
+                fieldValuesMap.set(fieldName, new Set());
+              }
+              
+              // ✅ [แก้ไข 4] ทำความสะอาดข้อมูลก่อนเก็บ
+              const cleanValue = String(value).trim().toLowerCase();
+              
+              if (cleanValue && cleanValue !== 'undefined' && cleanValue !== 'null') {
+                // เก็บทั้งตัวพิมพ์เล็กและตัวจริง
+                fieldValuesMap.get(fieldName)!.add(String(value).trim());
+              }
+            });
+          }
+        }
+      }
+    });
+
+    console.log(`✅ Matched ${matchCount} photos for subCategory: ${subCategoryId}`);
+
+    // ✅ [แก้ไข 5] แปลงเป็น object และเรียงตามตัวอักษร
+    const result: Record<string, string[]> = {};
+    
+    fieldValuesMap.forEach((values, fieldName) => {
+      result[fieldName] = Array.from(values)
+        .filter(v => v && v.length > 0) // กรองค่าว่างอีกครั้ง
+        .sort((a, b) => a.localeCompare(b, 'th')); // เรียงตามภาษาไทย
+    });
+
+    console.log('📋 Result:', JSON.stringify(result, null, 2));
+
+    return res.json({ success: true, data: result });
+
+  } catch (error) {
+    console.error("❌ Error fetching dynamic field values:", error);
+    return res.status(500).json({
+      success: false,
+      error: (error as Error).message
+    });
+  }
+});
 
 // --- [แก้ไข] ---
 // 4. บอก App หลัก ให้ใช้ apiRouter ที่ path "/api"

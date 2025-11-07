@@ -126,15 +126,58 @@ export async function getTopicsForFilter(
       .where("name", "==", subCategory)
       .where("mainCategoryId", "==", mainCatId)
       .limit(1).get();
+      
     if (subCatSnap.empty) throw new Error("Sub category not found.");
-    const subCatId = subCatSnap.docs[0].id;
+    
+    // --- START: NEW CODE ---
+    const subCatDoc = subCatSnap.docs[0]; // Get the document itself
+    const subCatData = subCatDoc.data();
+    const subCatId = subCatDoc.id;
+    
+    // 1. Get the custom order from the subCategory document
+    const customOrder = subCatData.topicOrder as string[] | undefined; 
+    // --- END: NEW CODE ---
 
     const topicsSnap = await projectConfigRef.collection("topics")
       .where("subCategoryId", "==", subCatId)
       .where("isArchived", "==", false)
       .get();
       
-    const allTopics: string[] = topicsSnap.docs.map(doc => doc.data().name as string);
+    // --- START: MODIFIED CODE ---
+    
+    // 2. Get topics as objects (name only is fine)
+    const alphabeticalTopics = topicsSnap.docs.map(doc => {
+      return { name: doc.data().name as string };
+    });
+    
+    let sortedTopics = alphabeticalTopics; // Default
+    console.log("--- RUNNING PDF-GENERATOR v4 SORTING LOGIC ---");
+    
+    if (customOrder) {
+      console.log(`✅ Using custom topicOrder for PDF: ${subCatId}`);
+      
+      // ✅ [แนะนำ] ให้สร้าง Array ใหม่ขึ้นมาเรียงลำดับ
+      sortedTopics = [...alphabeticalTopics].sort((a, b) => { 
+        const indexA = customOrder.indexOf(a.name);
+        const indexB = customOrder.indexOf(b.name);
+        
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB; // Both in list, sort by list
+        }
+        if (indexA !== -1) return -1; // Only A in list
+        if (indexB !== -1) return 1;  // Only B in list
+        return a.name.localeCompare(b.name, 'th'); // Neither in list
+      });
+    } else {
+       console.log(`⚠️ No topicOrder found for PDF: ${subCatId}. Using alphabetical.`);
+       // ✅ แก้ไขส่วนนี้ด้วย
+       sortedTopics = [...alphabeticalTopics].sort((a, b) => a.name.localeCompare(b.name, 'th'));
+    }
+
+    // 4. Return just the array of names
+    const allTopics: string[] = sortedTopics.map(t => t.name);
+    // --- END: MODIFIED CODE ---
+    
     return allTopics;
 
   } catch (error) {
@@ -454,24 +497,28 @@ function getInlineCSS(): string {
         font-weight: bold;
       }
       
-      .info-section {
-        display: flex;
-        justify-content: space-between;
+      .header-box {
+        border: 2px solid #000;
+        padding: 0; /* Table will handle padding */
       }
       
-      .info-column {
-        flex: 1;
-        padding: 2px 6px;
+      .info-table {
+        width: 100%;
+        border-collapse: collapse; /* ทำให้เส้นขอบรวมกัน */
+      }
+      
+      .info-table td {
+        width: 33.33%; /* บังคับ 3 คอลัมน์เท่ากัน */
         font-size: 11px;
-      }
-      
-      /* เส้นแบ่งสีเทาอ่อน */
-      .info-left {
+        padding: 2px 6px;
+        vertical-align: top;
+        /* สร้างเส้นขอบด้านขวาให้ 2 คอลัมน์แรก */
         border-right: 1px solid #ccc;
       }
       
-      .info-right {
-        /* No border for the rightmost column */
+      /* คอลัมน์สุดท้าย ไม่ต้องมีเส้นขอบขวา */
+      .info-table td:last-child {
+        border-right: none;
       }
       
       .info-item {
@@ -489,6 +536,12 @@ function getInlineCSS(): string {
       .info-item .value {
         flex: 1;
         word-break: break-word;
+
+        /* [ใหม่] กันข้อความยาวล้น และแสดง ... */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 250px; /* คุณปรับค่านี้ได้ตามความเหมาะสม */
       }
       
       /* Photos Grid - ลดขนาดรูป เพิ่มระยะห่าง */
@@ -557,45 +610,33 @@ function createDynamicHeader(
 ): string {
   const currentDate = getCurrentThaiDate();
   
-  // Check if it's QC Report or Daily Report
   const isQCReport = 'mainCategory' in reportData;
   
+  const logoSection = projectLogoBase64 
+    ? `<img src="${projectLogoBase64}" alt="Project Logo" style="max-width: 150px; max-height: 60px; object-fit: contain;" />`
+    : '';
+
+  // ===================================
+  //  QC REPORT LOGIC (ใช้ <table>)
+  // ===================================
   if (isQCReport) {
     const qcData = reportData as ReportData;
+    
+    // --- Logic การจัดแถวแบบ Flow (เหมือนเดิม) ---
+    const allInfoItems: { label: string, value: string }[] = [];
     const fieldEntries = Object.entries(qcData.dynamicFields || {}).filter(([_, value]) => value && value.trim());
-    
-    // คำนวณว่าต้องใช้กี่ช่อง (3 ช่องต่อแถว)
-    // แถวแรก: โครงการ, หมวดงานหลัก, หมวดงานย่อย (ใช้ไป 3 ช่อง)
-    // แถวสุดท้าย: ต้องเหลือที่สำหรับ วันที่ + แผ่นที่ (ใช้ไป 2 ช่อง, เหลือ 1 ช่องสำหรับ dynamic field)
-    
-    const totalFields = fieldEntries.length;
-    const lastRowFieldCount = Math.max(0, totalFields - 3); // จำนวน fields ที่จะแสดงในแถวที่ 2+
-    
-    // ถ้ามี fields เหลือ ให้คำนวณว่าแถวที่ 2 ต้องแสดงกี่ fields
-    // และแถวสุดท้าย (แถวที่ 3) จะมี field อีกกี่ตัว
-    let row2FieldCount = 0;
-    let row3FieldCount = 0;
-    
-    if (totalFields <= 3) {
-      // ถ้ามี fields น้อยกว่าหรือเท่ากับ 3 -> แสดงทั้งหมดในแถวที่ 2
-      row2FieldCount = totalFields;
-      row3FieldCount = 0;
-    } else {
-      // ถ้ามี fields มากกว่า 3
-      // แถวที่ 2 แสดง 3 fields
-      // แถวที่ 3 แสดง (เหลือ) ไม่เกิน 1 field (เพราะต้องเหลือที่สำหรับ วันที่ + แผ่นที่)
-      row2FieldCount = 3;
-      row3FieldCount = Math.min(1, totalFields - 3);
+    fieldEntries.forEach(([key, value]) => {
+      allInfoItems.push({ label: key, value: value });
+    });
+    allInfoItems.push({ label: 'วันที่', value: currentDate });
+    allInfoItems.push({ label: 'แผ่นที่', value: `${pageNumber}/${totalPages}` });
+
+    const infoRows: { label: string, value: string }[][] = [];
+    for (let i = 0; i < allInfoItems.length; i += 3) {
+      infoRows.push(allInfoItems.slice(i, i + 3));
     }
-    
-    const row2Fields = fieldEntries.slice(0, row2FieldCount);
-    const row3Fields = fieldEntries.slice(row2FieldCount, row2FieldCount + row3FieldCount);
-    
-    // ✅ สร้าง logo section โดยใช้โลโก้จาก settings (ถ้ามี) หรือใช้ default
-    const logoSection = projectLogoBase64 
-      ? `<img src="${projectLogoBase64}" alt="Project Logo" style="max-width: 150px; max-height: 60px; object-fit: contain;" />`
-      : `<div class="logo-central-pattana"><span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span></div>`;
-    
+    // --- จบ Logic Flow ---
+
     return `
       <header class="header">
         <div class="logo-section">
@@ -607,86 +648,61 @@ function createDynamicHeader(
             <h1>รูปถ่ายประกอบการตรวจสอบ</h1>
           </div>
           
-          <!-- แถวที่ 1: โครงการ | หมวดงานหลัก | หมวดงานย่อย -->
-          <div class="info-section">
-            <div class="info-column info-left">
-              <div class="info-item">
-                <span class="label">โครงการ:</span>
-                <span class="value">${qcData.projectName}</span>
-              </div>
-            </div>
-            
-            <div class="info-column info-left">
-              <div class="info-item">
-                <span class="label">หมวดงานหลัก:</span>
-                <span class="value">${qcData.mainCategory}</span>
-              </div>
-            </div>
-            
-            <div class="info-column info-right">
-              <div class="info-item">
-                <span class="label">หมวดงานย่อย:</span>
-                <span class="value">${qcData.subCategory}</span>
-              </div>
-            </div>
-          </div>
+          <table class="info-table">
+            <tbody>
+              <tr>
+                <td> <div class="info-item">
+                    <span class="label">โครงการ:</span>
+                    <span class="value">${qcData.projectName}</span>
+                  </div>
+                </td>
+                <td> <div class="info-item">
+                    <span class="label">หมวดงานหลัก:</span>
+                    <span class="value">${qcData.mainCategory}</span>
+                  </div>
+                </td>
+                <td> <div class="info-item">
+                    <span class="label">หมวดงานย่อย:</span>
+                    <span class="value">${qcData.subCategory}</span>
+                  </div>
+                </td>
+              </tr>
+              
+              ${infoRows.map(rowItems => `
+                <tr>
+                  ${/* 1. สร้าง <td> ที่มีข้อมูล */ ''}
+                  ${rowItems.map(item => `
+                    <td>
+                      <div class="info-item">
+                        <span class="label">${item.label}:</span>
+                        <span class="value">${item.value}</span>
+                      </div>
+                    </td>
+                  `).join('')}
+                  
+                  ${/* 2. เติม <td> ว่างที่เหลือในแถว (ถ้ามี) */ ''}
+                  ${rowItems.length < 3 ? 
+                    Array.from({ length: 3 - rowItems.length }, () => 
+                      `<td><div class="info-item">&nbsp;</div></td>`
+                    ).join('') 
+                    : ''
+                  }
+                </tr>
+              `).join('')}
+              
+            </tbody>
+          </table>
           
-          <!-- แถวที่ 2: Dynamic Fields -->
-          ${row2Fields.length > 0 ? `
-          <div class="info-section">
-            ${row2Fields.map(([key, value], index) => `
-            <div class="info-column ${index < 2 ? 'info-left' : 'info-right'}">
-              <div class="info-item">
-                <span class="label">${key}:</span>
-                <span class="value">${value}</span>
-              </div>
-            </div>
-            `).join('')}
-            ${row2Fields.length < 3 ? 
-              Array.from({ length: 3 - row2Fields.length }, (_, i) => 
-                `<div class="info-column ${row2Fields.length + i < 2 ? 'info-left' : 'info-right'}"></div>`
-              ).join('') 
-              : ''
-            }
-          </div>
-          ` : ''}
-          
-          <!-- แถวที่ 3: Dynamic Field ที่เหลือ (ไม่เกิน 1 field) | วันที่ | แผ่นที่ -->
-          <div class="info-section">
-            ${row3Fields.length > 0 ? `
-            <div class="info-column info-left">
-              <div class="info-item">
-                <span class="label">${row3Fields[0][0]}:</span>
-                <span class="value">${row3Fields[0][1]}</span>
-              </div>
-            </div>
-            ` : '<div class="info-column info-left"></div>'}
-            
-            <div class="info-column info-left">
-              <div class="info-item">
-                <span class="label">วันที่:</span>
-                <span class="value">${currentDate}</span>
-              </div>
-            </div>
-            
-            <div class="info-column info-right">
-              <div class="info-item">
-                <span class="label">แผ่นที่:</span>
-                <span class="value">${pageNumber}/${totalPages}</span>
-              </div>
-            </div>
-          </div>
         </div>
       </header>
     `;
+
+  // ===================================
+  //  DAILY REPORT LOGIC (ไม่เปลี่ยนแปลง)
+  // ===================================
   } else {
-    // Daily Report Header
+    // Daily Report Header (ใช้ Logic เดิมได้ เพราะมีแค่ 2 คอลัมน์)
     const dailyData = reportData as DailyReportData;
-    
-    // ✅ สร้าง logo section โดยใช้โลโก้จาก settings (ถ้ามี) หรือใช้ default
-    const logoSection = projectLogoBase64 
-      ? `<img src="${projectLogoBase64}" alt="Project Logo" style="max-width: 150px; max-height: 60px; object-fit: contain;" />`
-      : `<div class="logo-central-pattana"><span class="logo-central">CENTRAL</span><span class="logo-pattana">PATTANA</span></div>`;
     
     return `
       <header class="header">
@@ -699,25 +715,26 @@ function createDynamicHeader(
             <h1>รายงานการปฏิบัติงานประจำวัน</h1>
           </div>
           
-          <div class="info-section">
-            <div class="info-column info-left">
-              <div class="info-item">
-                <span class="label">โครงการ:</span>
-                <span class="value">${dailyData.projectName}</span>
-              </div>
-            </div>
-            
-            <div class="info-column info-right">
-              <div class="info-item">
-                <span class="label">วันที่:</span>
-                <span class="value">${dailyData.date}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">แผ่นที่:</span>
-                <span class="value">${pageNumber}/${totalPages}</span>
-              </div>
-            </div>
-          </div>
+          <table class="info-table">
+             <tbody>
+                <tr>
+                  <td style="width: 50%;"> <div class="info-item">
+                      <span class="label">โครงการ:</span>
+                      <span class="value">${dailyData.projectName}</span>
+                    </div>
+                  </td>
+                  <td style="width: 50%;"> <div class="info-item">
+                      <span class="label">วันที่:</span>
+                      <span class="value">${dailyData.date}</span>
+                    </div>
+                    <div class="info-item">
+                      <span class="label">แผ่นที่:</span>
+                      <span class="value">${pageNumber}/${totalPages}</span>
+                    </div>
+                  </td>
+                </tr>
+             </tbody>
+          </table>
         </div>
       </header>
     `;

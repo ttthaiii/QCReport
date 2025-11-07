@@ -1,4 +1,4 @@
-// Filename: src/App.tsx (REFACTORED for Pending Page UI)
+// Filename: src/App.tsx (FIXED - Remove Duplicate useEffect)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { auth, db } from './firebase'; 
@@ -10,7 +10,6 @@ import Reports from './components/Reports';
 import AdminConfig from './components/AdminConfig';
 import styles from './App.module.css'; 
 
-// ✅ [ใหม่] 1. Import CSS Module สำหรับหน้า Auth
 import authStyles from './components/Auth.module.css'; 
 
 import Login from './components/Login';
@@ -36,7 +35,6 @@ export interface UserProfile extends DocumentData {
 }
 
 function App() {
-  // --- (States ทั้งหมดเหมือนเดิม) ---
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -48,8 +46,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true); 
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>('projects');
+  const [newProjectName, setNewProjectName] = useState('');
 
-  // --- (useEffect และ Callbacks ทั้งหมดเหมือนเดิม) ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -83,7 +81,7 @@ function App() {
   }, [currentUser]);
 
   const fetchProjects = useCallback(async () => {
-    setIsLoading(true); 
+    setIsLoading(true);
     setError(null);
     const response = await api.getProjects();
     if (response.success && response.data) {
@@ -91,9 +89,29 @@ function App() {
     } else {
       setError(response.error || 'เกิดข้อผิดพลาดในการโหลดข้อมูลโครงการ');
     }
-    setIsLoading(false); 
+    setIsLoading(false);
   }, []);
 
+  // ✅ [แก้ไข] ใช้ inline function แทนการสร้าง fetchProjects แยก
+  useEffect(() => {
+    if (userProfile && userProfile.status === 'approved') {
+      const fetchProjectsOnce = async () => {
+        setIsLoading(true);
+        setError(null);
+        const response = await api.getProjects();
+        if (response.success && response.data) {
+          setProjects(response.data);
+        } else {
+          setError(response.error || 'เกิดข้อผิดพลาดในการโหลดข้อมูลโครงการ');
+        }
+        setIsLoading(false);
+      };
+      
+      fetchProjectsOnce();
+    }
+  }, [userProfile?.status, fetchProjects]); // ✅ เช็คแค่ status
+
+  // ✅ [แก้ไข] ใช้ useCallback สำหรับ fetchProjectConfig
   const fetchProjectConfig = useCallback(async () => {
     if (!selectedProject) return;
     setIsLoading(true); 
@@ -102,16 +120,19 @@ function App() {
     if (response.success && response.data) {
       setProjectConfig(response.data);
     } else {
-      setError(response.error || 'เกิดข้อผิดพลาดในการโหลด Config โครงการ');
+      // ✅ [แก้ไข] ตรวจสอบ Error
+      if (response.error && (response.error.includes("Config not found") || response.error.includes("empty"))) {
+        // นี่คือโปรเจกต์ใหม่ที่ยังไม่มี Config
+        console.warn("Config is empty, loading admin panel.");
+        setProjectConfig(null); // <-- ตั้งเป็น null
+        setError(null); // ✅ [สำคัญ] ลบ Error ทิ้ง
+      } else {
+        // Error อื่นๆ
+        setError(response.error || 'เกิดข้อผิดพลาดในการโหลด Config โครงการ'); 
+      }
     }
     setIsLoading(false);
   }, [selectedProject]);
-
-  useEffect(() => {
-    if (userProfile && userProfile.status === 'approved') {
-      fetchProjects();
-    }
-  }, [userProfile, fetchProjects]);
 
   useEffect(() => {
     if (selectedProject) {
@@ -135,7 +156,24 @@ function App() {
     await signOut(auth);
   };
 
-  // --- (ส่วน Render) ---
+  const handleAddNewProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectName.trim() || isLoading) return;
+
+    setIsLoading(true); // ใช้ loading state เดิม
+    const response = await api.addProject(newProjectName);
+
+    if (response.success) {
+      setNewProjectName(''); // Clear input
+      fetchProjects(); // Refresh project list
+      alert('สร้างโครงการสำเร็จ!');
+    } else {
+      setError(response.error || 'ไม่สามารถสร้างโครงการได้');
+    }
+    setIsLoading(false);
+  };
+
+  // --- Render Logic (เหมือนเดิม) ---
 
   if (isAuthLoading) {
     return <div className="loading-container">กำลังตรวจสอบสิทธิ์...</div>;
@@ -160,16 +198,13 @@ function App() {
     return (<div className="error-container"><p>บัญชีของคุณถูกปฏิเสธ</p><button onClick={handleLogout}>Log Out</button></div>);
   }
 
-  // ✅ [แก้ไข] 2. อัปเดต UI ของหน้า "รออนุมัติ"
   if (userProfile.status === 'pending') {
     return (
-      <div className={authStyles.authPage}> {/* <-- ใช้พื้นหลังสีครีม */}
-        {/* <-- ใช้กล่องสีขาวเหมือนหน้า Register Success --> */}
+      <div className={authStyles.authPage}>
         <div className={authStyles.successContainer}> 
-          <h2 style={{ color: '#856404' }}>⏳ รอการอนุมัติ</h2> {/* <-- [ใหม่] ใช้สีเหลือง/น้ำตาล */}
+          <h2 style={{ color: '#856404' }}>⏳ รอการอนุมัติ</h2>
           <p>สวัสดี, {userProfile.displayName}!</p>
           <p>บัญชีของคุณกำลังรอการอนุมัติจาก Admin</p>
-          {/* <-- ใช้ปุ่มสไตล์ Secondary ที่เราสร้างไว้ --> */}
           <button onClick={handleLogout} className={authStyles.buttonSecondary} style={{ marginTop: '20px' }}>
             Log Out
           </button>
@@ -178,7 +213,6 @@ function App() {
     );
   }
 
-  // (ส่วนที่เหลือของ Render เหมือนเดิม)
   if (isLoading && projects.length === 0) {
      return <div className="loading-container">กำลังโหลดโครงการ...</div>;
   }
@@ -191,6 +225,22 @@ function App() {
       return (
         <div className={styles.projectListContainer}>
           <h1>เลือกโครงการ (God Mode)</h1>
+
+          <form onSubmit={handleAddNewProject} className={styles.projectCard} style={{backgroundColor: '#f8f9fa', borderColor: 'var(--primary-color)'}}>
+            <h2 style={{marginTop: 0, fontSize: '1.2rem', color: 'var(--text-color)'}}>สร้างโครงการใหม่</h2>
+            <input
+              type="text"
+              placeholder="ป้อนชื่อโครงการใหม่..."
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              onClick={(e) => e.stopPropagation()} // ป้องกัน card click
+              style={{width: '100%', padding: '10px', fontSize: '1rem', border: '1px solid #ccc', borderRadius: '4px'}}
+              required
+            />
+            <button type="submit" disabled={isLoading} style={{marginTop: '10px', padding: '10px 15px', fontSize: '1rem', cursor: 'pointer', background: 'var(--primary-color)', color: 'white', border: 'none', borderRadius: '4px'}}>
+              {isLoading && !newProjectName ? '...' : (isLoading ? 'กำลังสร้าง...' : 'สร้างโครงการ')}
+            </button>
+          </form>          
           {projects.map((project) => (
             <div
               key={project.id}
@@ -302,11 +352,11 @@ function App() {
           />
         )}
 
-        {view === 'admin' && projectConfig && (userProfile.role === 'admin' || userProfile.role === 'god') && (
+        {view === 'admin' && (userProfile.role === 'admin' || userProfile.role === 'god') && (
           <AdminConfig
             projectId={selectedProject.id}
             projectName={selectedProject.projectName}
-            projectConfig={projectConfig}
+            projectConfig={projectConfig} // ✅ ส่ง projectConfig (ซึ่งอาจจะเป็น null)
             onConfigUpdated={() => fetchProjectConfig()}
             currentUserProfile={userProfile} 
           />

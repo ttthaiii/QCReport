@@ -151,44 +151,135 @@ const API_BASE_URL = IS_DEV
   ? `http://localhost:5001/${NEW_PROJECT_ID}/asia-southeast1/api` 
   : '/api';
 
+const pendingRequests = new Map<string, Promise<any>>();
 
 // [ใหม่] 3. สร้าง Wrapper 'fetch' ที่ปลอดภัย (ตัวหุ้ม)
-const fetchWithAuth = async (path: string, options: RequestInit = {}) => {
+const fetchWithAuth = async (path: string, options: RequestInit = {}, useCache = true) => {
   const user = auth.currentUser;
   
-  // 3.1 สร้าง Headers
+  // 1. Check cache
+  if (useCache && (!options.method || options.method === 'GET')) {
+    const cacheKey = `${path}`;
+    const cachedData = getCachedData(cacheKey);
+    if (cachedData) {
+      console.log(`📦 Using cache for: ${path}`);
+      return cachedData;
+    }
+    
+    // 2. Check pending requests (deduplication)
+    if (pendingRequests.has(cacheKey)) {
+      console.log(`⏳ Waiting for existing request: ${path}`);
+      return pendingRequests.get(cacheKey)!;
+    }
+  }
+  
+  // Headers
   const headers = new Headers(options.headers || {});
-
-  // 3.2 ถ้ามี User, ดึง Token และแนบไปใน Header
+  
+  // ✅ [เพิ่ม] Cache Control Headers สำหรับ POST requests
+  if (options.method === 'POST' && path.includes('/generate-report')) {
+    headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
+  }
+  
   if (user) {
-    const token = await user.getIdToken(); // ดึง Token ล่าสุด
+    const token = await user.getIdToken();
     headers.set('Authorization', `Bearer ${token}`);
   }
-
-  // 3.3 ถ้าเป็นการส่งข้อมูล (POST) และยังไม่มี Content-Type ให้ตั้งเป็น JSON
   if (options.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
-  // 3.4 เรียก fetch จริง โดยใช้ path + options ที่อัปเดตแล้ว
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: headers // (Headers ที่มี Token)
-  });
+  // 3. Create promise for deduplication
+  const requestPromise = (async () => {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: headers
+    });
 
-  // 3.5 จัดการ Error (เหมือนที่คุณทำ)
-  if (!response.ok) {
-    let errorMsg = `HTTP Error ${response.status}`;
-    try {
+    if (!response.ok) {
+      let errorMsg = `HTTP Error ${response.status}`;
+      try {
         const errorData = await response.json();
         errorMsg = errorData.error || errorMsg;
-    } catch (e) { /* Ignore if not JSON */ }
-    throw new Error(errorMsg);
+      } catch (e) { /* Ignore */ }
+      throw new Error(errorMsg);
+    }
+    
+    return response.json();
+  })();
+  
+  // Store in pending requests
+  if (useCache && (!options.method || options.method === 'GET')) {
+    const cacheKey = `${path}`;
+    pendingRequests.set(cacheKey, requestPromise);
   }
   
-  // 3.6 คืนค่าเป็น JSON
-  return response.json(); 
+  try {
+    const data = await requestPromise;
+    
+    // Cache result
+    if (useCache && (!options.method || options.method === 'GET')) {
+      const cacheKey = `${path}`;
+      setCachedData(cacheKey, data);
+      console.log(`💾 Cached: ${path}`);
+    }
+    
+    return data;
+  } finally {
+    // Clean up pending request
+    if (useCache && (!options.method || options.method === 'GET')) {
+      const cacheKey = `${path}`;
+      pendingRequests.delete(cacheKey);
+    }
+  }
 };
+
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 นาที
+function getCachedData(key: string): any | null {
+  const cached = cache.get(key);
+  if (!cached) return null;
+  
+  const now = Date.now();
+  if (now - cached.timestamp > CACHE_DURATION) {
+    cache.delete(key); // ลบ cache ที่หมดอายุ
+    return null;
+  }
+  
+  return cached.data;
+}
+
+function setCachedData(key: string, data: any): void {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
+function invalidateCache(pattern?: string | RegExp): void {
+  if (!pattern) {
+    // ลบทั้งหมด
+    cache.clear();
+    console.log('🗑️ Cleared ALL cache');
+    return;
+  }
+
+  const keysToDelete: string[] = [];
+  
+  cache.forEach((_, key) => {
+    const matches = typeof pattern === 'string' 
+      ? key.includes(pattern)
+      : pattern.test(key);
+    
+    if (matches) {
+      keysToDelete.push(key);
+    }
+  });
+
+  keysToDelete.forEach(key => {
+    cache.delete(key);
+    console.log(`🗑️ Invalidated cache: ${key}`);
+  });
+}
 
 
 // [แก้ไข] 4. อัปเดต 'api' object ทั้งหมดให้ใช้ 'fetchWithAuth'
@@ -197,10 +288,28 @@ export const api = {
   // --- Projects & Config (สำหรับหน้าเลือกโครงการ และ Admin) ---
   getProjects: async (): Promise<ApiResponse<Project[]>> => {
     try {
-      const data = await fetchWithAuth('/projects', { method: 'GET' });
-      return data; // (API ของคุณคืน { success: true, data: [...] })
+      const data = await fetchWithAuth('/projects', { method: 'GET' }, true); // ← เปิด cache
+      return data;
     } catch (error: any) {
       return { success: false, error: error.message };
+    }
+  },
+
+  addProject: async (projectName: string): Promise<ApiResponse<Project>> => {
+    try {
+      const data = await fetchWithAuth('/projects', {
+        method: 'POST',
+        body: JSON.stringify({ projectName })
+      });
+      
+      // ล้าง cache ของ /projects เพื่อให้ list โหลดใหม่
+      if (data.success) {
+        invalidateCache('/projects');
+      }
+      
+      return data;
+    } catch (error: any) { 
+      return { success: false, error: error.message }; 
     }
   },
 
@@ -219,6 +328,22 @@ export const api = {
       return data;
     } catch (error: any) {
       return { success: false, error: error.message, data: [] };
+    }
+  },
+
+  getDynamicFieldValues: async (
+    projectId: string, 
+    subCategoryId: string
+  ): Promise<ApiResponse<Record<string, string[]>>> => {
+    try {
+      const data = await fetchWithAuth(
+        `/projects/${projectId}/dynamic-field-values?subCategoryId=${encodeURIComponent(subCategoryId)}`,
+        { method: 'GET' },
+        false // ✅ เปลี่ยนจาก true เป็น false (ปิด cache)
+      );
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message, data: {} };
     }
   },
 
@@ -286,6 +411,20 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(reportData)
       });
+      
+      // ✅ [เพิ่ม] Invalidate cache หลังสร้างรายงานสำเร็จ
+      if (data.success) {
+        const { projectId } = reportData;
+        
+        // ลบ cache ของ generated reports
+        invalidateCache(`/projects/${projectId}/generated-reports`);
+        
+        // ลบ cache ของ checklist status (เพราะมีรูปใหม่แล้ว)
+        invalidateCache('/checklist-status');
+        
+        console.log('✅ Cache invalidated after report generation');
+      }
+      
       return data;
     } catch (error: any) {
       return { success: false, error: error.message };
@@ -350,88 +489,157 @@ export const api = {
   // --- Config CRUD (สำหรับหน้า Admin) ---
   addMainCategory: async (projectId: string, newName: string): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/main-categories`, {
+      // 1. เก็บผลลัพธ์ไว้ในตัวแปร
+      const response = await fetchWithAuth(`/project-config/${projectId}/main-categories`, {
         method: 'POST',
         body: JSON.stringify({ newName })
       });
+      
+      // 2. ถ้าสำเร็จ ให้ล้าง Cache ของหน้านี้!
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      
+      // 3. คืนค่าผลลัพธ์
+      return response;
+
     } catch (error: any) { return { success: false, error: error.message }; }
   },
   
   updateMainCategoryName: async (projectId: string, mainCatId: string, newName: string): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/main-category/${mainCatId}`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/main-category/${mainCatId}`, {
         method: 'POST',
         body: JSON.stringify({ newName })
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
   deleteMainCategory: async (projectId: string, mainCatId: string): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/main-category/${mainCatId}`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/main-category/${mainCatId}`, {
         method: 'DELETE'
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
   addSubCategory: async (projectId: string, mainCategoryId: string, mainCategoryName: string, newName: string): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/sub-categories`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/sub-categories`, {
         method: 'POST',
         body: JSON.stringify({ newName, mainCategoryId, mainCategoryName })
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
   updateSubCategoryName: async (projectId: string, subCatId: string, newName: string): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}`, {
         method: 'POST',
         body: JSON.stringify({ newName })
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
   deleteSubCategory: async (projectId: string, subCatId: string): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}`, {
         method: 'DELETE'
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
   addTopic: async (projectId: string, subCategoryId: string, mainCategoryName: string, subCategoryName: string, newTopicNames: string[]): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/topics`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/topics`, {
         method: 'POST',
         body: JSON.stringify({ newTopicNames, subCategoryId, mainCategoryName, subCategoryName })
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
   updateTopicName: async (projectId: string, topicId: string, newName: string): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/topic/${topicId}`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/topic/${topicId}`, {
         method: 'POST',
         body: JSON.stringify({ newName })
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
   deleteTopic: async (projectId: string, topicId: string): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/topic/${topicId}`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/topic/${topicId}`, {
         method: 'DELETE'
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
   
   updateDynamicFields: async (projectId: string, subCatId: string, fields: string[]): Promise<ApiResponse<any>> => {
     try {
-      return await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}/fields`, {
+      const response = await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}/fields`, {
         method: 'POST',
         body: JSON.stringify({ fields })
       });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  updateTopicOrder: async (projectId: string, subCatId: string, topicOrder: string[]): Promise<ApiResponse<any>> => {
+    try {
+      const response = await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}/topic-order`, {
+        method: 'POST',
+        body: JSON.stringify({ topicOrder })
+      });
+      // ✅ [แก้ไข] ล้าง Cache ถ้าสำเร็จ
+      if (response.success) {
+        invalidateCache(`/project-config/${projectId}`);
+      }
+      return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 

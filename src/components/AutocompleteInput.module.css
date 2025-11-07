@@ -1,0 +1,117 @@
+/* AutocompleteInput.module.css - FINAL VERSION */
+
+.autocompleteWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.autocompleteInput {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: white;
+  box-sizing: border-box;
+}
+
+.autocompleteInput:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+/* ✅ Dropdown ใช้ Portal + position: fixed */
+.suggestionsList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: white;
+  border: 2px solid #007bff;
+  border-radius: 4px;
+  max-height: 250px;
+  overflow-y: auto;
+  
+  /* ✅ z-index สูงสุด */
+  z-index: 999999;
+  
+  /* ✅ เงาเข้มขึ้นเพื่อให้เห็นชัด */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  
+  /* ✅ Smooth scrolling */
+  -webkit-overflow-scrolling: touch;
+  
+  /* ✅ ป้องกัน flicker */
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Custom scrollbar */
+.suggestionsList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.suggestionsList::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.suggestionsList::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.suggestionsList::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Suggestion item */
+.suggestionItem {
+  padding: 12px 15px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid #f0f0f0;
+  color: #333;
+  font-size: 0.95rem;
+  background: white;
+  user-select: none;
+}
+
+.suggestionItem:last-child {
+  border-bottom: none;
+}
+
+.suggestionItem:hover {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.suggestionItem:active {
+  background-color: #bbdefb;
+}
+
+/* No suggestions message */
+.noSuggestions {
+  padding: 12px 15px;
+  color: #999;
+  font-style: italic;
+  text-align: center;
+  background: white;
+  user-select: none;
+}
+
+/* Slide down animation */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggestionsList {
+  animation: slideDown 0.2s ease-out;
+}

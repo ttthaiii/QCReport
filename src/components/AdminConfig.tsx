@@ -102,20 +102,20 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
 
   const handleAddMain = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || isAdding || !internalConfig) return; 
+    if (!newName.trim() || isAdding) return; // ✅ 4. ลบ !internalConfig ออก
     setIsAdding(true);
     
     const response = await api.addMainCategory(projectId, newName);
     
     if (response.success && response.data) {
-      // ✅ [ใหม่] อัปเดต State ภายใน (Local State)
-      // (เราต้องสร้าง response.data ให้มี Type ที่ถูกต้อง)
+      // ✅ 5. สร้าง Config ใหม่ถ้ามันเป็น null
       const newMainCat: MainCategory = {
         id: response.data.id,
         name: response.data.name,
         subCategories: [] // เริ่มต้นด้วย SubCategories ว่าง
       };
-      setInternalConfig([ ...internalConfig, newMainCat ]);
+      // ถ้า config เดิมเป็น null หรือ array ว่าง, ให้สร้างใหม่
+      setInternalConfig(prevConfig => (prevConfig ? [...prevConfig, newMainCat] : [newMainCat]));
       
       setNewName("");
       setActiveForm(null);
@@ -163,30 +163,46 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     if (newTopicNames.length === 0) return;
 
     setIsAdding(true);
+    
+    // ✅ --- START: ส่วนที่แก้ไข ---
+    
+    // 1. ดึงรายชื่อหัวข้อ "เดิม" ที่มีอยู่ (ซึ่งตอนนี้อาจจะเรียงมั่ว)
+    const existingTopics = subCat.topics.map(t => t.name);
+    
+    // 2. สร้างลำดับที่ถูกต้อง = (หัวข้อเดิม + หัวข้อใหม่)
+    //    เราจะกรองหัวข้อที่ซ้ำกันออก (เผื่อไว้)
+    const existingTopicSet = new Set(existingTopics);
+    const uniqueNewTopicNames = newTopicNames.filter(name => !existingTopicSet.has(name));
+    
+    const newOrder = [...existingTopics, ...uniqueNewTopicNames];
+    
+    try {
+      // 3. เรียก API (ขั้นตอนที่ 1) เพื่อบันทึกลำดับ *ก่อน*
+      await api.updateTopicOrder(projectId, subCat.id, newOrder);
+
+    } catch (error: any) {
+      alert(`Error (บันทึกลำดับล้มเหลว): ${error.message}`);
+      setIsAdding(false);
+      return; // ออก ถ้าบันทึกลำดับไม่สำเร็จ
+    }
+
+    // ✅ --- END: ส่วนที่แก้ไข ---
+
+    // 4. เรียก API เดิมเพื่อสร้าง Topic (เหมือนเดิม)
     const response = await api.addTopic(projectId, subCat.id, mainCat.name, subCat.name, newTopicNames);
     
     if (response.success && response.data) {
-      // ✅ [ใหม่] อัปเดต State ภายใน
-      const newTopics: Topic[] = response.data.map((topicData: any) => ({
-        id: topicData.id,
-        name: topicData.name,
-        dynamicFields: topicData.dynamicFields || [] // (API ของเราอาจจะไม่ได้ส่ง field นี้มา แต่ใส่ไว้เพื่อความปลอดภัย)
-      }));
-      
-      setInternalConfig(internalConfig.map(mc => 
-        mc.id === mainCat.id
-          ? { ...mc, subCategories: mc.subCategories.map(sc => 
-              sc.id === subCat.id
-                ? { ...sc, topics: [...sc.topics, ...newTopics] } 
-                : sc
-            )}
-          : mc
-      ));
+      // ✅ --- START: ส่วนที่แก้ไข ---
+      // 5. [สำคัญ] เรียก onConfigUpdated() เพื่อบังคับให้ App โหลด Config ใหม่ทั้งหมด
+      //    (ซึ่งตอนนี้จะถูกจัดเรียงโดย Backend ตามขั้นตอนที่ 3)
+      onConfigUpdated();
+      // ✅ --- END: ส่วนที่แก้ไข ---
       
       setNewName("");
       setActiveForm(null);
     } else {
-      alert(`Error: ${response.error}`);
+      alert(`Error (สร้าง Topic ล้มเหลว): ${response.error}`);
+      // (ถ้าล้มเหลวตรงนี้ ลำดับอาจจะถูกบันทึกไปแล้ว แต่ Topic ไม่ถูกสร้าง)
     }
     setIsAdding(false);
   };
@@ -250,6 +266,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     const response = await api.updateDynamicFields(projectId, editingSubCat.id, fieldsToSave);
     
     if (response.success) {
+      onConfigUpdated();
       const updatedSubCatId = editingSubCat.id;
       setInternalConfig(internalConfig.map(mc => ({
         ...mc,
@@ -441,7 +458,12 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
                   </div>
                 )}
                 
-                {!internalConfig && <p>Loading config...</p>}
+                {!internalConfig && (
+                  <div style={{ padding: '20px', textAlign: 'center', background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }}>
+                    <p>ยังไม่มีการตั้งค่าโครงสร้างสำหรับโครงการนี้</p>
+                    <p>กรุณาเริ่มต้นโดยการ "เพิ่มหมวดงานหลักใหม่"</p>
+                  </div>
+                )}
 
                 {internalConfig && internalConfig.map((mainCat) => (
                   <div key={mainCat.id} className={styles.accordionItem}>

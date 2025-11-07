@@ -1,0 +1,24 @@
+{
+  "name": "qc-photos-migration",
+  "version": "1.0.0",
+  "description": "Migration script for QC photos from Google Drive to Firebase",
+  "main": "migrate-photos.js",
+  "scripts": {
+    "migrate": "node migrate-photos.js",
+    "inspect": "node inspect-firestore.js",
+    "dry-run": "node migrate-photos.js --dry-run"
+  },
+  "keywords": [
+    "firebase",
+    "migration",
+    "google-drive"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "csv-parser": "^3.0.0",
+    "axios": "^1.6.0",
+    "uuid": "^9.0.0"
+  }
+}
