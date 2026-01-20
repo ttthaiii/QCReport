@@ -180,12 +180,12 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
   const getCurrentJobIdentifier = (): { id: string, label: string } => { 
     if (reportType === 'QC') { 
-      // ✅ แก้ไข: ใช้ลำดับจาก requiredDynamicFields แทน Object.values()
-      const fieldValues = requiredDynamicFields
-        .map(fieldName => dynamicFields[fieldName] || '') // เรียงตาม config
+      const fieldValues = Object.keys(dynamicFields || {}) // <-- ✅ 1. ดึง Keys
+        .sort() // <-- ✅ 2. เรียงตามตัวอักษร
+        .map(key => dynamicFields[key] || '') // <-- ✅ 3. ดึงค่า
         .filter(item => !!item)
         .map(sanitizeForFirestoreId)
-        .join('_') || 'default'; 
+        .join('_') || 'default';
       
       const mainId = sanitizeForFirestoreId(selectedMainCat?.id || selectedMainCategory);
       const subId = sanitizeForFirestoreId(selectedSubCat?.id || selectedSubCategory);

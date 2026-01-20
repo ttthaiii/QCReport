@@ -36,7 +36,7 @@ const DEFAULT_REPORT_SETTINGS: ReportSettings = {
   layoutType: 'default',
   qcPhotosPerPage: 6,
   dailyPhotosPerPage: 2,
-  projectLogoUrl: '',
+  projectLogos: {},
 };
 
 type AdminView = 'config' | 'users';
@@ -296,28 +296,66 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     }
   };
   
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>, 
+    slot: 'left' | 'center' | 'right' // ✅ [แก้ไข]
+  ) => {
     const file = e.target.files?.[0];
     if (!file || !reportSettings) return;
+    
+    // [ป้องกัน] ถ้ายังอัปโหลดไม่เสร็จ ห้ามอัปโหลดซ้ำ
+    if (logoUploading) {
+      alert("รอสักครู่... กำลังอัปโหลดโลโก้ก่อนหน้า");
+      e.target.value = ''; // เคลียร์ค่าไฟล์ที่เลือก
+      return;
+    }
+    
     setLogoUploading(true);
     const reader = new FileReader();
     reader.readAsDataURL(file);
+    
     reader.onload = async () => {
       const base64 = reader.result as string;
-      const response = await api.uploadProjectLogo(projectId, base64);
+      
+      // ✅ [แก้ไข] ส่ง slot ไปที่ API
+      const response = await api.uploadProjectLogo(projectId, base64, slot);
+      
       if (response.success && response.data) {
-        setReportSettings({ ...reportSettings, projectLogoUrl: response.data.logoUrl });
-        alert('อัปโหลดโลโก้แล้ว!');
-        onConfigUpdated(); // (โลโก้ ควรอัปเดตทั้งแอป)
+        // ✅ [แก้ไข] 1. ดึง data ออกมาใส่ตัวแปรก่อน
+        const logoUrl = response.data.logoUrl; 
+        
+        // ✅ [แก้ไข] 2. อัปเดต State โดยใช้ตัวแปรใหม่
+        setReportSettings(prevSettings => ({
+          ...prevSettings,
+          projectLogos: {
+            ...prevSettings.projectLogos,
+            [slot]: logoUrl // <-- ใช้ตัวแปรที่ดึงออกมา
+          }
+        }));
+        // alert('อัปโหลดโลโก้แล้ว!'); (เอาออกก่อน เพื่อให้บันทึก)
+        // onConfigUpdated(); (ไม่ต้องเรียกทันที รอ handleSaveSettings)
       } else {
         alert(`Error uploading logo: ${response.error}`);
       }
       setLogoUploading(false);
+      e.target.value = ''; // เคลียร์ค่าไฟล์ที่เลือก
     };
+    
     reader.onerror = (error) => {
       alert(`Error reading file: ${error}`);
       setLogoUploading(false);
+      e.target.value = ''; // เคลียร์ค่าไฟล์ที่เลือก
     };
+  };
+
+  // ✅ [ใหม่] เพิ่มฟังก์ชันสำหรับ "ลบ" โลโก้ (แค่ใน State)
+  const handleClearLogo = (slot: 'left' | 'center' | 'right') => {
+    if (!reportSettings) return;
+    
+    const updatedLogos = { ...reportSettings.projectLogos };
+    delete updatedLogos[slot]; // ลบ key ออกจาก object
+    
+    setReportSettings({ ...reportSettings, projectLogos: updatedLogos });
   };
 
   const renderAddForm = (
@@ -416,14 +454,59 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
                     <input type="number" value={reportSettings.dailyPhotosPerPage} onChange={e => setReportSettings({...reportSettings, dailyPhotosPerPage: parseInt(e.target.value) as any})} min="1" max="6" />
                   </div>
                   <div className={styles.settingGroup}>
-                    <h4>โลโก้โครงการ</h4>
-                    <input type="file" accept="image/png, image/jpeg" onChange={handleLogoUpload} />
+                    <h4>โลโก้โครงการ (ซ้าย, กลาง, ขวา)</h4>
+                    
+                    {/* --- ช่องที่ 1: ซ้าย --- */}
+                    <div className={styles.logoSlotItem}>
+                      <label>โลโก้ซ้าย:</label>
+                      <input 
+                        type="file" 
+                        accept="image/png, image/jpeg" 
+                        onChange={(e) => handleLogoUpload(e, 'left')} 
+                        disabled={logoUploading}
+                      />
+                      {reportSettings.projectLogos?.left && (
+                        <div className={styles.logoPreview}>
+                          <img src={reportSettings.projectLogos.left} alt="Left Logo" />
+                          <button type="button" onClick={() => handleClearLogo('left')}>ลบ</button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* --- ช่องที่ 2: กลาง --- */}
+                    <div className={styles.logoSlotItem}>
+                      <label>โลโก้กลาง:</label>
+                      <input 
+                        type="file" 
+                        accept="image/png, image/jpeg" 
+                        onChange={(e) => handleLogoUpload(e, 'center')} 
+                        disabled={logoUploading}
+                      />
+                      {reportSettings.projectLogos?.center && (
+                        <div className={styles.logoPreview}>
+                          <img src={reportSettings.projectLogos.center} alt="Center Logo" />
+                          <button type="button" onClick={() => handleClearLogo('center')}>ลบ</button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* --- ช่องที่ 3: ขวา --- */}
+                    <div className={styles.logoSlotItem}>
+                      <label>โลโก้ขวา:</label>
+                      <input 
+                        type="file" 
+                        accept="image/png, image/jpeg" 
+                        onChange={(e) => handleLogoUpload(e, 'right')} 
+                        disabled={logoUploading}
+                      />
+                      {reportSettings.projectLogos?.right && (
+                        <div className={styles.logoPreview}>
+                          <img src={reportSettings.projectLogos.right} alt="Right Logo" />
+                          <button type="button" onClick={() => handleClearLogo('right')}>ลบ</button>
+                        </div>
+                      )}
+                    </div>
                     {logoUploading && <p>กำลังอัปโหลด...</p>}
-                    {reportSettings.projectLogoUrl && (
-                      <div className={styles.logoPreview}>
-                        <img src={reportSettings.projectLogoUrl} alt="Project Logo" style={{ display: 'block' }} />
-                      </div>
-                    )}
                   </div>
                   <button type="submit" className={`${styles.adminButton} ${styles.manage}`} disabled={logoUploading}>
                     {logoUploading ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}

@@ -101,9 +101,8 @@ function createStableQcId(
   topic: string,
   dynamicFields: Record<string, string>
 ): string {
-  // ✅ แปลง values เป็นตัวเล็กเพื่อให้ case-insensitive
   const sortedFields = Object.keys(dynamicFields || {}).sort()
-    .map(key => `${key}=${(dynamicFields[key] || '').toLowerCase().trim()}`)  // ✅ toLowerCase() + trim()
+    .map(key => `${key}=${(dynamicFields[key] || '').toLowerCase().trim()}`) // <-- ✅ แก้ไขบรรทัดนี้
     .join('&');
   const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
   return createHash('md5').update(rawId).digest('hex');
@@ -617,11 +616,17 @@ apiRouter.post("/projects/:projectId/report-settings", async (req: Request, res:
 
 // ✅ Endpoint สำหรับ Upload Logo โครงการ
 // ✅ [แก้ไข V11.3] Endpoint สำหรับ Upload Logo โครงการ (แก้ไขปัญหา Busboy)
-apiRouter.post("/projects/:projectId/upload-logo", async (req: Request, res: Response): Promise<Response> => {
+apiRouter.post("/projects/:projectId/upload-logo/:slot", async (req: Request, res: Response): Promise<Response> => {
   
   // [ใหม่] ตรวจสอบสิทธิ์ (เฉพาะ Admin/God)
   const user = (req as any).user;
-  const { projectId } = req.params;
+  const { projectId, slot } = req.params; // ✅ [แก้ไข] ดึง slot จาก params
+
+  // ✅ [ใหม่] ตรวจสอบ slot
+  if (!['left', 'center', 'right'].includes(slot)) {
+    return res.status(400).json({ success: false, error: 'Invalid logo slot (must be left, center, or right).' });
+  }
+
   if (user.role === 'user') {
      return res.status(403).json({ success: false, error: 'Only Admins can upload logo.' });
   }
@@ -630,33 +635,33 @@ apiRouter.post("/projects/:projectId/upload-logo", async (req: Request, res: Res
   }
 
   try {
-    console.log("--- BASE64 LOGO HANDLER IS RUNNING! ---");
+    console.log(`--- BASE64 LOGO HANDLER (Slot: ${slot}) ---`);
     const { logoBase64 } = req.body; 
 
     if (!logoBase64) {
       return res.status(400).json({ success: false, error: "No logoBase64 was uploaded." });
     }
 
-    // 2. แยกส่วนข้อมูลและ MimeType ออกจาก Base64 string
+    // 2. แยกส่วนข้อมูลและ MimeType
     const matches = logoBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     if (!matches || matches.length !== 3) {
       return res.status(400).json({ success: false, error: 'Invalid Base64 string format.' });
     }
     
-    const mimeType = matches[1]; // เช่น 'image/png'
-    const cleanBase64 = matches[2]; // ข้อมูลไฟล์
+    const mimeType = matches[1]; 
+    const cleanBase64 = matches[2]; 
     
     if (!mimeType.startsWith('image/')) {
       return res.status(400).json({ success: false, error: 'Invalid file type. Only images are allowed.' });
     }
     
-    // 3. แปลง Base64 กลับเป็น Buffer (เหมือนที่ทำกับ QC/Daily)
+    // 3. แปลง Base64 กลับเป็น Buffer
     const fileBuffer = Buffer.from(cleanBase64, "base64");
     
     // 4. อัปโหลด Buffer ไปยัง Storage
-    const bucket = getStorage().bucket(CORRECT_BUCKET_NAME); // (ใช้ชื่อที่ถูกต้อง)
-    const fileExtension = mimeType.split('/')[1] || 'png'; // เช่น 'png'
-    const uniqueFilename = `logo_${Date.now()}.${fileExtension}`;
+    const bucket = getStorage().bucket(CORRECT_BUCKET_NAME);
+    const fileExtension = mimeType.split('/')[1] || 'png';
+    const uniqueFilename = `logo_${slot}_${Date.now()}.${fileExtension}`; // ✅ [แก้ไข] เพิ่ม slot ในชื่อไฟล์
     const filePath = `logos/${projectId}/${uniqueFilename}`;
     const fileUpload = bucket.file(filePath);
 
@@ -671,16 +676,26 @@ apiRouter.post("/projects/:projectId/upload-logo", async (req: Request, res: Res
     const publicUrl = fileUpload.publicUrl();
     console.log(`Logo uploaded successfully: ${publicUrl}`);
 
-    // 6. บันทึก URL ลง Firestore
+    // ✅ [แก้ไข] 6. บันทึก URL ลง Firestore (ส่วนที่สำคัญที่สุด)
     const projectRef = db.collection("projects").doc(projectId);
-    await projectRef.set({ reportSettings: { projectLogoUrl: publicUrl } }, { merge: true });
+    
+    // เราใช้ Dot notation เพื่ออัปเดต field ภายใน map
+    // เช่น projectLogos.left = "url..."
+    const updatePath = `reportSettings.projectLogos.${slot}`; 
+    
+    await projectRef.set({ 
+      reportSettings: { 
+        projectLogos: {
+          [slot]: publicUrl // <-- [แก้ไข] ใช้ [slot] เพื่อระบุ key (left, center, right)
+        }
+      } 
+    }, { merge: true }); // merge: true สำคัญมาก
 
     // 7. ส่ง Response สำเร็จ
-    return res.json({ success: true, data: { logoUrl: publicUrl } });
+    return res.json({ success: true, data: { logoUrl: publicUrl, slot: slot } });
 
   } catch (err: any) {
     console.error('Error during Base64 upload or Storage save:', err);
-    // 8. ไม่ต้องเช็ค MulterError อีกต่อไป
     return res.status(500).json({ success: false, error: `Error processing file: ${err.message}` });
   }
 });
@@ -941,8 +956,8 @@ apiRouter.post("/generate-report", async (req: Request, res: Response): Promise<
       pdfBuffer = await generatePDF(reportData, fullLayoutPhotos, qcReportSettings);
       
       // ✅ [ใหม่] สร้างชื่อไฟล์ที่เสถียร (ไม่มีเวลา)
-      const fieldSlug = (dynamicFields && Object.values(dynamicFields).length > 0) 
-        ? `_${Object.values(dynamicFields).map((val: any) => slugify(String(val))).join('_')}` // <-- ✅ แก้ไข
+      const fieldSlug = (dynamicFields && Object.keys(dynamicFields).length > 0)
+        ? `_${Object.keys(dynamicFields).sort().map(key => slugify(String(dynamicFields[key] || ''))).join('_')}` // <-- ✅ แก้ไขบรรทัดนี้
         : '';
       stableFilename = `QC-Report_${slugify(mainCategory)}_${slugify(subCategory)}${fieldSlug}.pdf`;
 
@@ -2004,17 +2019,19 @@ apiRouter.get("/projects/:projectId/dynamic-field-values", async (req: Request, 
       // subCategoryId format: "งานโครงสร้าง-งานเสา" (slug)
       
       if (category) {
-        // แปลง category เป็น slug เพื่อเปรียบเทียบ
-        const categorySlug = category
-          .replace(/\s*>\s*/g, '-')
-          .toLowerCase()
-          .replace(/\s+/g, '-');
+        // 1. แปลง "A > B [C]" ให้เป็น "A-B [C]"
+        const categoryToSlugify = category.replace(/\s*>\s*/g, '-');
+        
+        // 2. [แก้ไข] เรียกใช้ฟังก์ชัน slugify() ที่ถูกต้อง (ที่อยู่บรรทัด 66)
+        //    ฟังก์ชันนี้จะลบ [] และจัดการ space ถูกต้อง
+        const categorySlug = slugify(categoryToSlugify);
         
         const targetSlug = (subCategoryId as string).toLowerCase();
         
         console.log(`Comparing: "${categorySlug}" vs "${targetSlug}"`);
         
-        if (categorySlug.includes(targetSlug) || targetSlug.includes(categorySlug)) {
+        // 3. [แก้ไข] เปลี่ยน .includes() เป็นการเปรียบเทียบตรงๆ (===)
+        if (categorySlug === targetSlug) {
           matchCount++;
           const dynamicFields = data.dynamicFields as Record<string, string>;
           
@@ -2026,10 +2043,10 @@ apiRouter.get("/projects/:projectId/dynamic-field-values", async (req: Request, 
               
               // ✅ [แก้ไข 4] ทำความสะอาดข้อมูลก่อนเก็บ
               const cleanValue = String(value).trim().toLowerCase();
-              
+
               if (cleanValue && cleanValue !== 'undefined' && cleanValue !== 'null') {
-                // เก็บทั้งตัวพิมพ์เล็กและตัวจริง
-                fieldValuesMap.get(fieldName)!.add(String(value).trim());
+                // ✅ แก้ไขให้ใช้ cleanValue
+                fieldValuesMap.get(fieldName)!.add(cleanValue); 
               }
             });
           }

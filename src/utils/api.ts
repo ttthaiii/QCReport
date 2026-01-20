@@ -29,7 +29,11 @@ export interface ReportSettings {
   layoutType: string;
   qcPhotosPerPage: 1 | 2 | 4 | 6;
   dailyPhotosPerPage: 1 | 2 | 4 | 6;
-  projectLogoUrl: string;
+  projectLogos: { // ✅ [แก้ไข] เพิ่มอันนี้
+    left?: string;
+    center?: string;
+    right?: string;
+  };
 }
 
 export interface Project {
@@ -115,7 +119,7 @@ const DEFAULT_REPORT_SETTINGS: ReportSettings = {
   layoutType: 'default',
   qcPhotosPerPage: 6,
   dailyPhotosPerPage: 2, // (คุณอาจจะอยากเปลี่ยนเป็น 6 เหมือนใน Config)
-  projectLogoUrl: '',
+  projectLogos: {},
 };
 
 export interface AdminUser {
@@ -474,9 +478,14 @@ export const api = {
     }
   },
 
-  uploadProjectLogo: async (projectId: string, logoBase64: string): Promise<ApiResponse<{ logoUrl: string }>> => {
+  uploadProjectLogo: async (
+    projectId: string, 
+    logoBase64: string, 
+    slot: 'left' | 'center' | 'right' // ✅ [แก้ไข] เพิ่ม slot
+  ): Promise<ApiResponse<{ logoUrl: string }>> => {
     try {
-      const data = await fetchWithAuth(`/projects/${projectId}/upload-logo`, {
+      // ✅ [แก้ไข] เพิ่ม slot เข้าไปใน URL
+      const data = await fetchWithAuth(`/projects/${projectId}/upload-logo/${slot}`, {
         method: 'POST',
         body: JSON.stringify({ logoBase64 })
       });

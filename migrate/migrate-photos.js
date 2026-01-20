@@ -211,28 +211,31 @@ async function loadDynamicFieldsMapping() {
     }
 }
 
-function transformDynamicFields(oldDynamicFields, subCategory, mapping) {
-    try {
-        const parsedFields = typeof oldDynamicFields === 'string' 
-            ? JSON.parse(oldDynamicFields) 
-            : oldDynamicFields;
-        
-        const config = mapping[subCategory];
-        if (!config) {
-            console.warn(`   ⚠️  No config for: "${subCategory}"`);
-            const { อาคาร, ...rest } = parsedFields;
-            // Trim all values
-            const trimmedRest = {};
-            Object.keys(rest).forEach(key => {
-                const value = rest[key];
-                trimmedRest[key] = typeof value === 'string' ? value.trim() : value;
-            });
-            return trimmedRest;
+function transformDynamicFields(mainCategory, subCategory, parsedFields, allowedFields) {
+    // 🎯 [ใหม่] ตรวจสอบ Category พิเศษที่เราต้องแก้ไข
+    const isColumnCategory = (mainCategory === 'งานโครงสร้าง' && subCategory === 'งานเสา');
+    const isCoreWallCategory = (subCategory === 'กำแพงลิฟต์และผนังบันได CORE ST-1');
+    const isPtsCategory = (subCategory === 'งานพื้นคอนกรีตอัดแรง [PTS]');
+
+    const newFields = {};
+
+    // ⭐️ [ใหม่] Logic แก้ปัญหาข้อ 1 (งานเสา):
+    // ดึงค่า Gridline ดิบจาก CSV มาดูก่อน
+    const rawCsvGridline = parsedFields.Gridline || null;
+    let gridlineIsActuallyFloorData = false;
+
+    if (isColumnCategory && rawCsvGridline) {
+        // ตรวจสอบว่าค่า Gridline นี้ เป็นข้อมูล "ชั้น" ที่ใส่ผิดที่หรือไม่
+        if (rawCsvGridline.startsWith('ชั้น') || rawCsvGridline.includes('โซน')) {
+            gridlineIsActuallyFloorData = true;
         }
-        
-        const allowedFields = config.dynamicFields;
-        const newFields = {};
-        
+    }
+
+    // --- เริ่มวนลูป Field ที่ระบบอนุญาต ---
+    allowedFields.forEach(allowedField => {
+        let valueToProcess = null;
+
+        // 1. หาค่า (จากชื่อใหม่ หรือชื่อเก่าที่ Mapping ไว้)
         const fieldNameMapping = {
             'ชั้น/Floor': 'ชั้น',
             'เสาเบอร์': 'เสาเบอร์',
@@ -240,29 +243,70 @@ function transformDynamicFields(oldDynamicFields, subCategory, mapping) {
             'Zone': 'Zone',
             'Gridline': 'Gridline'
         };
-        
-        allowedFields.forEach(allowedField => {
-            if (parsedFields[allowedField]) {
-                const value = parsedFields[allowedField];
-                newFields[allowedField] = typeof value === 'string' ? value.trim() : value;
-            } else {
-                const oldFieldName = Object.keys(fieldNameMapping).find(
-                    key => fieldNameMapping[key] === allowedField
-                );
-                if (oldFieldName && parsedFields[oldFieldName]) {
-                    const value = parsedFields[oldFieldName];
-                    newFields[allowedField] = typeof value === 'string' ? value.trim() : value;
-                }
-            }
-        });
-        
-        return newFields;
-    } catch (error) {
-        console.error('   ❌ Transform error:', error.message);
-        return {};
-    }
-}
 
+        if (parsedFields[allowedField]) {
+            valueToProcess = parsedFields[allowedField];
+        } else {
+            const oldFieldName = Object.keys(fieldNameMapping).find(
+                key => fieldNameMapping[key] === allowedField
+            );
+            if (oldFieldName && parsedFields[oldFieldName]) {
+                valueToProcess = parsedFields[oldFieldName];
+            }
+        }
+
+        // ⭐️ [ใหม่] Logic แก้ปัญหา (แทรกแซงการดึงค่า) ⭐️
+
+        // --- ปัญหาข้อ 1 (งานเสา) ---
+        if (isColumnCategory && gridlineIsActuallyFloorData) {
+            // ถ้า Gridline เป็นข้อมูล "ชั้น" จริงๆ
+            if (allowedField === 'ชั้น') {
+                // ถ้ากำลังหา "ชั้น" ให้ดึงค่าจาก Gridline มาใช้
+                valueToProcess = rawCsvGridline;
+                console.log(`      Found legacy Column 'Gridline' data: "${valueToProcess}"`);
+            } else if (allowedField === 'Gridline') {
+                // ถ้ากำลังหา "Gridline" ให้ตั้งเป็นค่าว่าง (เพราะมันไม่ใช่ Gridline)
+                valueToProcess = null;
+            }
+        }
+
+        // --- ปัญหาข้อ 2 (กำแพงลิฟต์) ---
+        if (isCoreWallCategory && allowedField === 'ชั้น' && valueToProcess == null) {
+            // ถ้าหา "ชั้น" ไม่เจอ ให้ไปหาจาก Key ที่ผิดแทน
+            valueToProcess = parsedFields['กำแพงลิฟต์และผนังบันได CORE ST-1เบอร์'] || null;
+            if (valueToProcess) console.log(`      Found legacy CoreWall 'เบอร์' data: "${valueToProcess}"`);
+        }
+        
+        // --- ปัญหาข้อ 4 (งานพื้น PTS) ---
+        if (isPtsCategory && allowedField === 'ชั้น' && valueToProcess == null) {
+            // ถ้าหา "ชั้น" ไม่เจอ ให้ไปหาจาก Key ที่ผิดแทน
+            valueToProcess = parsedFields['งานพื้นคอนกรีตอัดแรง [PTS]เบอร์'] || null;
+            if (valueToProcess) console.log(`      Found legacy PTS 'เบอร์' data: "${valueToProcess}"`);
+        }
+
+        // ---------------------------------
+        // 2. ทำความสะอาดและ Normalize ค่า
+        // ---------------------------------
+        if (valueToProcess == null || String(valueToProcess).trim() === '') {
+            return; // ข้าม Field นี้ไป (ไม่บันทึก)
+        }
+
+        let finalValue = String(valueToProcess).trim().toLowerCase();
+
+        // ⭐️ [ใหม่] ปรับปรุง: ให้ Normalize "ชั้น" ทุก Category
+        if (allowedField === 'ชั้น' && finalValue) {
+             // ใช้ฟังก์ชัน normalizeFloorValue (ที่มีอยู่แล้ว)
+            finalValue = normalizeFloorValue(finalValue);
+        }
+        
+        // 3. บันทึกค่าที่สะอาดแล้ว
+        if (finalValue) {
+            newFields[allowedField] = finalValue;
+        }
+    });
+
+    return newFields;
+}
 async function photoExists(projectId, category, topic, dynamicFields) {
     const stableId = createStableQcId(projectId, category, topic, dynamicFields);
     const doc = await db.collection('latestQcPhotos').doc(stableId).get();
@@ -362,14 +406,29 @@ async function migratePhotos() {
             console.log(`\n[${photoNum}/${stats.total}] ${row.topic}`);
             console.log(`   SubCategory: ${row.subCategory}`);
             
-            try {
-                const transformedFields = transformDynamicFields(
-                    row.dynamicFieldsRaw,
-                    row.subCategory,
-                    dynamicFieldsMapping
-                );
-                
-                console.log(`   Fields: ${JSON.stringify(transformedFields)}`);
+        try {
+                // [ใหม่] 1. ค้นหา Config ของ SubCategory นี้
+                const subCategoryConfig = dynamicFieldsMapping[row.subCategory];
+                const allowedFieldsArray = subCategoryConfig ? subCategoryConfig.dynamicFields : [];
+
+                // [ใหม่] 2. แปลง JSON string (row.dynamicFieldsRaw) ให้เป็น Object
+                let parsedFields = {};
+                try {
+                    parsedFields = JSON.parse(row.dynamicFieldsRaw);
+                } catch (e) {
+                    console.log(`   ⚠️  Warning: Could not parse Dynamic Fields JSON: ${e.message}`);
+                    // (ทำงานต่อแม้จะ parse ไม่ได้, จะได้ Fields: {} ที่ถูกต้อง)
+                }
+
+                // [แก้ไข] 3. เรียกฟังก์ชันด้วยตัวแปรที่ "ถูกต้อง" และ "เรียงลำดับถูกต้อง"
+                const transformedFields = transformDynamicFields(
+                    CONFIG.mainCategory,  // <-- 1. mainCategory
+                    row.subCategory,       // <-- 2. subCategory
+                    parsedFields,          // <-- 3. parsedFields (Object ที่แปลงแล้ว)
+                    allowedFieldsArray    // <-- 4. allowedFields (Array ที่ถูกต้อง)
+                );
+                
+                console.log(`   Fields: ${JSON.stringify(transformedFields)}`);
                 
                 if (CONFIG.skipExisting) {
                     const exists = await photoExists(CONFIG.projectId, category, row.topic, transformedFields);
@@ -454,6 +513,14 @@ async function migratePhotos() {
     }
     
     console.log('\n✅ Migration Complete!\n');
+}
+
+function normalizeFloorValue(value) {
+    if (typeof value !== 'string') return value;
+    // "ชั้น .1" -> "ชั้น 1", "ชั้น.1" -> "ชั้น 1", "ชั้น  1" -> "ชั้น 1"
+    // "3b-4" -> "3b-4" (ไม่เปลี่ยนแปลง)
+    return value.replace(/ชั้น\s*\.\s*(\d+)/g, 'ชั้น $1') // "ชั้น .1" -> "ชั้น 1"
+                .replace(/ชั้น\s*(\d+)/g, 'ชั้น $1');      // "ชั้น1" -> "ชั้น 1" (เผื่อไว้)
 }
 
 // ========================================

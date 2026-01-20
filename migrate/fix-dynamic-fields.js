@@ -35,7 +35,7 @@ console.log('✅ Firebase Admin initialized\n');
 function createStableQcId(projectId, category, topic, dynamicFields) {
     // Logic นี้คัดลอกมาจาก pdf-generator.ts เพื่อให้ Hashing ตรงกัน
     const sortedFields = Object.keys(dynamicFields || {}).sort()
-        .map(key => `${key}=${dynamicFields[key]}`)
+        .map(key => `${key}=${(dynamicFields[key] || '').toLowerCase().trim()}`) // ✅ แก้ไขตรงนี้
         .join('&');
     const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
     return crypto.createHash('md5').update(rawId).digest('hex');
@@ -52,7 +52,7 @@ function trimDynamicFields(dynamicFields) {
     Object.keys(dynamicFields).forEach(key => {
         const value = dynamicFields[key];
         if (typeof value === 'string') {
-            const trimmedValue = value.trim();
+            const trimmedValue = value.trim().toLowerCase(); // ✅ แก้ไขตรงนี้
             trimmed[key] = trimmedValue;
             if (trimmedValue !== value) {
                 hasChanges = true;

@@ -307,3 +307,42 @@
   /* [ใหม่] เพิ่ม padding ถ้ามันถูกย้ายออกมา */
   padding: 15px;
 }
+
+/* ใน AdminConfig.module.css */
+
+/* จัดการ 3 ช่องหลัก */
+.logoSlotItem {
+  margin-bottom: 15px; /* เว้นระยะห่างแต่ละช่อง */
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+/* จัดการรูปตัวอย่างและปุ่มลบ */
+.logoPreview {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logoPreview img {
+  max-height: 40px; /* ย่อรูปตัวอย่าง */
+  max-width: 150px;
+  object-fit: contain;
+  border: 1px solid #ccc;
+  background: #f9f9f9;
+}
+
+/* ปุ่มลบรูป */
+.logoPreview button {
+  padding: 2px 6px;
+  font-size: 11px;
+  background-color: #f44336; /* สีแดง */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.logoPreview button:hover {
+  background-color: #d32f2f;
+}

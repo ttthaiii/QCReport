@@ -20,7 +20,7 @@ function createStableQcId(
   dynamicFields: Record<string, string>
 ): string {
   const sortedFields = Object.keys(dynamicFields || {}).sort()
-    .map(key => `${key}=${dynamicFields[key]}`)
+    .map(key => `${key}=${(dynamicFields[key] || '').toLowerCase().trim()}`) // <-- ✅ ต้องแก้บรรทัดนี้
     .join('&');
   const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
   return createHash('md5').update(rawId).digest('hex');
@@ -38,12 +38,18 @@ function getCurrentThaiDate(): string {
 // TYPE DEFINITIONS
 // ========================================
 
+export interface ReportLogoSettings {
+  left?: string;   // URL สำหรับโลโก้ซ้าย
+  center?: string; // URL สำหรับโลโก้กลาง
+  right?: string;  // URL สำหรับโลโก้ขวา
+}
+
 export interface ReportSettings {
   layoutType: 'default' | string;
   qcPhotosPerPage: 1 | 2 | 4 | 6;
   dailyPhotosPerPage: 1 | 2 | 4 | 6;
   photosPerPage: 1 | 2 | 4 | 6;
-  projectLogoUrl: string;
+  projectLogos: ReportLogoSettings; // ✅  เปลี่ยนเป็นโครงสร้างใหม่
 }
 
 export const DEFAULT_SETTINGS: ReportSettings = {
@@ -51,7 +57,7 @@ export const DEFAULT_SETTINGS: ReportSettings = {
   qcPhotosPerPage: 6,
   dailyPhotosPerPage: 6,
   photosPerPage: 6,
-  projectLogoUrl: '',
+  projectLogos: {}, // ✅  เปลี่ยนเป็น object ว่าง
 };
 
 export interface PhotoData {
@@ -102,10 +108,33 @@ async function fetchAndEncodeImage(url: string): Promise<string | null> {
   }
 }
 
-async function fetchProjectLogo(projectLogoUrl: string): Promise<string | null> {
-  if (!projectLogoUrl) return null;
-  console.log(`Fetching project logo from: ${projectLogoUrl}`);
-  return fetchAndEncodeImage(projectLogoUrl);
+async function fetchProjectLogos(
+  logos: ReportLogoSettings
+): Promise<{ left: string | null; center: string | null; right: string | null }> {
+  
+  const urls = [
+    logos.left,
+    logos.center,
+    logos.right
+  ];
+
+  const base64Promises = urls.map(url => {
+    if (url) {
+      console.log(`Fetching project logo from: ${url}`);
+      return fetchAndEncodeImage(url);
+    }
+    return Promise.resolve(null);
+  });
+  
+  const [leftBase64, centerBase64, rightBase64] = await Promise.all(base64Promises);
+  
+  console.log(`Logos fetched. Left: ${!!leftBase64}, Center: ${!!centerBase64}, Right: ${!!rightBase64}`);
+  
+  return {
+    left: leftBase64,
+    center: centerBase64,
+    right: rightBase64
+  };
 }
 
 export async function getTopicsForFilter(
@@ -449,152 +478,165 @@ function getInlineCSS(): string {
         margin: 0 auto;
         background: white;
         position: relative;
+        
+        display: flex;
+        flex-direction: column;
       }
       
-      /* Header Styles - แก้ไข Logo ไม่ให้ทับ */
+      /* Header Styles */
       .header {
         position: relative;
         margin-bottom: 15px;
-        padding-top: 40px; /* ✅ เพิ่มจาก 22px เป็น 70px */
+        padding-top: 0; 
+        flex-shrink: 0;
       }
+      .logo-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        min-height: 60px; 
+        padding-bottom: 10px; 
+      }
+      
+      .logo-slot {
+        flex-basis: 33.33%; 
+        display: flex;
+        align-items: center;
+      }
+      
+      .logo-slot.logo-left   { justify-content: flex-start; }
+      .logo-slot.logo-center { justify-content: center; }
+      .logo-slot.logo-right  { justify-content: flex-end; }
+      
+      .logo-image {
+        max-height: 50px; 
+        max-width: 100%;  
+        object-fit: contain;
+      }      
+      
+      /* ... (CSS ส่วน .header-box, .info-table, .info-item ไม่เปลี่ยนแปลง) ... */
 
-      .logo-section {
-        position: absolute;
-        top: 10px; /* ✅ เพิ่ม top: 10px เพื่อเว้นระยะจากขอบบน */
-        right: 10px; /* ✅ เพิ่ม right: 10px เพื่อเว้นระยะจากขอบขวา */
-        z-index: 10;
-      }
-      
-      .logo-central-pattana {
-        font-size: 16px;
-        font-weight: bold;
-        letter-spacing: 0.5px;
-      }
-      
-      .logo-central {
-        color: #000;
-      }
-      
-      .logo-pattana {
-        color: #FFA500;
-      }
-      
-      /* Header Box */
       .header-box {
         border: 2px solid #000;
         padding: 6px 8px;
       }
-      
       .title-section {
         text-align: center;
         padding: 4px 0;
         border-bottom: 2px solid #000;
         margin-bottom: 6px;
       }
-      
       .title-section h1 {
         font-size: 16px;
         font-weight: bold;
       }
-      
       .header-box {
         border: 2px solid #000;
-        padding: 0; /* Table will handle padding */
+        padding: 0; 
       }
-      
       .info-table {
         width: 100%;
-        border-collapse: collapse; /* ทำให้เส้นขอบรวมกัน */
+        border-collapse: collapse; 
       }
-      
       .info-table td {
-        width: 33.33%; /* บังคับ 3 คอลัมน์เท่ากัน */
+        width: 33.33%; 
         font-size: 11px;
         padding: 2px 6px;
         vertical-align: top;
-        /* สร้างเส้นขอบด้านขวาให้ 2 คอลัมน์แรก */
         border-right: 1px solid #ccc;
       }
-      
-      /* คอลัมน์สุดท้าย ไม่ต้องมีเส้นขอบขวา */
       .info-table td:last-child {
         border-right: none;
       }
-      
       .info-item {
         padding: 1px 0;
         display: flex;
         line-height: 1.4;
       }
-      
       .info-item .label {
         font-weight: bold;
         min-width: 70px;
         flex-shrink: 0;
       }
-      
       .info-item .value {
         flex: 1;
         word-break: break-word;
-
-        /* [ใหม่] กันข้อความยาวล้น และแสดง ... */
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 250px; /* คุณปรับค่านี้ได้ตามความเหมาะสม */
+        max-width: 250px; 
       }
       
-      /* Photos Grid - ลดขนาดรูป เพิ่มระยะห่าง */
+      /* --- [ส่วนแก้ไขหลัก] --- */
+      
       .photos-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 15px 12px;
+        grid-template-rows: repeat(3, 1fr); /* บังคับ 3 แถว */
+        gap: 10px 12px;
         margin-top: 10px;
+        
+        flex-grow: 1; /* ยืดเต็มพื้นที่ */
+        min-height: 0; 
       }
       
       .photo-item {
         break-inside: avoid;
         page-break-inside: avoid;
+        
+        display: flex;
+        flex-direction: column;
+        min-height: 0; /* บังคับไม่ให้ล้น */
+        overflow: hidden; /* [ใหม่] ซ่อนส่วนที่ล้น (ถ้ามี) */
       }
       
       .photo-wrapper {
         width: 100%;
-        aspect-ratio: 4/3;
         background: #f5f5f5;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
         margin-bottom: 4px;
+
+        flex-grow: 1;
+        min-height: 0;
+        
+        /* ✅ [แก้ไข 1/2] ทำให้ .photo-wrapper เป็นตัวกำหนดขอบเขต */
+        position: relative;
       }
       
-      /* กรอบที่มีรูป - ไม่มี background สีเทา */
       .photo-wrapper.has-image {
         background: white;
       }
       
       .photo-wrapper img {
-        max-width: 95%;
-        max-height: 95%;
+        /* ✅ [แก้ไข 2/2] บังคับให้ img อยู่ตรงกลางกรอบ และห้ามขยายกรอบ */
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 100%; /* เปลี่ยนจาก 95% */
+        max-height: 100%; /* เปลี่ยนจาก 95% */
         width: auto;
         height: auto;
-        object-fit: contain;
+        object-fit: contain; /* ยังคงใช้ contain เพื่อไม่ให้รูปถูกตัด */
       }
       
-      /* ซ่อนข้อความ "ไม่มีรูปภาพ" */
+      /* ... (CSS ส่วน .placeholder-text, .photo-caption, .page-break ไม่เปลี่ยนแปลง) ... */
+
       .placeholder-text {
         display: none;
       }
-      
       .photo-caption {
         text-align: center;
         font-size: 11px;
         padding: 2px 0;
         font-weight: normal;
         line-height: 1.3;
+        flex-shrink: 0; 
       }
-      
-      /* Page Break */
       .page-break {
         page-break-after: always;
       }
@@ -606,16 +648,32 @@ function createDynamicHeader(
   reportData: ReportData | DailyReportData, 
   pageNumber: number, 
   totalPages: number,
-  projectLogoBase64: string | null = null
+  // ✅ [แก้ไข] รับเป็น Object ที่มี 3 ช่อง
+  projectLogoBase64s: { 
+    left: string | null; 
+    center: string | null; 
+    right: string | null; 
+  } | null = null
 ): string {
   const currentDate = getCurrentThaiDate();
   
   const isQCReport = 'mainCategory' in reportData;
   
-  const logoSection = projectLogoBase64 
-    ? `<img src="${projectLogoBase64}" alt="Project Logo" style="max-width: 150px; max-height: 60px; object-fit: contain;" />`
-    : '';
-
+  // ✅ [ใหม่] สร้าง HTML สำหรับโลโก้ 3 ช่อง
+  const logoContainerHTML = `
+    <div class="logo-container">
+      <div class="logo-slot logo-left">
+        ${projectLogoBase64s?.left ? `<img src="${projectLogoBase64s.left}" alt="Left Logo" class="logo-image" />` : ''}
+      </div>
+      <div class="logo-slot logo-center">
+        ${projectLogoBase64s?.center ? `<img src="${projectLogoBase64s.center}" alt="Center Logo" class="logo-image" />` : ''}
+      </div>
+      <div class="logo-slot logo-right">
+        ${projectLogoBase64s?.right ? `<img src="${projectLogoBase64s.right}" alt="Right Logo" class="logo-image" />` : ''}
+      </div>
+    </div>
+  `;
+  
   // ===================================
   //  QC REPORT LOGIC (ใช้ <table>)
   // ===================================
@@ -639,11 +697,7 @@ function createDynamicHeader(
 
     return `
       <header class="header">
-        <div class="logo-section">
-          ${logoSection}
-        </div>
-        
-        <div class="header-box">
+        ${logoContainerHTML} <div class="header-box">
           <div class="title-section">
             <h1>รูปถ่ายประกอบการตรวจสอบ</h1>
           </div>
@@ -700,17 +754,13 @@ function createDynamicHeader(
   // ===================================
   //  DAILY REPORT LOGIC (ไม่เปลี่ยนแปลง)
   // ===================================
-  } else {
+} else {
     // Daily Report Header (ใช้ Logic เดิมได้ เพราะมีแค่ 2 คอลัมน์)
     const dailyData = reportData as DailyReportData;
     
     return `
       <header class="header">
-        <div class="logo-section">
-          ${logoSection}
-        </div>
-        
-        <div class="header-box">
+        ${logoContainerHTML} <div class="header-box">
           <div class="title-section">
             <h1>รายงานการปฏิบัติงานประจำวัน</h1>
           </div>
@@ -778,7 +828,12 @@ function createPhotosGrid(photos: FullLayoutPhoto[], pageIndex: number): string 
 function createOptimizedHTML(
   reportData: PDFReportData, 
   photos: FullLayoutPhoto[],
-  projectLogoBase64: string | null = null
+  // ✅ [แก้ไข 1] รับเป็น Object ที่มี 3 ช่อง (เหมือน createDynamicHeader)
+  projectLogoBase64s: { 
+    left: string | null; 
+    center: string | null; 
+    right: string | null; 
+  } | null = null
 ): string {
   const photosPerPage = 6;
   const pages: FullLayoutPhoto[][] = [];
@@ -807,7 +862,7 @@ function createOptimizedHTML(
     
     return `
     <div class="page ${pageIndex < pages.length - 1 ? 'page-break' : ''}">
-      ${createDynamicHeader(reportData, pageIndex + 1, pages.length, projectLogoBase64)}
+      ${createDynamicHeader(reportData, pageIndex + 1, pages.length, projectLogoBase64s)}
       ${createPhotosGrid(pagePhotos, pageIndex)}
     </div>
   `}).join('');
@@ -892,15 +947,10 @@ export async function generatePDF(
   
   console.log(`📊 Generating QC Report PDF...`);
   
-  // ✅ ดึงโลโก้จาก settings
-  const projectLogoBase64 = await fetchProjectLogo(settings.projectLogoUrl);
-  if (projectLogoBase64) {
-    console.log(`✅ Project logo loaded successfully`);
-  } else {
-    console.log(`ℹ️ No project logo provided, using default`);
-  }
+  // ✅ [แก้ไข] เรียก fetchProjectLogos (เติม s) และส่ง settings.projectLogos (object)
+  const projectLogoBase64s = await fetchProjectLogos(settings.projectLogos);
   
-  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64);
+  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s);
   return generateOptimizedPDF(finalHtml);
 }
 
@@ -912,15 +962,10 @@ export async function generateDailyPDFWrapper(
   
   console.log(`📊 Generating Daily Report PDF...`);
   
-  // ✅ ดึงโลโก้จาก settings
-  const projectLogoBase64 = await fetchProjectLogo(settings.projectLogoUrl);
-  if (projectLogoBase64) {
-    console.log(`✅ Project logo loaded successfully`);
-  } else {
-    console.log(`ℹ️ No project logo provided, using default`);
-  }
+  // ✅ [แก้ไข] เรียก fetchProjectLogos (เติม s) และส่ง settings.projectLogos (object)
+  const projectLogoBase64s = await fetchProjectLogos(settings.projectLogos);
   
-  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64);
+  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s);
   return generateOptimizedPDF(finalHtml);
 }
 
