@@ -422,6 +422,7 @@ apiRouter.get("/project-config/:projectId", async (req, res) => {
                 id: doc.id,
                 name: subData.name,
                 dynamicFields: subData.dynamicFields || [],
+                fieldDependencies: subData.fieldDependencies, // <-- ✅ เพิ่ม fieldDependencies ส่งกลับไปด้วย
                 topics: sortedTopics, // <-- 4. ใช้ตัวแปรที่จัดเรียงแล้ว
             });
         });

@@ -1,19 +1,26 @@
 // Filename: src/utils/api.ts (REFACTORED for Auth Token)
 
 // [ใหม่] 1. Import auth จาก firebase.js
-import { auth } from '../firebase'; 
+import { auth } from '../firebase';
 
 // --- Type definitions (จากไฟล์เดิมของคุณ) ---
+export interface DynamicFieldConfig {
+  label: string;
+  type?: 'text' | 'autocomplete' | 'dropdown';
+  options?: string[];
+}
+
 export interface Topic {
   id: string;
   name: string;
-  dynamicFields: string[];
+  dynamicFields: (string | DynamicFieldConfig)[];
 }
 
 export interface SubCategory {
   id: string;
   name: string;
-  dynamicFields: string[];
+  dynamicFields: (string | DynamicFieldConfig)[];
+  fieldDependencies?: Record<string, { targetField: string; mapping: Record<string, string> }>;
   topics: Topic[];
 }
 
@@ -26,10 +33,10 @@ export interface MainCategory {
 export type ProjectConfig = MainCategory[];
 
 export interface ReportSettings {
-  layoutType: string;
-  qcPhotosPerPage: 1 | 2 | 4 | 6;
-  dailyPhotosPerPage: 1 | 2 | 4 | 6;
-  projectLogos: { // ✅ [แก้ไข] เพิ่มอันนี้
+  layoutType: string;
+  qcPhotosPerPage: 1 | 2 | 4 | 6;
+  dailyPhotosPerPage: 1 | 2 | 4 | 6;
+  projectLogos: { // ✅ [แก้ไข] เพิ่มอันนี้
     left?: string;
     center?: string;
     right?: string;
@@ -151,8 +158,8 @@ export interface ChecklistStatusResponse {
 // (อ้างอิงจาก firebase.json และ qc-functions/src/index.ts)
 const IS_DEV = process.env.NODE_ENV === 'development';
 const NEW_PROJECT_ID = 'tts-smart-report-generator';
-const API_BASE_URL = IS_DEV 
-  ? `http://localhost:5001/${NEW_PROJECT_ID}/asia-southeast1/api` 
+const API_BASE_URL = IS_DEV
+  ? `http://localhost:5001/${NEW_PROJECT_ID}/asia-southeast1/api`
   : '/api';
 
 const pendingRequests = new Map<string, Promise<any>>();
@@ -160,7 +167,7 @@ const pendingRequests = new Map<string, Promise<any>>();
 // [ใหม่] 3. สร้าง Wrapper 'fetch' ที่ปลอดภัย (ตัวหุ้ม)
 const fetchWithAuth = async (path: string, options: RequestInit = {}, useCache = true) => {
   const user = auth.currentUser;
-  
+
   // 1. Check cache
   if (useCache && (!options.method || options.method === 'GET')) {
     const cacheKey = `${path}`;
@@ -169,24 +176,24 @@ const fetchWithAuth = async (path: string, options: RequestInit = {}, useCache =
       console.log(`📦 Using cache for: ${path}`);
       return cachedData;
     }
-    
+
     // 2. Check pending requests (deduplication)
     if (pendingRequests.has(cacheKey)) {
       console.log(`⏳ Waiting for existing request: ${path}`);
       return pendingRequests.get(cacheKey)!;
     }
   }
-  
+
   // Headers
   const headers = new Headers(options.headers || {});
-  
+
   // ✅ [เพิ่ม] Cache Control Headers สำหรับ POST requests
   if (options.method === 'POST' && path.includes('/generate-report')) {
     headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     headers.set('Pragma', 'no-cache');
     headers.set('Expires', '0');
   }
-  
+
   if (user) {
     const token = await user.getIdToken();
     headers.set('Authorization', `Bearer ${token}`);
@@ -210,26 +217,26 @@ const fetchWithAuth = async (path: string, options: RequestInit = {}, useCache =
       } catch (e) { /* Ignore */ }
       throw new Error(errorMsg);
     }
-    
+
     return response.json();
   })();
-  
+
   // Store in pending requests
   if (useCache && (!options.method || options.method === 'GET')) {
     const cacheKey = `${path}`;
     pendingRequests.set(cacheKey, requestPromise);
   }
-  
+
   try {
     const data = await requestPromise;
-    
+
     // Cache result
     if (useCache && (!options.method || options.method === 'GET')) {
       const cacheKey = `${path}`;
       setCachedData(cacheKey, data);
       console.log(`💾 Cached: ${path}`);
     }
-    
+
     return data;
   } finally {
     // Clean up pending request
@@ -245,13 +252,13 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 นาที
 function getCachedData(key: string): any | null {
   const cached = cache.get(key);
   if (!cached) return null;
-  
+
   const now = Date.now();
   if (now - cached.timestamp > CACHE_DURATION) {
     cache.delete(key); // ลบ cache ที่หมดอายุ
     return null;
   }
-  
+
   return cached.data;
 }
 
@@ -268,12 +275,12 @@ function invalidateCache(pattern?: string | RegExp): void {
   }
 
   const keysToDelete: string[] = [];
-  
+
   cache.forEach((_, key) => {
-    const matches = typeof pattern === 'string' 
+    const matches = typeof pattern === 'string'
       ? key.includes(pattern)
       : pattern.test(key);
-    
+
     if (matches) {
       keysToDelete.push(key);
     }
@@ -305,15 +312,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ projectName })
       });
-      
+
       // ล้าง cache ของ /projects เพื่อให้ list โหลดใหม่
       if (data.success) {
         invalidateCache('/projects');
       }
-      
+
       return data;
-    } catch (error: any) { 
-      return { success: false, error: error.message }; 
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
   },
 
@@ -336,7 +343,7 @@ export const api = {
   },
 
   getDynamicFieldValues: async (
-    projectId: string, 
+    projectId: string,
     subCategoryId: string
   ): Promise<ApiResponse<Record<string, string[]>>> => {
     try {
@@ -382,13 +389,13 @@ export const api = {
       const payload = {
         projectId: data.projectId,
         reportType: data.reportType,
-        
+
         // ✅ [แก้ไข] Key ต้องเป็น 'photoBase64' ให้ตรงกับ index.ts
-        photoBase64: data.photoBase64, 
-        
+        photoBase64: data.photoBase64,
+
         // [FIX] รวม 'mainCategory' และ 'subCategory' เป็น 'category'
         category: data.reportType === 'QC' ? `${data.mainCategory} > ${data.subCategory}` : undefined,
-        
+
         topic: data.topic,
         description: data.description,
         location: data.location,
@@ -415,27 +422,27 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(reportData)
       });
-      
+
       // ✅ [เพิ่ม] Invalidate cache หลังสร้างรายงานสำเร็จ
       if (data.success) {
         const { projectId } = reportData;
-        
+
         // ลบ cache ของ generated reports
         invalidateCache(`/projects/${projectId}/generated-reports`);
-        
+
         // ลบ cache ของ checklist status (เพราะมีรูปใหม่แล้ว)
         invalidateCache('/checklist-status');
-        
+
         console.log('✅ Cache invalidated after report generation');
       }
-      
+
       return data;
     } catch (error: any) {
       return { success: false, error: error.message };
     }
   },
 
-  
+
   getChecklistStatus: async (payload: {
     projectId: string;
     reportType: 'QC' | 'Daily'; // <-- [ใหม่]
@@ -444,10 +451,10 @@ export const api = {
     dynamicFields?: Record<string, string>;
     date?: string; // <-- [ใหม่]
   }): Promise<ApiResponse<ChecklistStatusResponse>> => { // <-- [แก้ไข] ใช้ Type ใหม่
-     try {
+    try {
       const data = await fetchWithAuth('/checklist-status', {
         method: 'POST',
-        body: JSON.stringify(payload) 
+        body: JSON.stringify(payload)
       });
       return data;
     } catch (error: any) {
@@ -460,8 +467,7 @@ export const api = {
     try {
       const data = await fetchWithAuth(`/projects/${projectId}/report-settings`, { method: 'GET' });
       return data;
-    } catch (error: any)
- {
+    } catch (error: any) {
       return { success: false, error: error.message, data: DEFAULT_REPORT_SETTINGS };
     }
   },
@@ -479,8 +485,8 @@ export const api = {
   },
 
   uploadProjectLogo: async (
-    projectId: string, 
-    logoBase64: string, 
+    projectId: string,
+    logoBase64: string,
     slot: 'left' | 'center' | 'right' // ✅ [แก้ไข] เพิ่ม slot
   ): Promise<ApiResponse<{ logoUrl: string }>> => {
     try {
@@ -503,18 +509,18 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ newName })
       });
-      
+
       // 2. ถ้าสำเร็จ ให้ล้าง Cache ของหน้านี้!
       if (response.success) {
         invalidateCache(`/project-config/${projectId}`);
       }
-      
+
       // 3. คืนค่าผลลัพธ์
       return response;
 
     } catch (error: any) { return { success: false, error: error.message }; }
   },
-  
+
   updateMainCategoryName: async (projectId: string, mainCatId: string, newName: string): Promise<ApiResponse<any>> => {
     try {
       const response = await fetchWithAuth(`/project-config/${projectId}/main-category/${mainCatId}`, {
@@ -623,7 +629,7 @@ export const api = {
       return response;
     } catch (error: any) { return { success: false, error: error.message }; }
   },
-  
+
   updateDynamicFields: async (projectId: string, subCatId: string, fields: string[]): Promise<ApiResponse<any>> => {
     try {
       const response = await fetchWithAuth(`/project-config/${projectId}/sub-category/${subCatId}/fields`, {
@@ -655,84 +661,84 @@ export const api = {
   // --- Generated Reports (หน้า Reports) ---
   // (นี่คือฟังก์ชันจากไฟล์เดิมของคุณ ที่แก้ไขแล้ว)
   getGeneratedReports: async (projectId: string, filterCriteria: any): Promise<ApiResponse<GeneratedReportInfo[]>> => {
-      try {
-        const params = new URLSearchParams();
-        params.append('reportType', filterCriteria.reportType);
-        if (filterCriteria.reportType === 'QC') {
-          if (filterCriteria.mainCategory) params.append('mainCategory', filterCriteria.mainCategory);
-          if (filterCriteria.subCategory) params.append('subCategory', filterCriteria.subCategory);
-          if (filterCriteria.dynamicFields) {
-            Object.entries(filterCriteria.dynamicFields).forEach(([key, value]) => {
-              if (value) params.append(`dynamicFields[${key}]`, value as string);
-            });
-          }
-        } else if (filterCriteria.reportType === 'Daily') {
-          if (filterCriteria.date) params.append('date', filterCriteria.date);
+    try {
+      const params = new URLSearchParams();
+      params.append('reportType', filterCriteria.reportType);
+      if (filterCriteria.reportType === 'QC') {
+        if (filterCriteria.mainCategory) params.append('mainCategory', filterCriteria.mainCategory);
+        if (filterCriteria.subCategory) params.append('subCategory', filterCriteria.subCategory);
+        if (filterCriteria.dynamicFields) {
+          Object.entries(filterCriteria.dynamicFields).forEach(([key, value]) => {
+            if (value) params.append(`dynamicFields[${key}]`, value as string);
+          });
         }
-
-        // [แก้ไข] เรียกใช้ fetchWithAuth
-        const data = await fetchWithAuth(`/projects/${projectId}/generated-reports?${params.toString()}`, {
-          method: 'GET'
-        });
-
-        // (Error handling และ .json() ถูกย้ายไปใน fetchWithAuth แล้ว)
-        return data;
-
-      } catch (error) {
-        console.error('Error fetching generated reports:', error);
-        return {
-          success: false,
-          error: (error as Error).message,
-          data: []
-        };
+      } else if (filterCriteria.reportType === 'Daily') {
+        if (filterCriteria.date) params.append('date', filterCriteria.date);
       }
-    },
 
-    getSharedJobs: async (projectId: string): Promise<ApiResponse<SharedJob[]>> => {
-      try {
-        const data = await fetchWithAuth(`/projects/${projectId}/shared-jobs`, { method: 'GET' });
-        return data;
-      } catch (error: any) {
-        return { success: false, error: error.message, data: [] };
-      }
-    },
-    
-    saveSharedJob: async (projectId: string, jobData: SharedJob): Promise<ApiResponse<any>> => {
-      try {
-        return await fetchWithAuth(`/projects/${projectId}/shared-jobs`, {
-          method: 'POST',
-          body: JSON.stringify(jobData)
-        });
-      } catch (error: any) { return { success: false, error: error.message }; }
-    },
+      // [แก้ไข] เรียกใช้ fetchWithAuth
+      const data = await fetchWithAuth(`/projects/${projectId}/generated-reports?${params.toString()}`, {
+        method: 'GET'
+      });
 
-    // [ใหม่] 6. เพิ่มฟังก์ชัน 'getPhotosByProject' ที่หายไป
-    getPhotosByProject: async (projectId: string): Promise<ApiResponse<Photo[]>> => {
-      try {
-        // (Endpoint นี้อ้างอิงจาก index.ts ของคุณ `app.get("/photos/:projectId", ...)` )
-        const data = await fetchWithAuth(`/photos/${projectId}`, { method: 'GET' });
-        return data;
-      } catch (error: any) {
-        return { success: false, error: error.message, data: [] };
-      }
-    },
-    // ดึงรายงานทั้งหมด (ทั้งที่มีและยังไม่มี)
-    getAllPossibleReports: async (payload: {
-      projectId: string;
-      reportType: 'QC' | 'Daily';
-      mainCategory?: string;
-      subCategory?: string;
-      dynamicFields?: { [key: string]: string };
-      date?: string;
-    }): Promise<ApiResponse<GeneratedReportInfo[]>> => {
-      try {
-        const data = await fetchWithAuth('/reports/all-possible', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-        return data;
-      } catch (error: any) {
-        return { success: false, error: error.message };
-      }
-    }, 
+      // (Error handling และ .json() ถูกย้ายไปใน fetchWithAuth แล้ว)
+      return data;
+
+    } catch (error) {
+      console.error('Error fetching generated reports:', error);
+      return {
+        success: false,
+        error: (error as Error).message,
+        data: []
+      };
+    }
+  },
+
+  getSharedJobs: async (projectId: string): Promise<ApiResponse<SharedJob[]>> => {
+    try {
+      const data = await fetchWithAuth(`/projects/${projectId}/shared-jobs`, { method: 'GET' });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message, data: [] };
+    }
+  },
+
+  saveSharedJob: async (projectId: string, jobData: SharedJob): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/projects/${projectId}/shared-jobs`, {
+        method: 'POST',
+        body: JSON.stringify(jobData)
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  // [ใหม่] 6. เพิ่มฟังก์ชัน 'getPhotosByProject' ที่หายไป
+  getPhotosByProject: async (projectId: string): Promise<ApiResponse<Photo[]>> => {
+    try {
+      // (Endpoint นี้อ้างอิงจาก index.ts ของคุณ `app.get("/photos/:projectId", ...)` )
+      const data = await fetchWithAuth(`/photos/${projectId}`, { method: 'GET' });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message, data: [] };
+    }
+  },
+  // ดึงรายงานทั้งหมด (ทั้งที่มีและยังไม่มี)
+  getAllPossibleReports: async (payload: {
+    projectId: string;
+    reportType: 'QC' | 'Daily';
+    mainCategory?: string;
+    subCategory?: string;
+    dynamicFields?: { [key: string]: string };
+    date?: string;
+  }): Promise<ApiResponse<GeneratedReportInfo[]>> => {
+    try {
+      const data = await fetchWithAuth('/reports/all-possible', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
 };

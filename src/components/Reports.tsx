@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 // ✅ [ใหม่] 1. Import Type ใหม่
-import { api, ProjectConfig, MainCategory, SubCategory, GeneratedReportInfo, ChecklistStatusResponse } from '../utils/api'; 
+import { api, ProjectConfig, MainCategory, SubCategory, GeneratedReportInfo, ChecklistStatusResponse } from '../utils/api';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Reports.module.css';
 import AutocompleteInput from './AutocompleteInput';
 
-import { 
-  FiClipboard, FiSun, FiPlus, FiRefreshCw, FiCheckCircle, 
+import {
+  FiClipboard, FiSun, FiPlus, FiRefreshCw, FiCheckCircle,
   FiAlertTriangle, FiFileText, FiDownload, FiLoader, FiBarChart2,
   FiSearch // <-- [ใหม่]
 } from 'react-icons/fi';
@@ -23,29 +23,29 @@ interface ReportsProps {
 const cdnUrl = (process.env.REACT_APP_CDN_URL || '').replace(/\/$/, '');
 const formatDateToYYYYMMDD = (date: Date | null): string | undefined => {
   if (!date) return undefined;
-  
+
   // สร้าง Date ใหม่และตั้งเวลาเป็นเที่ยงวัน (หลีกเลี่ยงปัญหา timezone)
   const safeDate = new Date(date);
   safeDate.setHours(12, 0, 0, 0);
-  
+
   const year = safeDate.getFullYear();
   const month = String(safeDate.getMonth() + 1).padStart(2, '0');
   const day = String(safeDate.getDate()).padStart(2, '0');
-  
+
   return `${year}-${month}-${day}`;
 };
 const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig }) => {
-  
+
   // --- 1. STATES ---
   const [qcTopics, setQcTopics] = useState<ProjectConfig>(projectConfig || []);
   const [reportType, setReportType] = useState<'QC' | 'Daily'>('QC');
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [formData, setFormData] = useState({ mainCategory: '', subCategory: '' });
   const [dynamicFields, setDynamicFields] = useState<{ [key: string]: string }>({});
-  
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<any>(null);
-  
+
   // States สำหรับ List (ด้านล่าง)
   const [generatedReportsList, setGeneratedReportsList] = useState<GeneratedReportInfo[]>([]);
   const [isLoadingList, setIsLoadingList] = useState<boolean>(false);
@@ -62,33 +62,33 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     if (projectConfig) {
       setQcTopics(projectConfig);
       const mainCategories = projectConfig;
-      if (mainCategories.length > 0 && reportType === 'QC') { 
+      if (mainCategories.length > 0 && reportType === 'QC') {
         if (!formData.mainCategory) {
-            setFormData(prev => ({ ...prev, mainCategory: mainCategories[0].name }));
+          setFormData(prev => ({ ...prev, mainCategory: mainCategories[0].name }));
         }
       } else if (reportType !== 'QC') {
-        setFormData({ mainCategory: '', subCategory: '' }); 
+        setFormData({ mainCategory: '', subCategory: '' });
       }
     }
-  }, [projectConfig, reportType, formData.mainCategory]); 
+  }, [projectConfig, reportType, formData.mainCategory]);
 
   useEffect(() => {
     if (reportType === 'QC' && formData.mainCategory && qcTopics.length > 0) {
       const selectedMainCat = qcTopics.find(m => m.name === formData.mainCategory);
       if (selectedMainCat && selectedMainCat.subCategories.length > 0) {
-         if (!formData.subCategory || !selectedMainCat.subCategories.find(s => s.name === formData.subCategory)) {
-            setDynamicFields({}); 
-            setFormData(prev => ({ ...prev, subCategory: selectedMainCat.subCategories[0].name }));
-         }
+        if (!formData.subCategory || !selectedMainCat.subCategories.find(s => s.name === formData.subCategory)) {
+          setDynamicFields({});
+          setFormData(prev => ({ ...prev, subCategory: selectedMainCat.subCategories[0].name }));
+        }
       } else {
         setFormData(prev => ({ ...prev, subCategory: '' }));
-        setDynamicFields({}); 
+        setDynamicFields({});
       }
     } else if (reportType !== 'QC') {
-       setFormData(prev => ({ ...prev, subCategory: '' })); 
-       setDynamicFields({}); 
+      setFormData(prev => ({ ...prev, subCategory: '' }));
+      setDynamicFields({});
     }
-  }, [formData.mainCategory, formData.subCategory, qcTopics, reportType]); 
+  }, [formData.mainCategory, formData.subCategory, qcTopics, reportType]);
 
   useEffect(() => {
     if (reportType === 'QC') {
@@ -110,7 +110,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   const fetchGeneratedReports = useCallback(async () => {
     setIsLoadingList(true);
     setListError(null);
-    setGeneratedReport(null); 
+    setGeneratedReport(null);
 
     const filterCriteria = {
       reportType,
@@ -124,7 +124,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
     if (response.success && response.data) {
       response.data.sort((a: GeneratedReportInfo, b: GeneratedReportInfo) =>
-         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       setGeneratedReportsList(response.data);
     } else {
@@ -156,7 +156,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     }
     setIsLoadingList(false);
   }, [projectId, reportType, formData.mainCategory, formData.subCategory, selectedDate]);
-    
+
   // ✅ [ใหม่] (5.2) โหลด "สถานะรูปภาพ" (Preview Box #1.5)
   const fetchPreviewStatus = useCallback(async () => {
     setIsPreviewLoading(true);
@@ -197,15 +197,15 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   // (6.2) ปุ่ม "สร้างรายงาน" (เหมือนเดิม)
   const generateReport = async () => {
     if (isGenerating || !previewStatus || previewStatus.found === 0) {
-        if (!previewStatus) {
-            alert('กรุณากด "ค้นหา" เพื่อตรวจสอบข้อมูลก่อนสร้าง');
-            return;
-        }
-        if (previewStatus.found === 0) {
-            alert('ไม่พบรูปภาพ จึงไม่สามารถสร้างรายงานได้');
-            return;
-        }
+      if (!previewStatus) {
+        alert('กรุณากด "ค้นหา" เพื่อตรวจสอบข้อมูลก่อนสร้าง');
         return;
+      }
+      if (previewStatus.found === 0) {
+        alert('ไม่พบรูปภาพ จึงไม่สามารถสร้างรายงานได้');
+        return;
+      }
+      return;
     }
 
     const filterDataFromState = {
@@ -215,14 +215,52 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       dynamicFields: reportType === 'QC' ? dynamicFields : undefined,
       date: reportType === 'Daily' && selectedDate ? selectedDate.toISOString().split('T')[0] : undefined
     };
-    
+
     await runGenerateReport(filterDataFromState);
   };
-  
+
   // (Helper Functions ที่เหลือเหมือนเดิม)
-  const handleDynamicFieldChange = (fieldName: string, value: string) => {
-    setDynamicFields(prev => ({ ...prev, [fieldName]: value }));
-  };
+  /* 
+   * [MODIFIED] Handle field changes and auto-populate dependent fields
+   * Example: Select "Room 1" -> Auto select "ECN-..." for "Code note"
+   */
+  /* 
+   * [MODIFIED] Handle field changes and auto-populate dependent fields
+   * Example: Select "Room 1" -> Auto select "ECN-..." for "Code note"
+   */
+  const handleDynamicFieldChange = useCallback((fieldName: string, value: string) => {
+    setDynamicFields(prev => {
+      const newFields = { ...prev, [fieldName]: value };
+
+      // 1. Find current SubCategory config
+      // [FIX] Use qcTopics directly to avoid "used before declaration" error
+      const selectedMain = qcTopics.find(m => m.name === formData.mainCategory);
+      const currentSubCats = selectedMain ? selectedMain.subCategories : [];
+      const subCat = currentSubCats.find(s => s.name === formData.subCategory);
+
+      // DEBUG: Check if we have dependencies
+      // console.log('Handling change:', fieldName, value);
+      // console.log('Current SubCat:', subCat);
+
+      // 2. Check for dependencies
+      if (subCat && subCat.fieldDependencies) {
+        const dependency = subCat.fieldDependencies[fieldName];
+        // console.log('Found dependency:', dependency);
+
+        if (dependency) {
+          const targetValue = dependency.mapping[value];
+          // console.log('Target Value:', targetValue);
+
+          if (targetValue) {
+            newFields[dependency.targetField] = targetValue;
+          } else if (value === '' || value === null) {
+            newFields[dependency.targetField] = '';
+          }
+        }
+      }
+      return newFields;
+    });
+  }, [formData.mainCategory, formData.subCategory, qcTopics]);
   const isFieldsComplete = () => {
     if (reportType === 'QC') {
       return !!formData.mainCategory && !!formData.subCategory;
@@ -245,25 +283,25 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
     try {
       // ✅ แก้ไข: รวม projectId เข้าไปใน object
-      const response = await api.generateReport({ 
+      const response = await api.generateReport({
         projectId,      // ← เพิ่มบรรทัดนี้
         projectName,    // ← เพิ่มบรรทัดนี้ (optional)
-        ...filterData 
+        ...filterData
       });
 
       if (response.success && response.data) {
         setGeneratedReport(response.data);
         alert('สร้างรายงานสำเร็จ! 🎉');
-        
+
         // ✅ แสดง loading ขณะ refetch
         setIsPreviewLoading(true);
         setIsLoadingList(true);
-        
+
         await Promise.all([
           fetchPreviewStatus(),
           fetchGeneratedReports()
         ]);
-        
+
       } else {
         throw new Error(response.error || 'ไม่สามารถสร้างรายงานได้');
       }
@@ -276,7 +314,9 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   const mainCategories: MainCategory[] = qcTopics;
   const selectedMainCat = mainCategories.find(m => m.name === formData.mainCategory);
   const subCategories: SubCategory[] = selectedMainCat ? selectedMainCat.subCategories : [];
-  const requiredDynamicFields: string[] = subCategories.find(s => s.name === formData.subCategory)?.dynamicFields || [];
+  // ✅ [แก้ไข] ลบ Type Annotation ออก เพื่อให้ TS Infer เองจากการเปลี่ยนแปลงใน api.ts
+  const requiredDynamicFields = subCategories.find(s => s.name === formData.subCategory)?.dynamicFields || [];
+
   const handleRegenerateReport = async (report: GeneratedReportInfo) => {
     // ✅ แก้ไข: รวม projectId เข้าไปด้วย
     const filterDataFromReport = {
@@ -286,7 +326,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       mainCategory: report.mainCategory,
       subCategory: report.subCategory,
       dynamicFields: report.dynamicFields,
-      date: report.reportDate 
+      date: report.reportDate
     };
     await runGenerateReport(filterDataFromReport);
   };
@@ -294,14 +334,14 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   useEffect(() => {
     const fetchFieldSuggestions = async () => {
       const selectedSubCat = subCategories.find(s => s.name === formData.subCategory);
-      
+
       if (selectedSubCat?.id) {
         console.log('🔍 [Reports] Fetching suggestions for:', selectedSubCat.id);
-        
+
         const response = await api.getDynamicFieldValues(projectId, selectedSubCat.id);
-        
+
         console.log('📦 [Reports] Response:', response);
-        
+
         if (response.success && response.data) {
           console.log('✅ [Reports] Setting suggestions:', response.data);
           setFieldSuggestions(response.data);
@@ -313,50 +353,50 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         setFieldSuggestions({});
       }
     };
-    
+
     if (reportType === 'QC' && formData.subCategory) {
       fetchFieldSuggestions();
     }
   }, [projectId, reportType, formData.subCategory, subCategories]);
-  
+
   // (renderReportItem เหมือนเดิม)
   const renderReportItem = (report: GeneratedReportInfo) => {
     const createdAtDate = new Date(report.createdAt);
     const formattedDate = createdAtDate.toLocaleDateString('th-TH', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit'
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     }) + ' น.';
-    
+
     const pdfUrl = cdnUrl && report.firepath
-                 ? `${cdnUrl}/${report.firepath.replace(/^\//, '')}`
-                 : `${report.publicUrl}?v=${new Date(report.createdAt).getTime()}`;
-    
+      ? `${cdnUrl}/${report.firepath.replace(/^\//, '')}`
+      : `${report.publicUrl}?v=${new Date(report.createdAt).getTime()}`;
+
     return (
-        <div key={report.reportId} className={styles.reportListItem}>
-            <div className={styles.reportInfo}>
-                <span className={styles.reportFilename} title={report.filename}>
-                    <FiFileText style={{ verticalAlign: 'middle', marginRight: '4px' }} /> 
-                    {report.filename}
-                </span>
-                <span className={styles.reportDate}> สร้างเมื่อ: {formattedDate} </span>
-                <span className={styles.reportPhotoCount}>
-                  (มี {report.photosFound} รูป {report.reportType === 'QC' && report.totalTopics ? ` / ${report.totalTopics} หัวข้อ` : ''})
-                </span>
-            </div>
-            <div className={styles.reportActions}>
-                {report.hasNewPhotos && (
-                  <button onClick={() => handleRegenerateReport(report)} className={styles.reportButtonRegenerate} title="สร้างรายงานนี้ใหม่อีกครั้ง" disabled={isGenerating} >
-                    {isGenerating ? <FiLoader className={styles.iconSpin} /> : <FiRefreshCw />} 
-                  </button>
-                )}
-                <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={styles.reportButtonView} title="เปิดดู PDF" >
-                  <FiFileText /> 
-                </a>
-                <a href={pdfUrl} download={report.filename} className={styles.reportButtonDownload} title="ดาวน์โหลด PDF" >
-                  <FiDownload /> 
-                </a>
-            </div>
+      <div key={report.reportId} className={styles.reportListItem}>
+        <div className={styles.reportInfo}>
+          <span className={styles.reportFilename} title={report.filename}>
+            <FiFileText style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+            {report.filename}
+          </span>
+          <span className={styles.reportDate}> สร้างเมื่อ: {formattedDate} </span>
+          <span className={styles.reportPhotoCount}>
+            (มี {report.photosFound} รูป {report.reportType === 'QC' && report.totalTopics ? ` / ${report.totalTopics} หัวข้อ` : ''})
+          </span>
         </div>
+        <div className={styles.reportActions}>
+          {report.hasNewPhotos && (
+            <button onClick={() => handleRegenerateReport(report)} className={styles.reportButtonRegenerate} title="สร้างรายงานนี้ใหม่อีกครั้ง" disabled={isGenerating} >
+              {isGenerating ? <FiLoader className={styles.iconSpin} /> : <FiRefreshCw />}
+            </button>
+          )}
+          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={styles.reportButtonView} title="เปิดดู PDF" >
+            <FiFileText />
+          </a>
+          <a href={pdfUrl} download={report.filename} className={styles.reportButtonDownload} title="ดาวน์โหลด PDF" >
+            <FiDownload />
+          </a>
+        </div>
+      </div>
     );
   };
 
@@ -365,25 +405,25 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     if (isPreviewLoading) {
       return (
         <div className={styles.previewBox}>
-          <p className={styles.loadingText} style={{margin: 0}}>
-            <FiLoader className={styles.iconSpin} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> 
+          <p className={styles.loadingText} style={{ margin: 0 }}>
+            <FiLoader className={styles.iconSpin} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
             กำลังค้นหาข้อมูลรูปภาพ...
           </p>
         </div>
       );
     }
-    
+
     if (previewError) {
-       return (
+      return (
         <div className={styles.previewBox}>
-          <p className={styles.errorText} style={{margin: 0}}>
-             <FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> 
-             {previewError}
+          <p className={styles.errorText} style={{ margin: 0 }}>
+            <FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+            {previewError}
           </p>
         </div>
       );
     }
-    
+
     if (!previewStatus) {
       // (ยังไม่เริ่มค้นหา)
       return null;
@@ -391,23 +431,23 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
     // (ค้นหาเสร็จแล้ว)
     const { found, total } = previewStatus;
-    
+
     if (found === 0) {
       return (
         <div className={styles.previewBox}>
           <p className={styles.previewWarningText}>
-            <FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> 
+            <FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} />
             ไม่พบรูปภาพสำหรับเงื่อนไขนี้
           </p>
         </div>
       );
     }
-    
+
     return (
       <div className={styles.previewBox}>
         <p className={styles.previewStatusText}>
-          <FiCheckCircle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> 
-          {reportType === 'QC' ? 
+          <FiCheckCircle style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+          {reportType === 'QC' ?
             `พบรูปภาพแล้ว ${found} / ${total} หัวข้อ` :
             `พบรูปภาพแล้ว ${found} รูป`
           }
@@ -429,10 +469,10 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         {/* Report Type Toggle */}
         <div className={styles.reportTypeToggle}>
           <button onClick={() => { setReportType('QC'); setGeneratedReport(null); setPreviewStatus(null); }} className={`${styles.reportTypeButton} ${reportType === 'QC' ? styles.activeQc : ''}`} >
-            <FiClipboard style={{ verticalAlign: 'middle', marginRight: '4px' }} /> รายงาน QC 
+            <FiClipboard style={{ verticalAlign: 'middle', marginRight: '4px' }} /> รายงาน QC
           </button>
           <button onClick={() => { setReportType('Daily'); setGeneratedReport(null); setPreviewStatus(null); }} className={`${styles.reportTypeButton} ${reportType === 'Daily' ? styles.activeDaily : ''}`} >
-            <FiSun style={{ verticalAlign: 'middle', marginRight: '4px' }} /> รายงานประจำวัน 
+            <FiSun style={{ verticalAlign: 'middle', marginRight: '4px' }} /> รายงานประจำวัน
           </button>
         </div>
 
@@ -445,16 +485,16 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                 <label className={styles.label}>หมวดงานหลัก:</label>
                 <select value={formData.mainCategory} onChange={(e) => setFormData(prev => ({ subCategory: '', mainCategory: e.target.value }))} className={styles.formInput} disabled={mainCategories.length === 0} >
                   {mainCategories.length === 0 && <option>-- กำลังโหลด... --</option>}
-                  {mainCategories.map(category => ( <option key={category.id} value={category.name}>{category.name}</option> ))}
+                  {mainCategories.map(category => (<option key={category.id} value={category.name}>{category.name}</option>))}
                 </select>
               </div>
               {/* Sub Category */}
               <div>
                 <label className={styles.label}>หมวดงานย่อย:</label>
                 <select value={formData.subCategory} onChange={(e) => { setDynamicFields({}); setFormData(prev => ({ ...prev, subCategory: e.target.value })); }} className={styles.formInput} disabled={!formData.mainCategory || subCategories.length === 0} >
-                   {!formData.mainCategory ? <option>-- กรุณาเลือกหมวดหลักก่อน --</option> :
+                  {!formData.mainCategory ? <option>-- กรุณาเลือกหมวดหลักก่อน --</option> :
                     subCategories.length === 0 ? <option>-- ไม่มีหมวดงานย่อย --</option> :
-                    subCategories.map(subcategory => ( <option key={subcategory.id} value={subcategory.name}>{subcategory.name}</option> ))}
+                      subCategories.map(subcategory => (<option key={subcategory.id} value={subcategory.name}>{subcategory.name}</option>))}
                 </select>
               </div>
             </div>
@@ -463,29 +503,42 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
               <div className={styles.formGroup}>
                 <h4 className={styles.subheading}>ข้อมูลเพิ่มเติม:</h4>
                 <div className={styles.smallGridContainer}>
-                  {requiredDynamicFields.map((fieldName: string) => (
-                    <div key={fieldName}>
-                      <label className={styles.smallLabel}>{fieldName}:</label>
+                  {requiredDynamicFields.map((fieldConfig: string | any) => {
+                    const fieldLabel = typeof fieldConfig === 'string' ? fieldConfig : fieldConfig.label;
+                    const staticOptions = (typeof fieldConfig === 'object' && fieldConfig.options) ? fieldConfig.options : [];
+                    const suggestions = [
+                      ...staticOptions,
+                      ...(fieldSuggestions[fieldLabel] || [])
+                    ];
+                    // Remove duplicates
+                    const uniqueSuggestions = Array.from(new Set(suggestions));
+
+                    return (
+                      <div key={fieldLabel}>
+                        <label className={styles.smallLabel}>{fieldLabel}:</label>
                         <AutocompleteInput
-                          value={dynamicFields[fieldName] || ''}
-                          onChange={(value) => handleDynamicFieldChange(fieldName, value)}
-                          suggestions={fieldSuggestions[fieldName] || []}
-                          placeholder={`ระบุ${fieldName}...`}
+                          value={dynamicFields[fieldLabel] || ''}
+                          onChange={(value) => handleDynamicFieldChange(fieldLabel, value)}
+                          suggestions={uniqueSuggestions}
+                          placeholder={`ระบุ${fieldLabel}...`}
                           className={styles.formInput}
                         />
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
-          </div>
+          </div >
         )}
-        {reportType === 'Daily' && (
-          <div className={styles.formGroup}>
-            <label className={styles.label}>เลือกวันที่:</label>
-            <DatePicker selected={selectedDate} onChange={(date: Date | null) => setSelectedDate(date)} dateFormat="dd/MM/yyyy" className="daily-datepicker" />
-          </div>
-        )}
+        {
+          reportType === 'Daily' && (
+            <div className={styles.formGroup}>
+              <label className={styles.label}>เลือกวันที่:</label>
+              <DatePicker selected={selectedDate} onChange={(date: Date | null) => setSelectedDate(date)} dateFormat="dd/MM/yyyy" className="daily-datepicker" />
+            </div>
+          )
+        }
 
         {/* ✅ [ใหม่] 8. ปุ่ม Search และปุ่ม Generate (แยกกัน) */}
         <div className={styles.buttonContainer}>
@@ -497,20 +550,20 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
             <FiSearch style={{ verticalAlign: 'middle', marginRight: '8px' }} />
             {isPreviewLoading ? 'กำลังค้นหา...' : 'ค้นหา'}
           </button>
-          
+
           <button
             onClick={generateReport}
             disabled={isGenerating || !previewStatus || previewStatus.found === 0}
             className={styles.generateButton}
           >
-            {isGenerating ? 
-              <><FiLoader className={styles.iconSpin} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> กำลังสร้าง...</> : 
-              <><FiPlus style={{ verticalAlign: 'middle', marginRight: '8px' }} /> สร้างรายงาน PDF</> 
+            {isGenerating ?
+              <><FiLoader className={styles.iconSpin} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> กำลังสร้าง...</> :
+              <><FiPlus style={{ verticalAlign: 'middle', marginRight: '8px' }} /> สร้างรายงาน PDF</>
             }
           </button>
         </div>
-      </div>
-      
+      </div >
+
       {/* ✅ [ใหม่] 9. แสดงผล Preview Box */}
       {renderPreviewBox()}
 
@@ -519,8 +572,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         <h3 className={styles.generatedReportsTitle}>
           2. รายงานที่เคยสร้าง ({generatedReportsList.length} ฉบับล่าสุด)
         </h3>
-        {isLoadingList && <p className={styles.loadingText}><FiLoader className={styles.iconSpin} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> กำลังโหลดรายการ...</p>} 
-        {listError && <p className={styles.errorText}><FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> {listError}</p>} 
+        {isLoadingList && <p className={styles.loadingText}><FiLoader className={styles.iconSpin} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> กำลังโหลดรายการ...</p>}
+        {listError && <p className={styles.errorText}><FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> {listError}</p>}
         {!isLoadingList && !listError && generatedReportsList.length === 0 && (
           <p className={styles.noReportsText}>
             <i>-- ไม่พบรายงานที่เคยสร้างสำหรับเงื่อนไขนี้ --</i>
@@ -534,44 +587,46 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       </div>
 
       {/* --- Generated Result Box (เหมือนเดิม) --- */}
-      {generatedReport && !isGenerating && (
-        <div className={styles.generatedBox}>
-          <h3 className={styles.generatedTitle}><FiCheckCircle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> สร้างรายงานใหม่สำเร็จ!</h3> 
-          <div className={styles.generatedInfo}>
-             <p><strong>ไฟล์:</strong> {generatedReport.filename}</p>
-             {reportType === 'QC' ? (
-              <>
-                <p><strong>หมวดงาน:</strong> {formData.mainCategory} &gt; {formData.subCategory}</p>
-                <p><strong>รูปภาพที่ใส่:</strong> {generatedReport.photosFound}/{generatedReport.totalTopics}</p>
-              </>
-            ) : (
-              <>
-                <p><strong>วันที่:</strong> {selectedDate ? selectedDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric'}) : 'N/A'}</p>
-                <p><strong>รูปภาพที่ใส่:</strong> {generatedReport.photosFound}</p>
-              </>
-            )}
-          </div>
-          <div className={styles.generatedActions}>
-
-            {/* ✨ [แก้ไข] สร้างตัวแปร pdfUrl โดยเช็ค firepath ก่อน */}
-            {(() => {
-            const pdfUrl = cdnUrl && generatedReport.firepath
-                 ? `${cdnUrl}/${generatedReport.firepath.replace(/^\//, '')}`
-                 : generatedReport.publicUrl;
-              
-              return (
+      {
+        generatedReport && !isGenerating && (
+          <div className={styles.generatedBox}>
+            <h3 className={styles.generatedTitle}><FiCheckCircle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> สร้างรายงานใหม่สำเร็จ!</h3>
+            <div className={styles.generatedInfo}>
+              <p><strong>ไฟล์:</strong> {generatedReport.filename}</p>
+              {reportType === 'QC' ? (
                 <>
-                  <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={styles.generatedButton}><FiFileText style={{ verticalAlign: 'middle', marginRight: '4px' }} /> เปิดดู PDF</a> 
-                  <a href={pdfUrl} download={generatedReport.filename} className={styles.generatedButtonDownload}><FiDownload style={{ verticalAlign: 'middle', marginRight: '4px' }} /> ดาวน์โหลด PDF</a> 
+                  <p><strong>หมวดงาน:</strong> {formData.mainCategory} &gt; {formData.subCategory}</p>
+                  <p><strong>รูปภาพที่ใส่:</strong> {generatedReport.photosFound}/{generatedReport.totalTopics}</p>
                 </>
-              );
-            })()}
+              ) : (
+                <>
+                  <p><strong>วันที่:</strong> {selectedDate ? selectedDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}</p>
+                  <p><strong>รูปภาพที่ใส่:</strong> {generatedReport.photosFound}</p>
+                </>
+              )}
+            </div>
+            <div className={styles.generatedActions}>
 
+              {/* ✨ [แก้ไข] สร้างตัวแปร pdfUrl โดยเช็ค firepath ก่อน */}
+              {(() => {
+                const pdfUrl = cdnUrl && generatedReport.firepath
+                  ? `${cdnUrl}/${generatedReport.firepath.replace(/^\//, '')}`
+                  : generatedReport.publicUrl;
+
+                return (
+                  <>
+                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className={styles.generatedButton}><FiFileText style={{ verticalAlign: 'middle', marginRight: '4px' }} /> เปิดดู PDF</a>
+                    <a href={pdfUrl} download={generatedReport.filename} className={styles.generatedButtonDownload}><FiDownload style={{ verticalAlign: 'middle', marginRight: '4px' }} /> ดาวน์โหลด PDF</a>
+                  </>
+                );
+              })()}
+
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
-    </div>
+    </div >
   );
 };
 

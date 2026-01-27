@@ -24,6 +24,9 @@ const auth = getAuth(app);
 
 // Connect to emulators in development
 // (ใช้ process.env.NODE_ENV ก็ได้ หรือ window.location.hostname ก็ได้)
+// Connect to emulators in development
+// (ใช้ process.env.NODE_ENV ก็ได้ หรือ window.location.hostname ก็ได้)
+/* 
 if (process.env.NODE_ENV === 'development') {
   console.log("Connecting to local emulators...");
   
@@ -39,6 +42,7 @@ if (process.env.NODE_ENV === 'development') {
   // (สำหรับ Auth, { } จะเป็น Argument ที่สาม)
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
 }
+*/
 
 // Export ทุกบริการที่ต้องการใช้ในแอป
 export { functions, db, storage, auth };
