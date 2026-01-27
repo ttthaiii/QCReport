@@ -111,7 +111,7 @@ async function fetchAndEncodeImage(url: string): Promise<string | null> {
 async function fetchProjectLogos(
   logos: ReportLogoSettings
 ): Promise<{ left: string | null; center: string | null; right: string | null }> {
-  
+
   const urls = [
     logos.left,
     logos.center,
@@ -125,11 +125,11 @@ async function fetchProjectLogos(
     }
     return Promise.resolve(null);
   });
-  
+
   const [leftBase64, centerBase64, rightBase64] = await Promise.all(base64Promises);
-  
+
   console.log(`Logos fetched. Left: ${!!leftBase64}, Center: ${!!centerBase64}, Right: ${!!rightBase64}`);
-  
+
   return {
     left: leftBase64,
     center: centerBase64,
@@ -145,7 +145,7 @@ export async function getTopicsForFilter(
 ): Promise<string[]> {
   try {
     const projectConfigRef = db.collection("projectConfig").doc(projectId);
-    
+
     const mainCatSnap = await projectConfigRef.collection("mainCategories")
       .where("name", "==", mainCategory).limit(1).get();
     if (mainCatSnap.empty) throw new Error("Main category not found.");
@@ -155,41 +155,41 @@ export async function getTopicsForFilter(
       .where("name", "==", subCategory)
       .where("mainCategoryId", "==", mainCatId)
       .limit(1).get();
-      
+
     if (subCatSnap.empty) throw new Error("Sub category not found.");
-    
+
     // --- START: NEW CODE ---
     const subCatDoc = subCatSnap.docs[0]; // Get the document itself
     const subCatData = subCatDoc.data();
     const subCatId = subCatDoc.id;
-    
+
     // 1. Get the custom order from the subCategory document
-    const customOrder = subCatData.topicOrder as string[] | undefined; 
+    const customOrder = subCatData.topicOrder as string[] | undefined;
     // --- END: NEW CODE ---
 
     const topicsSnap = await projectConfigRef.collection("topics")
       .where("subCategoryId", "==", subCatId)
       .where("isArchived", "==", false)
       .get();
-      
+
     // --- START: MODIFIED CODE ---
-    
+
     // 2. Get topics as objects (name only is fine)
     const alphabeticalTopics = topicsSnap.docs.map(doc => {
       return { name: doc.data().name as string };
     });
-    
+
     let sortedTopics = alphabeticalTopics; // Default
     console.log("--- RUNNING PDF-GENERATOR v4 SORTING LOGIC ---");
-    
+
     if (customOrder) {
       console.log(`✅ Using custom topicOrder for PDF: ${subCatId}`);
-      
+
       // ✅ [แนะนำ] ให้สร้าง Array ใหม่ขึ้นมาเรียงลำดับ
-      sortedTopics = [...alphabeticalTopics].sort((a, b) => { 
+      sortedTopics = [...alphabeticalTopics].sort((a, b) => {
         const indexA = customOrder.indexOf(a.name);
         const indexB = customOrder.indexOf(b.name);
-        
+
         if (indexA !== -1 && indexB !== -1) {
           return indexA - indexB; // Both in list, sort by list
         }
@@ -198,15 +198,15 @@ export async function getTopicsForFilter(
         return a.name.localeCompare(b.name, 'th'); // Neither in list
       });
     } else {
-       console.log(`⚠️ No topicOrder found for PDF: ${subCatId}. Using alphabetical.`);
-       // ✅ แก้ไขส่วนนี้ด้วย
-       sortedTopics = [...alphabeticalTopics].sort((a, b) => a.name.localeCompare(b.name, 'th'));
+      console.log(`⚠️ No topicOrder found for PDF: ${subCatId}. Using alphabetical.`);
+      // ✅ แก้ไขส่วนนี้ด้วย
+      sortedTopics = [...alphabeticalTopics].sort((a, b) => a.name.localeCompare(b.name, 'th'));
     }
 
     // 4. Return just the array of names
     const allTopics: string[] = sortedTopics.map(t => t.name);
     // --- END: MODIFIED CODE ---
-    
+
     return allTopics;
 
   } catch (error) {
@@ -219,9 +219,9 @@ export async function getDailyPhotosByDate(
   projectId: string,
   date: string
 ): Promise<FullLayoutPhoto[]> {
-  
+
   const db = admin.firestore();
-  
+
   // ✅ แก้ไข: ใช้ Timestamp แทน Date
   const startDate = admin.firestore.Timestamp.fromDate(
     new Date(`${date}T00:00:00+07:00`)
@@ -234,7 +234,7 @@ export async function getDailyPhotosByDate(
   console.log(`   - Date: ${date}`);
   console.log(`   - Start: ${startDate.toDate().toISOString()}`);
   console.log(`   - End: ${endDate.toDate().toISOString()}`);
-  
+
   const photosSnapshot = await db.collection("dailyPhotos")
     .where("projectId", "==", projectId)
     .where("createdAt", ">=", startDate)
@@ -243,7 +243,7 @@ export async function getDailyPhotosByDate(
     .get();
 
   console.log(`✅ Found ${photosSnapshot.docs.length} daily photos`);
-  
+
   // ✅ เพิ่ม Debug แต่ละรูป
   photosSnapshot.docs.forEach((doc, i) => {
     const data = doc.data();
@@ -255,15 +255,15 @@ export async function getDailyPhotosByDate(
     photosSnapshot.docs.map(async (doc, index) => {
       const data = doc.data() as FirestorePhotoData;
       const createdAt = (data.createdAt as admin.firestore.Timestamp).toDate();
-      
-      const topicName = data.description 
+
+      const topicName = data.description
         ? data.description                           // แสดงแค่ "คำอธิบาย"
-        : `(No Description)`;  
-        
-      const imageBase64 = data.driveUrl 
-        ? await fetchAndEncodeImage(data.driveUrl) 
+        : `(No Description)`;
+
+      const imageBase64 = data.driveUrl
+        ? await fetchAndEncodeImage(data.driveUrl)
         : null;
-      
+
       return {
         topic: topicName,
         topicOrder: index,
@@ -286,13 +286,13 @@ export async function getLatestPhotos(
   allTopics: string[],
   dynamicFields: Record<string, string>
 ): Promise<PhotoData[]> {
-  
+
   const db = admin.firestore();
   const category = `${mainCategory} > ${subCategory}`;
-  
+
   console.log(`Fetching latest QC photos from 'latestQcPhotos' for: ${category}`);
   console.log(`Dynamic fields:`, dynamicFields);
-  
+
   const photoPromises = allTopics.map(async (topic) => {
     const stableId = createStableQcId(
       projectId,
@@ -300,17 +300,17 @@ export async function getLatestPhotos(
       topic,
       dynamicFields || {}
     );
-    
+
     const docRef = db.collection('latestQcPhotos').doc(stableId);
     const doc = await docRef.get();
-      
+
     if (!doc.exists) {
       return null;
     }
-    
+
     const data = doc.data() as FirestorePhotoData;
     const imageBase64 = data.driveUrl ? await fetchAndEncodeImage(data.driveUrl) : null;
-    
+
     // ✅ Debug: ตรวจสอบว่า Base64 ถูกสร้างหรือไม่
     if (imageBase64) {
       const base64Length = imageBase64.length;
@@ -319,7 +319,7 @@ export async function getLatestPhotos(
     } else {
       console.log(`     ⚠️ Failed to encode image for topic: "${topic}"`);
     }
-    
+
     return {
       topic: topic,
       imageBase64: imageBase64,
@@ -328,7 +328,7 @@ export async function getLatestPhotos(
       timestamp: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : undefined,
     } as PhotoData;
   });
-  
+
   const photos = await Promise.all(photoPromises);
   const foundPhotos = photos.filter((p): p is PhotoData => p !== null);
 
@@ -353,17 +353,17 @@ export function createFullLayoutPhotos(
   photos: PhotoData[],
   allTopics: string[]
 ): FullLayoutPhoto[] {
-  
+
   const photosByTopic = new Map<string, PhotoData>();
   photos.forEach(photo => {
     photosByTopic.set(photo.topic, photo);
   });
-  
+
   const fullLayoutPhotos: FullLayoutPhoto[] = [];
-  
+
   allTopics.forEach((topic, index) => {
     const photo = photosByTopic.get(topic);
-    
+
     if (photo && photo.imageBase64) {
       fullLayoutPhotos.push({
         ...photo,
@@ -380,7 +380,7 @@ export function createFullLayoutPhotos(
       });
     }
   });
-  
+
   return fullLayoutPhotos;
 }
 
@@ -406,16 +406,16 @@ export async function getUploadedTopicStatus(
   category: string,
   dynamicFields: Record<string, string>
 ): Promise<Record<string, boolean>> {
-  
+
   const db = admin.firestore();
   const statusMap: Record<string, boolean> = {};
-  
+
   try {
     // Query qcPhotos collection
     let query = db.collection('qcPhotos')
       .where('projectId', '==', projectId)
       .where('category', '==', category);
-    
+
     // Add dynamic fields filters
     if (dynamicFields) {
       Object.keys(dynamicFields).forEach(key => {
@@ -425,9 +425,9 @@ export async function getUploadedTopicStatus(
         }
       });
     }
-    
+
     const snapshot = await query.get();
-    
+
     // Create status map
     snapshot.forEach(doc => {
       const data = doc.data();
@@ -435,10 +435,10 @@ export async function getUploadedTopicStatus(
         statusMap[data.topic] = true;
       }
     });
-    
+
     console.log(`📊 Found ${Object.keys(statusMap).length} uploaded topics for ${category}`);
     return statusMap;
-    
+
   } catch (error) {
     console.error('Error in getUploadedTopicStatus:', error);
     return statusMap;
@@ -562,10 +562,10 @@ function getInlineCSS(): string {
       .info-item .value {
         flex: 1;
         word-break: break-word;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 250px; 
+        /* white-space: nowrap; */
+        /* overflow: hidden; */
+        /* text-overflow: ellipsis; */
+        /* max-width: 250px; */ 
       }
       
       /* --- [ส่วนแก้ไขหลัก] --- */
@@ -645,20 +645,20 @@ function getInlineCSS(): string {
 }
 
 function createDynamicHeader(
-  reportData: ReportData | DailyReportData, 
-  pageNumber: number, 
+  reportData: ReportData | DailyReportData,
+  pageNumber: number,
   totalPages: number,
   // ✅ [แก้ไข] รับเป็น Object ที่มี 3 ช่อง
-  projectLogoBase64s: { 
-    left: string | null; 
-    center: string | null; 
-    right: string | null; 
+  projectLogoBase64s: {
+    left: string | null;
+    center: string | null;
+    right: string | null;
   } | null = null
 ): string {
   const currentDate = getCurrentThaiDate();
-  
+
   const isQCReport = 'mainCategory' in reportData;
-  
+
   // ✅ [ใหม่] สร้าง HTML สำหรับโลโก้ 3 ช่อง
   const logoContainerHTML = `
     <div class="logo-container">
@@ -673,19 +673,32 @@ function createDynamicHeader(
       </div>
     </div>
   `;
-  
+
   // ===================================
   //  QC REPORT LOGIC (ใช้ <table>)
   // ===================================
   if (isQCReport) {
     const qcData = reportData as ReportData;
-    
-    // --- Logic การจัดแถวแบบ Flow (เหมือนเดิม) ---
+
+    // --- Logic การจัดแถวแบบ Flow ---
     const allInfoItems: { label: string, value: string }[] = [];
-    const fieldEntries = Object.entries(qcData.dynamicFields || {}).filter(([_, value]) => value && value.trim());
-    fieldEntries.forEach(([key, value]) => {
-      allInfoItems.push({ label: key, value: value });
-    });
+
+    // ✅ [ใหม่] 1. แยก Code Note ออกมา (หาแบบ Case-insensitive)
+    let codeNoteItem: { label: string, value: string } | null = null;
+
+    const fieldEntries = Object.entries(qcData.dynamicFields || {})
+      .filter(([_, value]) => value && value.trim());
+
+    for (const [key, value] of fieldEntries) {
+      // เช็คว่าเป็น Code note หรือไม่
+      if (key.toLowerCase().includes('code note') || key.toLowerCase().includes('หมายเหตุ')) {
+        codeNoteItem = { label: key, value: value };
+      } else {
+        // ถ้าไม่ใช่ ให้ใส่ในตาราง 3 คอลัมน์ตามปกติ
+        allInfoItems.push({ label: key, value: value });
+      }
+    }
+
     allInfoItems.push({ label: 'วันที่', value: currentDate });
     allInfoItems.push({ label: 'แผ่นที่', value: `${pageNumber}/${totalPages}` });
 
@@ -735,14 +748,26 @@ function createDynamicHeader(
                   `).join('')}
                   
                   ${/* 2. เติม <td> ว่างที่เหลือในแถว (ถ้ามี) */ ''}
-                  ${rowItems.length < 3 ? 
-                    Array.from({ length: 3 - rowItems.length }, () => 
-                      `<td><div class="info-item">&nbsp;</div></td>`
-                    ).join('') 
-                    : ''
-                  }
+                  ${rowItems.length < 3 ?
+        Array.from({ length: 3 - rowItems.length }, () =>
+          `<td><div class="info-item">&nbsp;</div></td>`
+        ).join('')
+        : ''
+      }
                 </tr>
               `).join('')}
+
+              ${/* ✅ [ใหม่] 2. แสดง Code Note บรรทัดสุดท้าย (เต็มความกว้าง) */ ''}
+              ${codeNoteItem ? `
+                <tr>
+                  <td colspan="3" style="border-top: 1px solid #ccc;">
+                    <div class="info-item">
+                      <span class="label">${codeNoteItem!.label}:</span>
+                      <span class="value" style="white-space: pre-wrap;">${codeNoteItem!.value}</span>
+                    </div>
+                  </td>
+                </tr>
+              ` : ''}
               
             </tbody>
           </table>
@@ -751,13 +776,13 @@ function createDynamicHeader(
       </header>
     `;
 
-  // ===================================
-  //  DAILY REPORT LOGIC (ไม่เปลี่ยนแปลง)
-  // ===================================
-} else {
+    // ===================================
+    //  DAILY REPORT LOGIC (ไม่เปลี่ยนแปลง)
+    // ===================================
+  } else {
     // Daily Report Header (ใช้ Logic เดิมได้ เพราะมีแค่ 2 คอลัมน์)
     const dailyData = reportData as DailyReportData;
-    
+
     return `
       <header class="header">
         ${logoContainerHTML} <div class="header-box">
@@ -794,7 +819,7 @@ function createDynamicHeader(
 function createPhotosGrid(photos: FullLayoutPhoto[], pageIndex: number): string {
   const photoItems = photos.map((photo, index) => {
     const displayNumber = pageIndex * 6 + index + 1;
-    
+
     if (photo.isPlaceholder || !photo.imageBase64) {
       return `
         <div class="photo-item">
@@ -807,7 +832,7 @@ function createPhotosGrid(photos: FullLayoutPhoto[], pageIndex: number): string 
         </div>
       `;
     }
-    
+
     const hasNoDescription = photo.topic.includes('(No Description)');
 
     return `
@@ -821,23 +846,23 @@ function createPhotosGrid(photos: FullLayoutPhoto[], pageIndex: number): string 
       </div>
     `;
   }).join('');
-  
+
   return `<div class="photos-grid">${photoItems}</div>`;
 }
 
 function createOptimizedHTML(
-  reportData: PDFReportData, 
+  reportData: PDFReportData,
   photos: FullLayoutPhoto[],
   // ✅ [แก้ไข 1] รับเป็น Object ที่มี 3 ช่อง (เหมือน createDynamicHeader)
-  projectLogoBase64s: { 
-    left: string | null; 
-    center: string | null; 
-    right: string | null; 
+  projectLogoBase64s: {
+    left: string | null;
+    center: string | null;
+    right: string | null;
   } | null = null
 ): string {
   const photosPerPage = 6;
   const pages: FullLayoutPhoto[][] = [];
-  
+
   // ✅ Debug: ตรวจสอบรูปก่อน slice
   console.log(`\n📄 Creating HTML for ${photos.length} photos:`);
   photos.forEach((photo, index) => {
@@ -845,7 +870,7 @@ function createOptimizedHTML(
     console.log(`     - Has image: ${!!photo.imageBase64}`);
     console.log(`     - Is placeholder: ${photo.isPlaceholder}`);
   });
-  
+
   for (let i = 0; i < photos.length; i += photosPerPage) {
     const pagePhotos = photos.slice(i, i + photosPerPage);
     pages.push(pagePhotos);
@@ -859,7 +884,7 @@ function createOptimizedHTML(
     pagePhotos.forEach((photo, index) => {
       console.log(`  ${index + 1}. ${photo.topic} - Has image: ${!!photo.imageBase64}`);
     });
-    
+
     return `
     <div class="page ${pageIndex < pages.length - 1 ? 'page-break' : ''}">
       ${createDynamicHeader(reportData, pageIndex + 1, pages.length, projectLogoBase64s)}
@@ -890,13 +915,13 @@ function createOptimizedHTML(
 async function generateOptimizedPDF(
   finalHtml: string
 ): Promise<Buffer> {
-  
+
   let browser: Browser | null = null;
   let page: Page | null = null;
 
   try {
     console.log(`🎯 Starting Optimized PDF generation...`);
-    
+
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
@@ -906,20 +931,20 @@ async function generateOptimizedPDF(
     page = await browser.newPage();
     await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 2 });
     await page.setJavaScriptEnabled(false);
-    
+
     await page.setContent(finalHtml, { waitUntil: ['domcontentloaded'], timeout: 45000 });
-    
+
     const pdfUint8Array = await page.pdf({
-      format: 'A4', 
-      printBackground: true, 
+      format: 'A4',
+      printBackground: true,
       preferCSSPageSize: true,
       margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
       timeout: 60000
     });
-    
+
     console.log(`✅ PDF generated! Size: ${pdfUint8Array.length} bytes`);
     return Buffer.from(pdfUint8Array);
-    
+
   } catch (error) {
     console.error('❌ Error in PDF generation:', error);
     throw error;
@@ -944,12 +969,12 @@ export async function generatePDF(
   fullLayoutPhotos: FullLayoutPhoto[],
   settings: ReportSettings
 ): Promise<Buffer> {
-  
+
   console.log(`📊 Generating QC Report PDF...`);
-  
+
   // ✅ [แก้ไข] เรียก fetchProjectLogos (เติม s) และส่ง settings.projectLogos (object)
   const projectLogoBase64s = await fetchProjectLogos(settings.projectLogos);
-  
+
   const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s);
   return generateOptimizedPDF(finalHtml);
 }
@@ -959,12 +984,12 @@ export async function generateDailyPDFWrapper(
   fullLayoutPhotos: FullLayoutPhoto[],
   settings: ReportSettings
 ): Promise<Buffer> {
-  
+
   console.log(`📊 Generating Daily Report PDF...`);
-  
+
   // ✅ [แก้ไข] เรียก fetchProjectLogos (เติม s) และส่ง settings.projectLogos (object)
   const projectLogoBase64s = await fetchProjectLogos(settings.projectLogos);
-  
+
   const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s);
   return generateOptimizedPDF(finalHtml);
 }
@@ -981,28 +1006,28 @@ export async function uploadPDFToStorage(
   reportType: 'QC' | 'Daily',
   filename: string
 ): Promise<{ publicUrl: string; filePath: string }> {
-  
+
   const { projectId, mainCategory, subCategory, date } = reportData;
-  
+
   try {
     const bucket = admin.storage().bucket(CORRECT_BUCKET_NAME);
-    
+
     let storagePath = `generated-reports/${projectId}/`;
-    
+
     if (reportType === 'QC') {
       const mainSlug = mainCategory ? mainCategory.replace(/\s+/g, '_') : 'unknown';
       const subSlug = subCategory ? subCategory.replace(/\s+/g, '_') : 'unknown';
       storagePath += `QC/${mainSlug}/${subSlug}/`;
     } else {
-      const subFolder = date ? date.substring(0, 7) : 'unknown-date'; 
+      const subFolder = date ? date.substring(0, 7) : 'unknown-date';
       storagePath += `Daily/${subFolder}/`;
     }
-    
+
     const filePath = storagePath + filename;
     const file = bucket.file(filePath);
-  
+
     console.log(`Uploading PDF to: ${filePath}`);
-    
+
     await file.save(pdfBuffer, {
       metadata: {
         contentType: 'application/pdf',
@@ -1010,10 +1035,10 @@ export async function uploadPDFToStorage(
       },
       public: true,
     });
-  
+
     const publicUrl = file.publicUrl();
     console.log(`✅ PDF uploaded: ${publicUrl}`);
-    
+
     return { publicUrl, filePath };
 
   } catch (error) {

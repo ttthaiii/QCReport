@@ -157,10 +157,11 @@ export interface ChecklistStatusResponse {
 // [ใหม่] 2. กำหนด API_BASE_URL
 // (อ้างอิงจาก firebase.json และ qc-functions/src/index.ts)
 const IS_DEV = process.env.NODE_ENV === 'development';
-const NEW_PROJECT_ID = 'tts-smart-report-generator';
+const NEW_PROJECT_ID = 'tts2004-smart-report-generate';
+
 const API_BASE_URL = IS_DEV
-  ? `http://localhost:5001/${NEW_PROJECT_ID}/asia-southeast1/api`
-  : '/api';
+  ? `https://asia-southeast1-${NEW_PROJECT_ID}.cloudfunctions.net/api` // Local: Use Prod Backend
+  : '/api'; // Production: Use relative path (Hosting Rewrites)
 
 const pendingRequests = new Map<string, Promise<any>>();
 

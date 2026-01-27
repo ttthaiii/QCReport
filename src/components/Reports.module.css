@@ -240,9 +240,12 @@
 .reportFilename {
   font-weight: 500;
   color: #333;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis; 
+  font-weight: 500;
+  color: #333;
+  /* white-space: nowrap; */
+  /* overflow: hidden; */
+  /* text-overflow: ellipsis; */ 
+  word-break: break-word; /* Ensure long words break if necessary */ 
 }
 .reportDate { font-size: 0.85em; color: #555; }
 .reportPhotoCount { font-size: 0.85em; color: #777; }

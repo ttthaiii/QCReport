@@ -451,10 +451,10 @@ function getInlineCSS() {
       .info-item .value {
         flex: 1;
         word-break: break-word;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 250px; 
+        /* white-space: nowrap; */
+        /* overflow: hidden; */
+        /* text-overflow: ellipsis; */
+        /* max-width: 250px; */ 
       }
       
       /* --- [ส่วนแก้ไขหลัก] --- */
@@ -556,12 +556,22 @@ projectLogoBase64s = null) {
     // ===================================
     if (isQCReport) {
         const qcData = reportData;
-        // --- Logic การจัดแถวแบบ Flow (เหมือนเดิม) ---
+        // --- Logic การจัดแถวแบบ Flow ---
         const allInfoItems = [];
-        const fieldEntries = Object.entries(qcData.dynamicFields || {}).filter(([_, value]) => value && value.trim());
-        fieldEntries.forEach(([key, value]) => {
-            allInfoItems.push({ label: key, value: value });
-        });
+        // ✅ [ใหม่] 1. แยก Code Note ออกมา (หาแบบ Case-insensitive)
+        let codeNoteItem = null;
+        const fieldEntries = Object.entries(qcData.dynamicFields || {})
+            .filter(([_, value]) => value && value.trim());
+        for (const [key, value] of fieldEntries) {
+            // เช็คว่าเป็น Code note หรือไม่
+            if (key.toLowerCase().includes('code note') || key.toLowerCase().includes('หมายเหตุ')) {
+                codeNoteItem = { label: key, value: value };
+            }
+            else {
+                // ถ้าไม่ใช่ ให้ใส่ในตาราง 3 คอลัมน์ตามปกติ
+                allInfoItems.push({ label: key, value: value });
+            }
+        }
         allInfoItems.push({ label: 'วันที่', value: currentDate });
         allInfoItems.push({ label: 'แผ่นที่', value: `${pageNumber}/${totalPages}` });
         const infoRows = [];
@@ -614,6 +624,18 @@ projectLogoBase64s = null) {
             : ''}
                 </tr>
               `).join('')}
+
+              ${ /* ✅ [ใหม่] 2. แสดง Code Note บรรทัดสุดท้าย (เต็มความกว้าง) */''}
+              ${codeNoteItem ? `
+                <tr>
+                  <td colspan="3" style="border-top: 1px solid #ccc;">
+                    <div class="info-item">
+                      <span class="label">${codeNoteItem.label}:</span>
+                      <span class="value" style="white-space: pre-wrap;">${codeNoteItem.value}</span>
+                    </div>
+                  </td>
+                </tr>
+              ` : ''}
               
             </tbody>
           </table>
