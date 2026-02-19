@@ -2169,6 +2169,10 @@ apiRouter.post("/proxy-image", async (req, res) => {
   }
 });
 
+// --- [Audit Tool] ---
+import auditRouter from './migrations/audit-lowercase';
+mainApp.use('/audit', auditRouter);
+
 // --- [แก้ไข] ---
 // 4. บอก App หลัก ให้ใช้ apiRouter ที่ path "/api" (สำหรับ Production Hosting) และ "/" (สำหรับ Direct Call)
 mainApp.use(["/api", "/"], apiRouter);

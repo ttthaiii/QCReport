@@ -1254,7 +1254,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           })}
           <div className={styles['wizard-nav']}>
             <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}>ย้อนกลับ</button>
-            <button className={styles['wizard-button']} onClick={handleDynamicFieldsSubmit}>เริ่มตรวจใหม่ (Start New)</button>
+            <button className={styles['wizard-button']} onClick={handleDynamicFieldsSubmit}>เริ่มตรวจใหม่</button>
           </div>
 
           {/* ✅ [ใหม่] ส่วนแสดงงานที่ค้างอยู่ (Resume Job) - พร้อม Smart Filter */}

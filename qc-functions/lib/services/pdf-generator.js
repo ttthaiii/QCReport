@@ -863,7 +863,7 @@ async function uploadPDFToStorage(pdfBuffer, reportData, reportType, filename) {
         await file.save(pdfBuffer, {
             metadata: {
                 contentType: 'application/pdf',
-                cacheControl: 'public, max-age=3600',
+                cacheControl: 'public, max-age=604800', // ✅ Cache 1 สัปดาห์ (ประหยัด Bandwidth)
             },
             public: true,
         });
