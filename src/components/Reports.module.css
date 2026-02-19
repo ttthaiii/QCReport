@@ -9,10 +9,10 @@
 /* --- 1. Form Box --- */
 .formBox {
   margin-bottom: 20px;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
+  padding: 0;
+  background-color: transparent;
+  border-radius: 0;
+  border: none;
 }
 
 .formBoxTitle {
@@ -102,20 +102,23 @@
 .buttonContainer {
   margin-top: 30px;
   display: grid;
-  grid-template-columns: 1fr 1fr; /* แบ่งครึ่ง */
+  grid-template-columns: 1fr 1fr;
+  /* แบ่งครึ่ง */
   gap: 15px;
 }
 
 .searchButton {
   padding: 12px 20px;
   font-size: 16px;
-  background-color: #6c757d; /* สีเทา */
+  background-color: #6c757d;
+  /* สีเทา */
   color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s, opacity 0.2s;
 }
+
 .searchButton:hover {
   background-color: #5a6268;
 }
@@ -123,13 +126,15 @@
 .generateButton {
   padding: 12px 20px;
   font-size: 16px;
-  background-color: #007bff; /* สีน้ำเงิน */
+  background-color: #007bff;
+  /* สีน้ำเงิน */
   color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s, opacity 0.2s;
 }
+
 .generateButton:hover {
   background-color: #0056b3;
 }
@@ -150,9 +155,12 @@
 
 /* --- 5. [แก้ไข] Preview Box (สำหรับสถานะ) --- */
 .previewBox {
-  margin-bottom: 20px; /* [แก้ไข] ลดระยะห่างจาก Form Box */
-  padding: 15px 20px; /* [แก้ไข] ลด Padding */
-  background-color: #e9ecef; /* [แก้ไข] เปลี่ยนสีพื้นหลัง */
+  margin-bottom: 20px;
+  /* [แก้ไข] ลดระยะห่างจาก Form Box */
+  padding: 15px 20px;
+  /* [แก้ไข] ลด Padding */
+  background-color: #e9ecef;
+  /* [แก้ไข] เปลี่ยนสีพื้นหลัง */
   border-radius: 8px;
   border: 1px solid #ced4da;
   text-align: center;
@@ -161,14 +169,16 @@
 .previewStatusText {
   font-size: 1.1em;
   font-weight: bold;
-  color: #155724; /* สีเขียว */
+  color: #155724;
+  /* สีเขียว */
   margin: 0;
 }
 
 .previewWarningText {
   font-size: 1.1em;
   font-weight: bold;
-  color: #856404; /* สีเหลืองเข้ม */
+  color: #856404;
+  /* สีเหลืองเข้ม */
   margin: 0;
 }
 
@@ -182,61 +192,99 @@
   border-radius: 8px;
   border: 1px solid #c3e6cb;
 }
+
 /* (Style .generatedBox อื่นๆ เหมือนเดิม) */
-.generatedTitle { margin-top: 0; color: #155724; }
-.generatedInfo { margin-bottom: 15px; }
-.generatedActions { margin-top: 15px; }
+.generatedTitle {
+  margin-top: 0;
+  color: #155724;
+}
+
+.generatedInfo {
+  margin-bottom: 15px;
+}
+
+.generatedActions {
+  margin-top: 15px;
+}
+
 .generatedButton {
-  display: inline-block; padding: 10px 20px; background-color: #28a745;
-  color: white; text-decoration: none; border-radius: 4px;
-  margin-right: 10px; margin-bottom: 10px; transition: background-color 0.2s;
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #28a745;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  margin-right: 10px;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
 }
-.generatedButton:hover { background-color: #218838; }
+
+.generatedButton:hover {
+  background-color: #218838;
+}
+
 .generatedButtonDownload {
-  display: inline-block; padding: 10px 20px; background-color: #17a2b8;
-  color: white; text-decoration: none; border-radius: 4px;
-  margin-bottom: 10px; transition: background-color 0.2s;
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #17a2b8;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  transition: background-color 0.2s;
 }
-.generatedButtonDownload:hover { background-color: #117a8b; }
+
+.generatedButtonDownload:hover {
+  background-color: #117a8b;
+}
 
 /* --- 7. Generated Reports List --- */
 .generatedReportsBox {
-  margin-top: 20px; /* [แก้ไข] ลดระยะห่าง */
+  margin-top: 20px;
+  /* [แก้ไข] ลดระยะห่าง */
   padding: 20px;
   background-color: #f8f9fa;
   border-radius: 8px;
   border: 1px solid var(--border-color);
 }
+
 .generatedReportsTitle {
   margin-top: 0;
   margin-bottom: 20px;
   color: #495057;
-  font-size: 1.2rem; 
+  font-size: 1.2rem;
 }
+
 /* (Style .reportListContainer และอื่นๆ เหมือนเดิม) */
 .reportListContainer {
-  max-height: 400px; 
+  max-height: 400px;
   overflow-y: auto;
   border: 1px solid #e0e0e0;
   border-radius: 4px;
-  background-color: #fff; 
+  background-color: #fff;
 }
+
 .reportListItem {
   display: flex;
-  justify-content: space-between; 
+  justify-content: space-between;
   align-items: center;
   padding: 12px 15px;
   border-bottom: 1px solid #f0f0f0;
-  gap: 15px; 
+  gap: 15px;
 }
-.reportListItem:last-child { border-bottom: none; }
+
+.reportListItem:last-child {
+  border-bottom: none;
+}
+
 .reportInfo {
   display: flex;
-  flex-direction: column; 
-  gap: 3px; 
-  flex: 1; 
-  min-width: 0; 
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
 }
+
 .reportFilename {
   font-weight: 500;
   color: #333;
@@ -244,29 +292,53 @@
   color: #333;
   /* white-space: nowrap; */
   /* overflow: hidden; */
-  /* text-overflow: ellipsis; */ 
-  word-break: break-word; /* Ensure long words break if necessary */ 
+  /* text-overflow: ellipsis; */
+  word-break: break-word;
+  /* Ensure long words break if necessary */
 }
-.reportDate { font-size: 0.85em; color: #555; }
-.reportPhotoCount { font-size: 0.85em; color: #777; }
+
+.reportDate {
+  font-size: 0.85em;
+  color: #555;
+}
+
+.reportPhotoCount {
+  font-size: 0.85em;
+  color: #777;
+}
+
 .reportActions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0; 
+  flex-shrink: 0;
 }
+
 /* (Style ปุ่ม .reportButton... เหมือนเดิม) */
 .reportButtonRegenerate {
-  padding: 5px 10px; font-size: 0.85rem; font-weight: bold;
-  color: #333; background-color: #ffc107; text-decoration: none;
-  border-radius: 4px; transition: background-color 0.2s, opacity 0.2s;
-  border: none; cursor: pointer;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #333;
+  background-color: #ffc107;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background-color 0.2s, opacity 0.2s;
+  border: none;
+  cursor: pointer;
 }
-.reportButtonRegenerate:hover { background-color: #e0a800; }
+
+.reportButtonRegenerate:hover {
+  background-color: #e0a800;
+}
+
 .reportButtonRegenerate:disabled {
-  opacity: 0.5; cursor: not-allowed;
-  background-color: #6c757d; color: white;
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #6c757d;
+  color: white;
 }
+
 .reportButtonView,
 .reportButtonDownload {
   padding: 5px 10px;
@@ -275,18 +347,30 @@
   text-decoration: none;
   border-radius: 4px;
   transition: background-color 0.2s;
-  border: none; 
-  cursor: pointer; 
+  border: none;
+  cursor: pointer;
   /* [ใหม่] จัดไอคอนให้อยู่ตรงกลาง */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 40px;
 }
-.reportButtonView { background-color: #007bff; }
-.reportButtonView:hover { background-color: #0056b3; }
-.reportButtonDownload { background-color: #17a2b8; }
-.reportButtonDownload:hover { background-color: #117a8b; }
+
+.reportButtonView {
+  background-color: #007bff;
+}
+
+.reportButtonView:hover {
+  background-color: #0056b3;
+}
+
+.reportButtonDownload {
+  background-color: #17a2b8;
+}
+
+.reportButtonDownload:hover {
+  background-color: #117a8b;
+}
 
 
 /* (Style .loadingText, .errorText, .noReportsText เหมือนเดิม) */
@@ -298,6 +382,7 @@
   color: #555;
   font-style: italic;
 }
+
 .errorText {
   color: var(--error-color);
   font-weight: bold;
@@ -308,7 +393,401 @@
 .iconSpin {
   animation: spin 1.5s linear infinite;
 }
+
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- 8. [ใหม่] Active Feed (Grouped Dashboard) --- */
+.activeFeedBox {
+  /* Full Width Breakout */
+  margin-left: -20px;
+  margin-right: -20px;
+  padding: 10px 20px;
+  /* Add padding x to align content */
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin-bottom: 25px;
+}
+
+.activeFeedTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #666;
+  /* Match Camera header color */
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  border-bottom: none;
+  /* Remove underline */
+  padding-bottom: 0;
+}
+
+/* --- 5. Active Feed / Unified List --- */
+.activeFeedSection {
+  margin-top: 10px;
+  /* Reduced from 30px */
+}
+
+/* Smart Search Input */
+.searchContainer {
+  margin-bottom: 20px;
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 15px;
+  color: #adb5bd;
+  font-size: 1.2rem;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 12px 15px 12px 45px;
+  border: 1px solid #ced4da;
+  border-radius: 30px;
+  font-size: 1rem;
+  transition: all 0.2s;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 4px 10px rgba(0, 123, 255, 0.15);
+}
+
+.activeFeedBox {
+  /* Removed border and box-shadow for flat design */
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  margin-bottom: 30px;
+}
+
+/* Group Headers - Remove Box Look */
+.mainCategoryGroup {
+  margin-bottom: 15px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  /* Align with content */
+}
+
+.mainCategoryHeader {
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 10px 0;
+  padding-left: 10px;
+  border-left: 4px solid #007bff;
+  font-size: 1rem;
+}
+
+.subCategoryGroup {
+  margin-bottom: 15px;
+  padding-left: 0;
+  /* Align flat */
+}
+
+.subCategoryHeader {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #888;
+  margin: 0 0 8px 10px;
+}
+
+/* Job Cards Grid - Match selection-grid */
+.jobCardsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+}
+
+@media (min-width: 600px) {
+  .jobCardsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Job Card - Match selection-card */
+.jobCard {
+  background: #ffffff;
+  border: 2px solid #eee;
+  border-radius: 10px;
+  padding: 15px;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  position: relative;
+  /* ✅ [แก้ไข] เพื่อให้ Badge ลอยเทียบกับ Card นี้ */
+}
+
+.jobCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  /* Match Camera hover */
+  border-color: #007bff;
+}
+
+.jobCardContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.jobCardIcon {
+  width: 36px;
+  height: 36px;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.jobCardDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.jobCardDetails strong {
+  font-size: 0.95rem;
+  /* Slightly larger */
+  color: #333;
+  line-height: 1.3;
+  word-break: break-word;
+  /* Ensure long text wraps */
+}
+
+.jobCardDetails span {
+  font-size: 0.8rem;
+  color: #666;
+  display: flex;
+  align-items: center;
+}
+
+/* Action Buttons */
+.jobCardActions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 5px;
+  border-top: none;
+  /* Remove separator line for cleaner look */
+  margin-top: 5px;
+}
+
+.miniGenerateButton {
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 0;
+  /* Full block button */
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+  width: 100%;
+  justify-content: center;
+}
+
+.miniGenerateButton:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.miniGenerateButton:disabled {
+  background: #aab2b9;
+  cursor: not-allowed;
+}
+
+.miniSuccessButton {
+  background: #28a745;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  padding: 8px 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+.miniSuccessButton:hover {
+  background: #218838;
+}
+
+/* --- 9. [ใหม่] Main Tabs (Create vs History) --- */
+.mainTabContainer {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 25px;
+  border-bottom: 2px solid #eef0f2;
+  padding-bottom: 0;
+}
+
+.mainTabButton {
+  padding: 12px 25px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #6c757d;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+  /* Pull down to overlap border */
+}
+
+.mainTabButton:hover {
+  color: #495057;
+  background-color: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+}
+
+.mainTabButton.activeMainTab {
+  color: #007bff;
+  font-weight: 700;
+  border-bottom-color: #007bff;
+}
+
+/* Adjust title margins */
+h1 {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* --- 10. Manual Search Button --- */
+.manualSearchButton {
+  padding: 10px 20px;
+  background: white;
+  border: 1px solid #ced4da;
+  border-radius: 30px;
+  color: #6c757d;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.2s;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+/* Accordion Styles */
+.accordionHeader {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  background-color: #f8f9fa;
+  padding: 12px 15px;
+  border-radius: 8px;
+  margin-bottom: 5px;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.accordionHeader:hover {
+  background-color: #e9ecef;
+}
+
+.accordionTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: #333;
+}
+
+.accordionIcon {
+  color: #666;
+  font-size: 1.2rem;
+  transition: transform 0.2s ease;
+}
+
+.accordionIcon.expanded {
+  transform: rotate(90deg);
+}
+
+.accordionCount {
+  background-color: #e9ecef !important;
+  color: #495057;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.accordionContent {
+  padding-left: 15px;
+  /* Indent content */
+  margin-bottom: 15px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Sub-Accordion specific adjustments */
+.subAccordionHeader {
+  background-color: transparent;
+  border-left: 3px solid #dee2e6;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.subAccordionHeader:hover {
+  background-color: #f1f3f5;
+  border-left-color: #adb5bd;
+}
+
+.manualSearchButton:hover {
+  background: #fff;
+  border-color: #007bff;
+  color: #007bff;
+  box-shadow: 0 4px 10px rgba(0, 123, 255, 0.15);
+  transform: translateY(-1px);
 }

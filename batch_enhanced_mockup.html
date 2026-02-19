@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Batch Mockup</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #007bff;
+            /* Blue */
+            --secondary: #6c757d;
+            /* Grey */
+            --danger: #dc3545;
+            /* Red */
+            --bg: #f8f9fa;
+        }
+
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .mobile-container {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            position: relative;
+            padding-bottom: 80px;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            text-align: center;
+        }
+
+        .title {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .subtitle {
+            font-size: 0.9em;
+            color: #777;
+            margin-top: 5px;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .step-title {
+            font-size: 1.1em;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        /* --- New Enhanced Buttons --- */
+        .category-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .cat-btn {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 20px 10px;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            /* For badge positioning */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s;
+            height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cat-btn:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .cat-name {
+            font-size: 1em;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        /* --- THE NEW FEATURES --- */
+
+        /* 1. Red Badge for Pending Jobs */
+        .badge-pending {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--danger);
+            color: white;
+            font-size: 0.75em;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* 2. Progress Text for Active Session */
+        .progress-indicator {
+            font-size: 0.8em;
+            color: var(--primary);
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+
+        .completed-indicator {
+            font-size: 0.8em;
+            color: #28a745;
+            background: #d4edda;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0);
+            }
+
+            to {
+                transform: scale(1);
+            }
+        }
+
+        /* Bottom Nav */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+        }
+
+        .nav-item {
+            text-align: center;
+            color: #999;
+            font-size: 0.8em;
+            position: relative;
+        }
+
+        .nav-item.active {
+            color: var(--primary);
+        }
+
+        .nav-icon {
+            font-size: 1.5em;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        /* Nav Badge */
+        .nav-badge {
+            position: absolute;
+            top: 0;
+            right: 10px;
+            background: var(--danger);
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-container">
+        <div class="header">
+            <h1 class="title">The Lofts Silom</h1>
+            <div class="subtitle">เลือกหมวดหมู่ที่ต้องการตรวจ</div>
+        </div>
+
+        <div class="content">
+            <div class="step-title">1. เลือกหมวดงาน (Main Category)</div>
+
+            <div class="category-grid">
+                <!-- Card 1: Has Pending Jobs -->
+                <div class="cat-btn">
+                    <div class="badge-pending">3 งานค้าง</div>
+                    <div class="cat-name">งานสถาปัตย์</div>
+                    <div class="progress-indicator">📸 กำลังทำ...</div>
+                </div>
+
+                <!-- Card 2: Normal -->
+                <div class="cat-btn">
+                    <div class="cat-name">งานระบบไฟฟ้า</div>
+                </div>
+
+                <!-- Card 3: Completed -->
+                <div class="cat-btn">
+                    <div class="cat-name">งานสุขาภิบาล</div>
+                    <div class="completed-indicator">✓ เสร็จแล้ว 2</div>
+                </div>
+
+                <!-- Card 4: Normal -->
+                <div class="cat-btn">
+                    <div class="cat-name">งานภายนอก</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 30px; text-align: center; color: #777; font-size: 0.9em;">
+                <p>👇 ลองสังเกตปุ่มด้านล่างครับ 👇</p>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <div class="nav-item active">
+                <span class="nav-icon">📷</span>
+                ถ่ายรูป
+            </div>
+            <div class="nav-item">
+                <!-- Nav Badge Notification -->
+                <div class="nav-badge"></div>
+                <span class="nav-icon">📊</span>
+                รายงาน
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">⚙️</span>
+                ตั้งค่า
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -223,22 +223,57 @@ async function getDailyPhotosByDate(projectId, date) {
 async function getLatestPhotos(projectId, mainCategory, subCategory, allTopics, dynamicFields) {
     const db = admin.firestore();
     const category = `${mainCategory} > ${subCategory}`;
-    console.log(`Fetching latest QC photos from 'latestQcPhotos' for: ${category}`);
+    console.log(`Fetching latest QC photos from 'qcPhotos' (Direct Query) for: ${category}`);
     console.log(`Dynamic fields:`, dynamicFields);
+    // 1. Query รูปทั้งหมดในหมวดนี้ (และ Filter Dynamic Fields)
+    let query = db.collection('qcPhotos')
+        .where('projectId', '==', projectId)
+        .where('category', '==', category);
+    // Filter ด้วย Dynamic Fields (สำคัญมาก)
+    if (dynamicFields) {
+        Object.keys(dynamicFields).forEach(key => {
+            const value = dynamicFields[key];
+            if (value) {
+                query = query.where(`dynamicFields.${key}`, '==', value);
+            }
+        });
+    }
+    const snapshot = await query.get();
+    console.log(`✅ Found ${snapshot.size} total photos in this category.`);
+    // 2. จัดกลุ่มรูปตาม Topic และเลือกรูปที่ใหม่ที่สุด
+    const latestPhotosByTopic = new Map();
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        const topic = data.topic;
+        // ข้ามถ้าไม่มี Topic (ไม่ควรเกิดขึ้น)
+        if (!topic)
+            return;
+        // ถ้ายังไม่มีใน Map หรือ รูปนี้ใหม่กว่ารูปที่มีอยู่
+        if (!latestPhotosByTopic.has(topic)) {
+            latestPhotosByTopic.set(topic, data);
+        }
+        else {
+            const existing = latestPhotosByTopic.get(topic);
+            // เปรียบเทียบ createdAt (ถ้ามี)
+            const existingTime = existing.createdAt ? existing.createdAt.toMillis() : 0;
+            const newTime = data.createdAt ? data.createdAt.toMillis() : 0;
+            if (newTime > existingTime) {
+                latestPhotosByTopic.set(topic, data);
+            }
+        }
+    });
+    console.log(`✅ Identified latest photos for ${latestPhotosByTopic.size} topics.`);
+    // 3. Map กลับไปยัง allTopics เพื่อให้ได้ลำดับที่ถูกต้อง (และเติม Placeholder)
     const photoPromises = allTopics.map(async (topic) => {
-        const stableId = createStableQcId(projectId, category, topic, dynamicFields || {});
-        const docRef = db.collection('latestQcPhotos').doc(stableId);
-        const doc = await docRef.get();
-        if (!doc.exists) {
+        const data = latestPhotosByTopic.get(topic);
+        if (!data) {
+            // ไม่พบรูปใน Topic นี้
             return null;
         }
-        const data = doc.data();
         const imageBase64 = data.driveUrl ? await fetchAndEncodeImage(data.driveUrl) : null;
-        // ✅ Debug: ตรวจสอบว่า Base64 ถูกสร้างหรือไม่
         if (imageBase64) {
-            const base64Length = imageBase64.length;
-            const isValidBase64 = imageBase64.startsWith('data:image/');
-            console.log(`     📸 Base64 encoded: ${base64Length} chars, Valid: ${isValidBase64}`);
+            // Debug
+            // console.log(`     📸 Encoded: ${topic}`);
         }
         else {
             console.log(`     ⚠️ Failed to encode image for topic: "${topic}"`);
@@ -253,18 +288,7 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, allTopics, 
     });
     const photos = await Promise.all(photoPromises);
     const foundPhotos = photos.filter((p) => p !== null);
-    console.log(`✅ Found ${foundPhotos.length} photos out of ${allTopics.length} topics`);
-    // ✅ Debug ข้อมูลแต่ละรูป
-    foundPhotos.forEach((photo, index) => {
-        console.log(`  Photo ${index + 1}:`);
-        console.log(`    - Topic: ${photo.topic}`);
-        console.log(`    - Has Base64: ${!!photo.imageBase64}`);
-        console.log(`    - Is Placeholder: ${photo.isPlaceholder}`);
-        if (photo.imageBase64) {
-            console.log(`    - Base64 length: ${photo.imageBase64.length}`);
-            console.log(`    - Starts with: ${photo.imageBase64.substring(0, 30)}...`);
-        }
-    });
+    console.log(`✅ Final: Returning ${foundPhotos.length} photos ready for PDF.`);
     return foundPhotos;
 }
 function createFullLayoutPhotos(photos, allTopics) {

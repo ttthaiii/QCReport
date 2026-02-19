@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified QC Mockup</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #007bff;
+            --success: #28a745;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-main: #333;
+            --text-light: #6c757d;
+        }
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 0;
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+        }
+        .mobile-container {
+            width: 100%;
+            max-width: 400px; /* Mobile width simulation */
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            position: relative;
+            padding-bottom: 80px; /* Space for bottom bar */
+        }
+        .header {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            padding: 20px;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            box-shadow: 0 4px 10px rgba(0,123,255,0.2);
+        }
+        .project-name { font-size: 0.9em; opacity: 0.9; }
+        .page-title { font-size: 1.4em; font-weight: 600; margin-top: 5px; }
+        
+        .progress-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin: -20px 20px 20px 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            border: 1px solid #eee;
+            position: relative;
+        }
+        .job-info { font-weight: 600; color: #333; font-size: 1.1em; display: flex; justify-content: space-between; align-items: center; }
+        .status-badge { 
+            background: #e3f2fd; color: #007bff; 
+            padding: 4px 10px; border-radius: 20px; 
+            font-size: 0.8em; font-weight: 500; 
+        }
+        .progress-track {
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--success);
+            width: 60%; /* 3/5 */
+        }
+        .progress-text {
+            font-size: 0.85em; color: var(--text-light); margin-top: 8px; text-align: right;
+        }
+
+        .section-title {
+            padding: 0 20px; margin-bottom: 10px; font-weight: 600; color: #555; font-size: 0.95em;
+        }
+
+        .task-list { padding: 0 20px; }
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: transform 0.2s;
+        }
+        .task-item:active { transform: scale(0.98); }
+        .task-icon {
+            width: 40px; height: 40px;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            margin-right: 12px;
+            font-size: 1.2em;
+        }
+        .icon-done { background: #d4edda; color: #155724; }
+        .icon-todo { background: #cce5ff; color: #004085; }
+        
+        .task-details { flex: 1; }
+        .task-name { font-weight: 500; font-size: 0.95em; }
+        .task-status { font-size: 0.8em; color: var(--text-light); }
+
+        .btn-action {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: #f1f3f5;
+            color: #6c757d;
+            cursor: pointer;
+        }
+
+        .bottom-bar {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 10px;
+        }
+        .btn-primary {
+            flex: 1;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1em;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,123,255,0.3);
+        }
+        .btn-icon { margin-right: 8px; }
+    </style>
+</head>
+<body>
+    <div class="mobile-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="project-name">โครงการ: The Lofts Silom</div>
+            <div class="page-title">QC Workstation</div>
+        </div>
+
+        <!-- Current Job / Progress -->
+        <div class="progress-card">
+            <div class="job-info">
+                <span>ชั้น 1 / ห้อง 101</span>
+                <span class="status-badge">กำลังดำเนินการ</span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill"></div>
+            </div>
+            <div class="progress-text">
+                ถ่ายแล้ว 3 จาก 5 หัวข้อ (60%)
+            </div>
+        </div>
+
+        <!-- Lists -->
+        <div class="section-title">รายการตรวจสอบ (Checklist)</div>
+        <div class="task-list">
+            <!-- Item 1: Done -->
+            <div class="task-item">
+                <div class="task-icon icon-done">✓</div>
+                <div class="task-details">
+                    <div class="task-name">งานปูพื้นกระเบื้อง</div>
+                    <div class="task-status">เรียบร้อยแล้ว</div>
+                </div>
+                <button class="btn-action">📷</button>
+            </div>
+            
+            <!-- Item 2: Done -->
+            <div class="task-item">
+                <div class="task-icon icon-done">✓</div>
+                <div class="task-details">
+                    <div class="task-name">งานติดตั้งสุขภัณฑ์</div>
+                    <div class="task-status">เรียบร้อยแล้ว</div>
+                </div>
+                <button class="btn-action">📷</button>
+            </div>
+
+            <!-- Item 3: Todo -->
+            <div class="task-item" style="border-left: 4px solid #007bff;">
+                <div class="task-icon icon-todo">📷</div>
+                <div class="task-details">
+                    <div class="task-name">งานทาสีผนัง</div>
+                    <div class="task-status" style="color: #007bff;">รอถ่ายรูป...</div>
+                </div>
+            </div>
+
+             <!-- Item 4: Todo -->
+             <div class="task-item">
+                <div class="task-icon icon-todo">📷</div>
+                <div class="task-details">
+                    <div class="task-name">งานติดตั้งปลั๊กไฟ</div>
+                    <div class="task-status">รอถ่ายรูป...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Action Bar (The Key Feature) -->
+        <div class="bottom-bar">
+            <!-- Close Button -->
+            <button style="width: 50px; background: #fff; border: 1px solid #ddd; border-radius: 10px; color: #555;">↩</button>
+            
+            <!-- Generate Button -->
+            <button class="btn-primary">
+                <span class="btn-icon">📄</span>
+                สร้างรายงานทันที (Generate PDF)
+            </button>
+        </div>
+    </div>
+</body>
+</html>

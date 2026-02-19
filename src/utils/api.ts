@@ -1,7 +1,8 @@
 // Filename: src/utils/api.ts (REFACTORED for Auth Token)
 
 // [ใหม่] 1. Import auth จาก firebase.js
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 // --- Type definitions (จากไฟล์เดิมของคุณ) ---
 export interface DynamicFieldConfig {
@@ -93,6 +94,7 @@ export interface Photo {
   filename: string;
   location?: string;
   firepath: string;
+  dynamicFields?: Record<string, string>; // ✅ [เพิ่ม] เพื่อให้ Filter ได้
 }
 
 export interface ApiResponse<T> {
@@ -327,9 +329,51 @@ export const api = {
 
   getProjectConfig: async (projectId: string): Promise<ApiResponse<ProjectConfig>> => {
     try {
+      // 1. [NEW] Try fetching from Firestore 'projectConfigs' (Direct Read)
+      // This fixes the 404 error for new projects that are saved to Firestore but not yet known by the API
+      // or if we want to bypass the API for performance/cost.
+      const configRef = doc(db, 'projectConfigs', projectId);
+      const configSnap = await getDoc(configRef);
+
+      if (configSnap.exists()) {
+        const data = configSnap.data();
+        console.log("✅ Config found in 'projectConfigs' (Direct Read):", data);
+
+        // Map Firestore data to ProjectConfig interface
+        // Assuming the document contains a key 'mainCategories' or similar that holds the array
+        // OR the document *is* the config wrapper.
+        // Based on common patterns, if ProjectConfig is an Array, it's likely wrapped in a field.
+        let config: ProjectConfig = [];
+
+        if (Array.isArray(data.mainCategories)) {
+          config = data.mainCategories as ProjectConfig;
+        } else if (Array.isArray(data.config)) {
+          config = data.config as ProjectConfig;
+        } else if (Array.isArray(data.data)) {
+          config = data.data as ProjectConfig;
+        } else {
+          // Fallback: If the document keys act as indexes or something unexpected
+          console.warn("⚠️ 'projectConfigs' doc found but structure is unknown:", data);
+          // We might want to try API if structure is weird, or return empty?
+          // Let's assume if it exists, it's the right one.
+          // If we can't find array, return as is if it looks like one, or empty.
+        }
+
+        if (config.length > 0) {
+          return { success: true, data: config };
+        }
+      }
+
+      console.warn(`⚠️ Config not found in 'projectConfigs' for ${projectId}. Trying API (Legacy)...`);
+
+      // 2. Fallback to API (Legacy Support)
+      // For old projects that might still be in 'projectConfig' (singular) subcollections
+      // and not yet migrated to 'projectConfigs' (plural).
       const data = await fetchWithAuth(`/project-config/${projectId}`, { method: 'GET' });
       return data;
+
     } catch (error: any) {
+      console.error("❌ Error fetching project config:", error);
       return { success: false, error: error.message };
     }
   },
@@ -371,9 +415,6 @@ export const api = {
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
-  /**
-   * (God) ตั้งค่า Role ผู้ใช้
-   */
   setUserRole: async (uid: string, role: 'user' | 'admin' | 'god'): Promise<ApiResponse<any>> => {
     try {
       return await fetchWithAuth(`/admin/set-role/${uid}`, {
@@ -381,6 +422,40 @@ export const api = {
         body: JSON.stringify({ role })
       });
     } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
+  reverseGeocode: async (lat: number, lon: number): Promise<string> => {
+    try {
+      const response = await fetchWithAuth(`/proxy-geocode?lat=${lat}&lon=${lon}`, { method: 'GET' }, true); // Use cache for geocoding
+
+      if (response.success && response.data) {
+        const data = response.data;
+        if (data.address) {
+          const addr = data.address;
+          const parts: string[] = [];
+          const road = addr.road || addr.street;
+          if (road) { parts.push(road); }
+          const subdistrict = addr.suburb || addr.village || addr.hamlet;
+          if (subdistrict) { parts.push(subdistrict); }
+          const district = addr.district || addr.city_district || addr.town || addr.municipality;
+          if (district) { parts.push(district); }
+          const province = addr.state || addr.province;
+          if (province) { parts.push(province); }
+
+          if (parts.length > 0) { return parts.join('\n'); }
+
+          if (data.display_name) {
+            const displayParts = data.display_name.split(',').slice(0, 3).map((s: string) => s.trim());
+            return displayParts.join('\n');
+          }
+        }
+      }
+      // Fallback
+      return `พิกัด:\n${lat.toFixed(4)},\n${lon.toFixed(4)}`;
+    } catch (error) {
+      console.error('Error reverse geocoding via proxy:', error);
+      return `พิกัด:\n${lat.toFixed(4)},\n${lon.toFixed(4)}`;
+    }
   },
 
   // --- Photo Upload (สำหรับหน้า Camera) ---
@@ -394,8 +469,10 @@ export const api = {
         // ✅ [แก้ไข] Key ต้องเป็น 'photoBase64' ให้ตรงกับ index.ts
         photoBase64: data.photoBase64,
 
+
+
         // [FIX] รวม 'mainCategory' และ 'subCategory' เป็น 'category'
-        category: data.reportType === 'QC' ? `${data.mainCategory} > ${data.subCategory}` : undefined,
+        category: data.reportType === 'QC' ? `${(data.mainCategory || '').trim()} > ${(data.subCategory || '').trim()}` : undefined,
 
         topic: data.topic,
         description: data.description,
@@ -456,7 +533,7 @@ export const api = {
       const data = await fetchWithAuth('/checklist-status', {
         method: 'POST',
         body: JSON.stringify(payload)
-      });
+      }, false); // ✅ Disable cache
       return data;
     } catch (error: any) {
       return { success: false, error: error.message };
@@ -466,7 +543,7 @@ export const api = {
   // --- Report Settings (สำหรับหน้า Admin) ---
   getReportSettings: async (projectId: string): Promise<ApiResponse<ReportSettings>> => {
     try {
-      const data = await fetchWithAuth(`/projects/${projectId}/report-settings`, { method: 'GET' });
+      const data = await fetchWithAuth(`/projects/${projectId}/report-settings`, { method: 'GET' }, false); // ✅ Disable cache for settings too
       return data;
     } catch (error: any) {
       return { success: false, error: error.message, data: DEFAULT_REPORT_SETTINGS };
@@ -680,7 +757,7 @@ export const api = {
       // [แก้ไข] เรียกใช้ fetchWithAuth
       const data = await fetchWithAuth(`/projects/${projectId}/generated-reports?${params.toString()}`, {
         method: 'GET'
-      });
+      }, false); // ✅ Disable cache
 
       // (Error handling และ .json() ถูกย้ายไปใน fetchWithAuth แล้ว)
       return data;
@@ -697,7 +774,7 @@ export const api = {
 
   getSharedJobs: async (projectId: string): Promise<ApiResponse<SharedJob[]>> => {
     try {
-      const data = await fetchWithAuth(`/projects/${projectId}/shared-jobs`, { method: 'GET' });
+      const data = await fetchWithAuth(`/projects/${projectId}/shared-jobs`, { method: 'GET' }, false); // ✅ Disable cache
       return data;
     } catch (error: any) {
       return { success: false, error: error.message, data: [] };
@@ -742,4 +819,67 @@ export const api = {
       return { success: false, error: error.message };
     }
   },
+
+  // [ใหม่] 7. ดึงรูปภาพล่าสุดของ Topic (สำหรับปุ่ม "ดูรูป" ใน Camera)
+  getLatestPhotoForTopic: async (projectId: string, topicName: string, category: string, dynamicFields: Record<string, string> = {}): Promise<ApiResponse<Photo>> => {
+    try {
+      const allPhotosRes = await api.getPhotosByProject(projectId);
+      if (!allPhotosRes.success || !allPhotosRes.data) {
+        throw new Error(allPhotosRes.error || 'Failed to fetch photos');
+      }
+
+      // หา Topic ที่ตรงกัน และใหม่ที่สุด
+      // หมายเหตุ: category ใน Photo saved format คือ "Main > Sub"
+      const matchedPhotos = allPhotosRes.data.filter((p: any) => { // Cast as any because dynamicFields might not be fully typed in allPhotosRes yet
+        const isTopicMatch = p.topic === topicName;
+        const isCategoryMatch = p.reportType === 'QC' ? (p.category === category) : true;
+
+        // ✅ [แก้ไข] Check Dynamic Fields
+        let isFieldsMatch = true;
+        if (p.reportType === 'QC' && p.dynamicFields) {
+          // Compare provided dynamicFields with photo's dynamicFields
+          const photoFields = p.dynamicFields as Record<string, string>;
+          const requestFields = dynamicFields;
+
+          // Check if all requested fields match the photo's fields
+          // (Simple JSON stringify comparison might work if keys are sorted, but strict key checking is safer)
+          if (Object.keys(requestFields).length > 0) {
+            for (const key of Object.keys(requestFields)) {
+              if (photoFields[key] !== requestFields[key]) {
+                isFieldsMatch = false;
+                break;
+              }
+            }
+          }
+        }
+
+        return isTopicMatch && isCategoryMatch && isFieldsMatch;
+      });
+
+      if (matchedPhotos.length === 0) {
+        return { success: false, error: 'Photo not found' };
+      }
+
+      // เรียงจากใหม่ไปเก่า
+      matchedPhotos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      return { success: true, data: matchedPhotos[0] };
+
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // [ใหม่] 8. Proxy Image (แก้ CORS)
+  proxyImage: async (url: string): Promise<ApiResponse<string>> => {
+    try {
+      const data = await fetchWithAuth('/proxy-image', {
+        method: 'POST',
+        body: JSON.stringify({ url })
+      });
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
 };

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator, enableIndexedDbPersistence } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
@@ -18,7 +18,18 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Services
 const functions = getFunctions(app, 'asia-southeast1');
-const db = getFirestore(app); // <-- เพิ่ม Firestore
+const db = getFirestore(app);
+
+// ✅ Enable Offline Persistence
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code == 'failed-precondition') {
+    // Multiple tabs open, persistence can only be enabled in one tab at a a time.
+    console.warn('Persistence failed: Multiple tabs open');
+  } else if (err.code == 'unimplemented') {
+    // The current browser does not support all of the features required to enable persistence
+    console.warn('Persistence failed: Browser not supported');
+  }
+});
 const storage = getStorage(app); // <-- เพิ่ม Storage
 const auth = getAuth(app);
 

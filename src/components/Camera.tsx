@@ -11,7 +11,8 @@ import AutocompleteInput from './AutocompleteInput';
 import {
   FiClipboard, FiSun, FiMapPin, FiCheckCircle, FiLoader,
   FiAlertTriangle, FiCircle, FiCamera, FiPaperclip, FiRefreshCw,
-  FiTrash2, FiEdit, FiX, FiInbox
+  FiTrash2, FiEdit, FiX, FiInbox, FiImage, FiEye, FiEyeOff, FiSave,
+  FiZoomIn, FiZoomOut
 } from 'react-icons/fi';
 
 interface CameraProps {
@@ -36,36 +37,7 @@ export interface PhotoQueueItem {
   status: 'pending' | 'failed';
 }
 
-// (ฟังก์ชัน reverseGeocodeNominatim เหมือนเดิม)
-async function reverseGeocodeNominatim(latitude: number, longitude: number): Promise<string> {
-  const url = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=th&zoom=18&addressdetails=1`;
-  try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'QCReport-App/1.0 (Contact: [thai.l@tts2004.co.th] for issues)' }
-    });
-    const data = await response.json();
-    if (data && data.address) {
-      const addr = data.address;
-      const parts: string[] = [];
-      const road = addr.road || addr.street;
-      if (road) { parts.push(road); }
-      const subdistrict = addr.suburb || addr.village || addr.hamlet;
-      if (subdistrict) { parts.push(subdistrict); }
-      const district = addr.district || addr.city_district || addr.town || addr.municipality;
-      if (district) { parts.push(district); }
-      const province = addr.state || addr.province;
-      if (province) { parts.push(province); }
-      if (parts.length > 0) { return parts.join('\n'); }
-      const displayParts = data.display_name.split(',').slice(0, 3).map((s: string) => s.trim());
-      return displayParts.join('\n');
-    } else {
-      return `พิกัด:\n${latitude.toFixed(4)},\n${longitude.toFixed(4)}`;
-    }
-  } catch (error) {
-    console.error('Error fetching Nominatim:', error);
-    return `ไม่สามารถระบุสถานที่`;
-  }
-}
+// (ฟังก์ชัน reverseGeocodeNominatim ถูกลบออกแล้ว ใช้ api.reverseGeocode แทน)
 
 // ✅ [แก้ไข 2] ย้าย 'pendingManager' เข้ามาใน Type ให้ถูกต้อง
 type WizardStep =
@@ -104,11 +76,17 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const [pendingAttachTopic, setPendingAttachTopic] = useState<string>('');
   const [fieldSuggestions, setFieldSuggestions] = useState<Record<string, string[]>>({});
   const [previewData, setPreviewData] = useState<{
-    url: string,
-    timestamp?: string,
-    location?: string | null,
-    addWatermark?: boolean  // ✅ เพิ่ม
+    url: string;
+    timestamp?: string;
+    location?: string | null;
+    addWatermark?: boolean;
   } | null>(null);
+
+  // ✅ [ใหม่] State สำหรับ Zoom
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [showInfoOverlay, setShowInfoOverlay] = useState<boolean>(true); // ✅ State สำหรับ Toggle Overlay
+  // ✅ State สำหรับคำนวณขนาด Font ให้เท่ากับ Watermark ของจริง
+  const [watermarkFontSize, setWatermarkFontSize] = useState<number>(24);
 
   const [modalState, setModalState] = useState<{
     title: string;
@@ -311,7 +289,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           enableHighAccuracy: true, timeout: 5000
         });
       });
-      locationString = await reverseGeocodeNominatim(
+      // ✅ ใช้ api.reverseGeocode (Proxied) แทน direct fetch
+      locationString = await api.reverseGeocode(
         position.coords.latitude,
         position.coords.longitude
       );
@@ -566,11 +545,14 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
    * Example: Select "Room 1" -> Auto select "ECN-..." for "Code note"
    */
   const handleDynamicFieldChange = useCallback((fieldName: string, value: string) => {
+    // ✅ [แก้ไข] บังคับเป็นตัวพิมพ์ใหญ่ (Uppercase) เสมอ เพื่อแก้ปัญหาข้อมูล Case Sensitive
+    const upperValue = value ? value.toUpperCase() : '';
+
     setDynamicFields(prev => {
-      const newFields = { ...prev, [fieldName]: value };
+      const newFields = { ...prev, [fieldName]: upperValue };
 
       // DEBUG
-      console.log('📷 [Camera] Field Change:', fieldName, '=', value);
+      console.log('📷 [Camera] Field Change:', fieldName, '=', upperValue);
       console.log('📷 [Camera] Selected SubCat:', selectedSubCat);
 
       // 1. Check for dependencies using 'selectedSubCat'
@@ -579,12 +561,13 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         const dependency = selectedSubCat.fieldDependencies[fieldName];
         if (dependency) {
           console.log('📷 [Camera] Dependency match!', dependency);
-          const targetValue = dependency.mapping[value];
+          // ✅ [แก้ไข] ใช้ upperValue ในการ Lookup
+          const targetValue = dependency.mapping[upperValue];
           console.log('📷 [Camera] Target Value:', targetValue);
 
           if (targetValue) {
             newFields[dependency.targetField] = targetValue;
-          } else if (value === '' || value === null) {
+          } else if (upperValue === '' || upperValue === null) {
             newFields[dependency.targetField] = '';
           }
         }
@@ -792,35 +775,209 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const renderPreviewModal = () => {
     if (!previewData) return null;
 
-    let formattedTimestamp = '';
-    if (previewData.timestamp) {
-      const date = new Date(previewData.timestamp);
-      const datePart = date.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const timePart = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-      formattedTimestamp = `${datePart} ${timePart}`;
-    }
+    const formattedTimestamp = previewData.timestamp
+      ? new Date(previewData.timestamp).toLocaleString('th-TH')
+      : '';
+    const locationLines = previewData.location
+      ? previewData.location.split('\n').filter(line => !!line.trim())
+      : [];
 
-    const locationLines = previewData.location ? previewData.location.split('\n').filter(line => !!line.trim()) : ['ไม่สามารถระบุตำแหน่งได้'];
+    const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const img = e.currentTarget;
+      // สูตรเดียวกับ watermark.ts: Math.max(24, width / 60)
+      const calculatedFontSize = Math.max(24, img.naturalWidth / 60);
+      setWatermarkFontSize(calculatedFontSize);
+    };
+
+    // ฟังก์ชันดาวน์โหลดรูปพร้อมลายน้ำ
+    const handleDownloadWithWatermark = async () => {
+      let imageSrc = previewData.url;
+
+      // ✅ ถ้าเป็นรูปจาก Firebase Storage (URL) ต้องผ่าน Proxy เพื่อแก้ CORS
+      if (imageSrc.startsWith('http')) {
+        setModalState({ title: 'กำลังเตรียมรูป...', message: 'กำลังโหลดรูปต้นฉบับ...' });
+        try {
+          const res = await api.proxyImage(imageSrc);
+          if (res.success && res.data) {
+            imageSrc = res.data; // data เป็น base64
+          } else {
+            throw new Error(res.error || 'Proxy failed');
+          }
+        } catch (e) {
+          console.error("Proxy error:", e);
+          alert('ไม่สามารถดาวน์โหลดรูปได้ (CORS Error)');
+          setModalState(null);
+          return;
+        }
+        setModalState(null);
+      }
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      // img.crossOrigin = "anonymous"; // ❌ ไม่ต้องใช้แล้วเพราะเป็น Base64
+      img.src = imageSrc;
+
+      img.onload = () => {
+        canvas.width = img.width; // ... rest of the code
+        canvas.height = img.height;
+        if (!ctx) return;
+
+        // 1. วาดรูปต้นฉบับ
+        ctx.drawImage(img, 0, 0);
+
+        // 2. ถ้าต้องมีลายน้ำ (หรือรูปนี้ถูกระบุว่ามีลายน้ำ) ให้วาดลงไป
+        if (previewData.addWatermark && (formattedTimestamp || locationLines.length > 0)) {
+          // Config ลายน้ำ (เลียนแบบ watermark.ts)
+          const fontSize = Math.max(24, Math.floor(canvas.width * 0.03));
+          ctx.font = `bold ${fontSize}px Arial`;
+          ctx.fillStyle = 'white';
+          ctx.shadowColor = 'black';
+          ctx.shadowBlur = 4;
+          ctx.shadowOffsetX = 2;
+          ctx.shadowOffsetY = 2;
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'bottom';
+
+          const padding = Math.floor(canvas.width * 0.02);
+          const lineHeight = fontSize * 1.5;
+          let currentY = canvas.height - padding;
+
+          // วาด Timestamp ก่อน (อยู่ล่างสุด)
+          if (formattedTimestamp) {
+            ctx.fillText(formattedTimestamp, canvas.width - padding, currentY);
+            currentY -= lineHeight;
+          }
+
+          // วาด Location (ย้อนกลับจากล่างขึ้นบน)
+          [...locationLines].reverse().forEach(line => {
+            if (line) {
+              ctx.fillText(line.trim(), canvas.width - padding, currentY);
+              currentY -= lineHeight;
+            }
+          });
+        }
+
+        // 3. สั่งดาวน์โหลด
+        const link = document.createElement('a');
+        link.download = `photo_${Date.now()}.jpg`;
+        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.click();
+      };
+    };
 
     return (
-      <div className={styles['preview-modal-overlay']} onClick={() => setPreviewData(null)}>
+      <div className={styles['preview-modal-overlay']} onClick={() => { setPreviewData(null); setZoomLevel(1); }}>
         <div className={styles['preview-modal-content']} onClick={(e) => e.stopPropagation()}>
-          <div className={styles['preview-image-container']}>
-            <img src={previewData.url} alt="Preview" />
 
-            {/* ✅ แก้ไข: แสดง Overlay เฉพาะเมื่อ addWatermark = true */}
-            {previewData.addWatermark && (formattedTimestamp || previewData.location) && (
-              <div className={styles['preview-watermark-overlay']}>
-                {formattedTimestamp && <span>{formattedTimestamp}</span>}
-                {locationLines.map((line, index) => (<span key={index}>{line}</span>))}
-              </div>
-            )}
+          {/* ✅ [ใหม่] Top Toolbar สำหรับเครื่องมือ */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '10px',
+            borderBottom: '1px solid #eee',
+            paddingBottom: '10px'
+          }}>
+            <h3 className={styles['preview-modal-title']}>Preview</h3>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {/* Toggle Info Overlay */}
+              <button
+                onClick={() => setShowInfoOverlay(prev => !prev)}
+                className={styles['preview-control-button']}
+                title={showInfoOverlay ? "ซ่อนรายละเอียด" : "แสดงรายละเอียด"}
+                style={{ backgroundColor: showInfoOverlay ? '#007bff' : '#eee', color: showInfoOverlay ? 'white' : 'black' }}
+              >
+                {showInfoOverlay ? <FiEye /> : <FiEyeOff />}
+              </button>
+
+              {/* Zoom Controls */}
+              <button onClick={() => setZoomLevel(prev => Math.max(1, prev - 0.5))} className={styles['preview-control-button']} title="Zoom Out"><FiZoomOut /> -</button>
+              <span style={{ background: '#eee', padding: '5px 10px', borderRadius: '4px', minWidth: '40px', textAlign: 'center', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Math.round(zoomLevel * 100)}%</span>
+              <button onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.5))} className={styles['preview-control-button']} title="Zoom In"><FiZoomIn /> +</button>
+
+              {/* Download */}
+              <button
+                onClick={handleDownloadWithWatermark}
+                className={styles['preview-control-button']}
+                title="Download with Watermark"
+                style={{ backgroundColor: '#27ae60', color: 'white', borderColor: '#27ae60' }}
+              >
+                <FiSave /> <span className={styles['button-text']}>บันทึก</span>
+              </button>
+            </div>
+
+            <button className={styles['preview-modal-close']} onClick={() => { setPreviewData(null); setZoomLevel(1); }} style={{ position: 'static', marginLeft: '10px' }}>
+              <FiX />
+            </button>
           </div>
-          <button className={styles['preview-modal-close']} onClick={() => setPreviewData(null)}>
-            <FiX />
-          </button>
+
+          <div className={styles['preview-image-container']} style={{
+            overflow: 'auto',
+            maxHeight: '80vh', // ✅ ปรับให้พอดีจอ ไม่ล้นจนมี Scrollbar ซ้อน
+            textAlign: 'center',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+
+            {/* Wrapper สำหรับรูป + Text เพื่อให้ Zoom ไปพร้อมกัน */}
+            <div style={{
+              position: 'relative',
+              display: 'inline-block',
+              transform: `scale(${zoomLevel})`,
+              transformOrigin: 'center center', // ✅ Zoom จากตรงกลาง
+              transition: 'transform 0.2s ease',
+            }}>
+              <img
+                src={previewData.url}
+                alt="Preview"
+                onLoad={handleImageLoad} // ✅ คำนวณขนาด Font เมื่อรูปโหลดเสร็จ
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '80vh', // ✅ บังคับความสูงให้พอดีจอ
+                  width: 'auto',
+                  display: 'block',
+                  // margin: '0 auto' // ไม่ต้องใช้เพราะมี Flex parent แล้ว
+                }}
+              />
+
+              {/* ✅ [แก้ไข] แสดง Text แบบจำลอง Watermark 100% */}
+              {showInfoOverlay && previewData.addWatermark && (formattedTimestamp || locationLines.length > 0) && (
+                <div style={{
+                  position: 'absolute',
+                  // ✅ ใช้ padding เท่ากับขนาด font (เหมือน watermark.ts)
+                  bottom: `${watermarkFontSize}px`,
+                  right: `${watermarkFontSize}px`,
+                  textAlign: 'right',
+                  color: 'white',
+                  textShadow: '0px 0px 4px rgba(0,0,0,1)', // เงา blur 3 (ใกล้เคียง 4)
+                  fontWeight: 'bold',
+                  fontFamily: 'Arial, sans-serif',
+                  fontSize: `${watermarkFontSize}px`,
+                  lineHeight: '1.2', // ตาม watermark.ts
+                  pointerEvents: 'none',
+                  whiteSpace: 'pre', // ใช้ pre เพื่อให้ \n ทำงาน
+                }}>
+                  {/* แสดง Location ก่อน (อยู่ด้านบน) */}
+                  {locationLines.length > 0 && (
+                    <div style={{ marginBottom: 0 }}>
+                      {[...locationLines].map((line, i) => (
+                        <div key={i}>{line}</div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Timestamp อยู่ล่างสุด */}
+                  {formattedTimestamp && (
+                    <div>{formattedTimestamp}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </div >
     );
   };
 
@@ -910,21 +1067,80 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             );
           })()}
 
-          {sharedJobs.length > 0 && (
-            <div className={styles['recent-jobs-container']}>
-              <h3><FiMapPin style={{ verticalAlign: 'middle', marginRight: '8px' }} /> งานที่ค้างอยู่ (สำหรับทุกคน)</h3>
-              {sharedJobs.map((job) => (
-                <div key={job.id} className={styles['recent-job-item']} onClick={() => handleSelectSharedJob(job)}>
-                  <span>{job.label}</span>
-                  {job.reportType === 'QC' && job.totalTopics > 0 && (
-                    <span style={{ marginLeft: '10px', color: '#555', fontSize: '0.9em' }}>
-                      (ถ่ายแล้ว {job.completedTopics}/{job.totalTopics})
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* sharedJobs list removed as per new workflow */}
+
+          {/* ✅ [ใหม่] ปุ่มซ่อมแซมข้อมูล (Migration Tool) */}
+          <div style={{ marginTop: '30px', textAlign: 'center', padding: '20px', borderTop: '1px solid #eee' }}>
+            <p style={{ color: '#888', marginBottom: '10px', fontSize: '0.8rem' }}>เครื่องมือสำหรับผู้ดูแลระบบ</p>
+            <button
+              onClick={async () => {
+                if (!window.confirm('ยืนยันที่จะแปลงข้อมูลเก่าทั้งหมดเป็นตัวพิมพ์ใหญ่ (Uppercase)?\nการกระทำนี้จะแก้ไขข้อมูลในฐานข้อมูลทันที')) return;
+                setModalState({ title: 'กำลังประมวลผล...', message: 'กำลังซ่อมแซมข้อมูล...' });
+                try {
+                  const response = await api.getSharedJobs(projectId);
+                  if (response.success && response.data) {
+                    let updatedCount = 0;
+                    const jobs = response.data;
+
+                    for (const job of jobs) {
+                      let needsUpdate = false;
+                      const newDynamicFields: Record<string, string> = {};
+
+                      // 1. Check & Convert Fields
+                      for (const [key, value] of Object.entries(job.dynamicFields)) {
+                        if (value && value !== value.toUpperCase()) {
+                          needsUpdate = true;
+                          newDynamicFields[key] = value.toUpperCase();
+                        } else {
+                          newDynamicFields[key] = value;
+                        }
+                      }
+
+                      if (needsUpdate) {
+                        // 2. Re-generate ID/Label
+                        const sanitizeForFirestoreId = (str: string) => str.replace(/[\/\.\$\[\]#]/g, '_');
+
+                        const mainId = sanitizeForFirestoreId(job.mainCategory);
+                        const subId = sanitizeForFirestoreId(job.subCategory);
+                        const fieldValues = Object.keys(newDynamicFields).sort().map(k => newDynamicFields[k]).map(sanitizeForFirestoreId).join('_');
+                        const newId = `${mainId}_${subId}_${fieldValues}`;
+
+                        // 3. Prepare New Job Data
+                        const newJob = {
+                          ...job,
+                          id: newId, // New ID
+                          dynamicFields: newDynamicFields,
+                          label: [job.mainCategory, job.subCategory, ...Object.values(newDynamicFields)].join(' / ')
+                        };
+
+                        // 4. Save New
+                        await api.saveSharedJob(projectId, newJob);
+                        updatedCount++;
+                      }
+                    }
+                    alert(`✅ ซ่อมแซมข้อมูลเสร็จสิ้น!\nแก้ไขไปทั้งหมด ${updatedCount} รายการ`);
+                    fetchSharedJobs();
+                  }
+                } catch (e) {
+                  alert('❌ เกิดข้อผิดพลาด: ' + (e as Error).message);
+                } finally {
+                  setModalState(null);
+                }
+              }}
+              style={{
+                background: '#f8f9fa',
+                border: '1px dashed #ccc',
+                color: '#dc3545',
+                padding: '10px 15px',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: 'bold'
+              }}
+            >
+              🔧 Fix Data Case (เปลี่ยนเป็นตัวพิมพ์ใหญ่)
+            </button>
+          </div>
         </div>
       )}
 
@@ -934,7 +1150,36 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           <h2>2. เลือกหมวดงานหลัก</h2>
           {renderChecklistHeader()}
           <div className={styles['selection-grid']}>
-            {mainCategories.map((mainCat) => (<div key={mainCat.id} className={styles['selection-card']} onClick={() => handleSelectMainCat(mainCat.name)}> {mainCat.name} </div>))}
+            {mainCategories.map((mainCat) => {
+              // ✅ [ใหม่] คำนวณความคืบหน้าของ Main Category
+              const activeJobsInMain = sharedJobs.filter(
+                job => job.mainCategory === mainCat.name && job.reportType === 'QC' && job.status === 'pending'
+              );
+              const pendingCount = activeJobsInMain.length;
+
+              return (
+                <div key={mainCat.id} className={styles['selection-card']} onClick={() => handleSelectMainCat(mainCat.name)} style={{ position: 'relative' }}>
+                  {mainCat.name}
+                  {/* Badge แจ้งเตือนงานค้าง */}
+                  {pendingCount > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '-10px',
+                      right: '-10px',
+                      background: '#dc3545',
+                      color: 'white',
+                      padding: '4px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }}>
+                      {pendingCount} อยู่ระหว่างดำเนินการ
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className={styles['wizard-nav']}> <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}>ย้อนกลับ</button> </div>
         </div>
@@ -944,7 +1189,39 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           <h2>3. เลือกหมวดงานย่อย</h2>
           {renderChecklistHeader()}
           <div className={styles['selection-grid']}>
-            {subCategories.map((subCat) => (<div key={subCat.id} className={styles['selection-card']} onClick={() => handleSelectSubCat(subCat.name)}> {subCat.name} </div>))}
+            {subCategories.map((subCat) => {
+              // ✅ [ใหม่] คำนวณจำนวนงานค้างของ Sub Category (เหมือน Main Cat)
+              const activeJobsInSub = sharedJobs.filter(
+                job => job.mainCategory === selectedMainCategory &&
+                  job.subCategory === subCat.name &&
+                  job.reportType === 'QC' &&
+                  job.status === 'pending'
+              );
+              const pendingCount = activeJobsInSub.length;
+
+              return (
+                <div key={subCat.id} className={styles['selection-card']} onClick={() => handleSelectSubCat(subCat.name)} style={{ position: 'relative' }}>
+                  {subCat.name}
+                  {/* Badge แจ้งเตือนงานค้าง */}
+                  {pendingCount > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '-10px',
+                      right: '-10px',
+                      background: '#dc3545',
+                      color: 'white',
+                      padding: '4px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }}>
+                      {pendingCount} อยู่ระหว่างดำเนินการ
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className={styles['wizard-nav']}> <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}>ย้อนกลับ</button> </div>
         </div>
@@ -977,8 +1254,74 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           })}
           <div className={styles['wizard-nav']}>
             <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}>ย้อนกลับ</button>
-            <button className={styles['wizard-button']} onClick={handleDynamicFieldsSubmit}>ถัดไป</button>
+            <button className={styles['wizard-button']} onClick={handleDynamicFieldsSubmit}>เริ่มตรวจใหม่ (Start New)</button>
           </div>
+
+          {/* ✅ [ใหม่] ส่วนแสดงงานที่ค้างอยู่ (Resume Job) - พร้อม Smart Filter */}
+          {(() => {
+            // 1. กรองงานที่ "สถานะ" ตรงกันก่อน
+            let relevantJobs = sharedJobs.filter(
+              job => job.mainCategory === selectedMainCategory &&
+                job.subCategory === selectedSubCategory &&
+                job.reportType === 'QC' &&
+                job.status === 'pending'
+            );
+
+            // 2. Smart Filter: กรองตามสิ่งที่ User พิมพ์ใน dynamicFields
+            const filterKeys = Object.keys(dynamicFields);
+            if (filterKeys.length > 0) {
+              relevantJobs = relevantJobs.filter(job => {
+                return filterKeys.every(key => {
+                  const filterValue = dynamicFields[key] || '';
+                  if (!filterValue) return true; // ถ้าช่องนี้ User ไม่ได้พิมพ์ ก็ข้ามไป (ถือว่าผ่าน)
+
+                  const jobValue = job.dynamicFields[key] || '';
+                  // เปรียบเทียบแบบ Case Insensitive และ Partial Match
+                  return jobValue.toLowerCase().includes(filterValue.toLowerCase());
+                });
+              });
+            }
+
+            if (relevantJobs.length > 0) {
+              return (
+                <div style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+                  <h3 style={{ fontSize: '1rem', color: '#666', marginBottom: '15px' }}>
+                    <FiRefreshCw style={{ verticalAlign: 'middle', marginRight: '5px' }} />
+                    ทำงานต่อจากเดิม (Resume) - พบ {relevantJobs.length} รายการ
+                  </h3>
+                  <div className={styles['selection-grid']}>
+                    {relevantJobs.map(job => (
+                      <div
+                        key={job.id}
+                        className={styles['selection-card']}
+                        onClick={() => handleSelectSharedJob(job)}
+                        style={{ flexDirection: 'column', gap: '5px', alignItems: 'flex-start', padding: '15px' }}
+                      >
+                        <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>
+                          {Object.values(job.dynamicFields).join(' / ')}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                          แก้ไขล่าสุด: {new Date(job.lastUpdatedAt).toLocaleString('th-TH')}
+                        </div>
+                        <div style={{
+                          color: '#007bff',
+                          fontSize: '0.8rem',
+                          background: '#e3f2fd',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          marginTop: '5px',
+                          alignSelf: 'flex-start'
+                        }}>
+                          📸 ถ่ายแล้ว {job.completedTopics}/{job.totalTopics}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       )}
 
@@ -993,7 +1336,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                   const topicName = topic.name;
                   const queueItem = photoQueue.get(topicName);
                   const isQueued = !!queueItem;
-                  const isUploaded = uploadedStatus.has(topicName);
+                  const isUploaded = uploadedStatus.get(topicName) || uploadedStatus.has(topicName); // ✅ Safe check
 
                   let statusIcon: React.ReactNode = <FiCircle />;
                   let statusLabel = '';
@@ -1011,29 +1354,70 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                     statusColor = '#0056b3';
                   }
 
+                  // ✅ [ใหม่] ฟังก์ชันกดดูรูปที่อัปโหลดแล้ว
+                  const handleViewUploaded = async () => {
+                    if (!isUploaded) return;
+                    setModalState({ title: 'กำลังโหลด...', message: 'กำลังดึงรูปภาพล่าสุด...' });
+                    try {
+                      const response = await api.getLatestPhotoForTopic(projectId, topicName, `${selectedMainCategory} > ${selectedSubCategory}`, dynamicFields);
+                      setModalState(null);
+                      if (response.success && response.data) {
+                        setPreviewData({
+                          url: response.data.driveUrl, // ✅ Changed to driveUrl
+                          timestamp: response.data.createdAt, // ✅ Changed to createdAt
+                          location: response.data.location || null,
+                          addWatermark: false
+                        });
+                      } else {
+                        alert('ไม่พบรูปภาพ');
+                      }
+                    } catch (e) {
+                      setModalState(null);
+                      alert('เกิดข้อผิดพลาดในการโหลดรูป');
+                    }
+                  };
+
                   return (
                     <div key={topic.id} className={styles['topic-list-item']}>
                       <span className={styles['topic-list-item-status']}>{statusIcon}</span>
                       <span
-                        className={`${styles['topic-list-item-name']} ${isQueued ? styles.viewable : ''}`}
-                        onClick={() => isQueued && queueItem ? setPreviewData({
-                          url: queueItem.base64,
-                          timestamp: queueItem.timestamp,
-                          location: queueItem.location,
-                          addWatermark: queueItem.addWatermark  // ✅ เพิ่ม
-                        }) : undefined}
-                        title={isQueued ? 'กดเพื่อดูรูป' : topicName}
+                        className={`${styles['topic-list-item-name']} ${(isQueued || isUploaded) ? styles.viewable : ''}`}
+                        onClick={() => {
+                          if (isQueued && queueItem) {
+                            setPreviewData({
+                              url: queueItem.base64,
+                              timestamp: queueItem.timestamp,
+                              location: queueItem.location,
+                              addWatermark: queueItem.addWatermark
+                            });
+                          } else if (isUploaded) {
+                            handleViewUploaded();
+                          }
+                        }}
+                        title={(isQueued || isUploaded) ? 'กดเพื่อดูรูป' : topicName}
                         style={{ color: isQueued ? statusColor : 'inherit' }}
                       >
                         {topicName} <span style={{ color: statusColor, fontSize: '0.8em', fontWeight: 'bold' }}>{statusLabel}</span>
                       </span>
 
                       <button className={`${styles['topic-list-item-button']} ${(isQueued || isUploaded) ? styles.retake : ''}`} onClick={() => handleStartPhotoForTopic(topicName, 'capture')} title="ถ่ายรูป (บังคับลายน้ำ)">
-                        {(isQueued || isUploaded) ? <FiRefreshCw /> : <FiCamera />}
+                        <FiCamera />
                       </button>
                       <button className={`${styles['topic-list-item-button']} ${styles.attach}`} onClick={() => handleStartPhotoForTopic(topicName, 'attach')} title="แนบรูป">
-                        <FiPaperclip />
+                        <FiImage />
                       </button>
+
+                      {/* ✅ [ใหม่] ปุ่มดูรูปแยกต่างหาก (ชัดเจนขึ้น) */}
+                      {isUploaded && (
+                        <button
+                          className={`${styles['topic-list-item-button']} ${styles.attach}`}
+                          onClick={handleViewUploaded}
+                          title="ดูรูปที่ส่งแล้ว"
+                          style={{ marginLeft: '5px' }}
+                        >
+                          <FiEye />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -1173,7 +1557,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 setShowWatermarkModal(true); // เปิด Modal
               }}
             >
-              <span style={{ fontSize: '2.5rem' }}><FiPaperclip /></span>
+              <span style={{ fontSize: '2.5rem' }}><FiImage /></span>
               <br /> แนบรูป
             </button>
           </div>

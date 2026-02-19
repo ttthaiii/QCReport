@@ -116,15 +116,6 @@ if (!admin.apps.length) {
 }
 const db = (0, firestore_1.getFirestore)();
 // --- [แก้ไข] ---
-// 1. สร้าง App หลัก
-const mainApp = (0, express_1.default)();
-mainApp.use((0, cors_1.default)({ origin: true }));
-// 2. ใช้ json parser กับ App หลัก เพื่อให้ทุก route รับ json body ได้
-mainApp.use(express_1.default.json({ limit: "10mb" }));
-// 3. สร้าง Router ใหม่สำหรับ API
-const apiRouter = express_1.default.Router();
-// --- จบการแก้ไข ---
-// --- API ROUTES ---
 const checkAuth = async (req, res, next) => {
     // 1.1 ตรวจสอบว่ามี Header 'Authorization' (ตั๋ว) ส่งมาไหม
     if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer ')) {
@@ -174,6 +165,19 @@ const checkRole = (roles) => {
         return; // <-- [แก้ไข]
     };
 };
+// 1. สร้าง App หลัก
+const mainApp = (0, express_1.default)();
+mainApp.use((0, cors_1.default)({ origin: true }));
+// 2. ใช้ json parser กับ App หลัก เพื่อให้ทุก route รับ json body ได้
+mainApp.use(express_1.default.json({ limit: "10mb" }));
+// 3. สร้าง Router ใหม่สำหรับ API
+const apiRouter = express_1.default.Router();
+apiRouter.use((0, cors_1.default)({ origin: true }));
+apiRouter.use(express_1.default.json({ limit: "50mb" }));
+apiRouter.use(checkAuth); // ✅ บังคับ Check Auth ทุก Route ใน apiRouter
+// --- จบการแก้ไข ---
+// --- API ROUTES ---
+// (Moved checkAuth/checkRole to top)
 // ... (คง Endpoint /health, /projects, /project-config, /projects/:projectId/report-settings ไว้เหมือนเดิม) ...
 // --- [แก้ไข] เปลี่ยน "app." ทั้งหมดเป็น "apiRouter." ---
 // ✅ Health check endpoint
@@ -694,14 +698,19 @@ apiRouter.post("/upload-photo-base64", async (req, res) => {
         photoData.filePath = storageResult.filePath;
         // 1. บันทึกลง Collection หลัก (qcPhotos หรือ dailyPhotos)
         const firestoreResult = await (0, firestore_2.logPhotoToFirestore)(photoData);
-        // ✅ --- [เพิ่มใหม่] ---
-        // 2. ถ้าเป็น QC, ให้อัปเดต 'latestQcPhotos' ด้วย
+        // ✅ --- [ลบออก] ---
+        // ไม่ต้องอัปเดต 'latestQcPhotos' แล้ว เพราะเรา Query จาก 'qcPhotos' โดยตรง
+        // (เพื่อลด Write Operation และรองรับข้อมูลเก่า)
+        /*
         if (reportType === 'QC' && stableQcId) {
-            console.log(`Updating latestQcPhotos for ID: ${stableQcId}`);
-            await db.collection('latestQcPhotos').doc(stableQcId).set(Object.assign(Object.assign({}, photoData), { createdAt: firestore_1.FieldValue.serverTimestamp() // (สำคัญ: ใช้อันนี้เพื่ออัปเดตเวลา)
-             }));
+          console.log(`Updating latestQcPhotos for ID: ${stableQcId}`);
+          await db.collection('latestQcPhotos').doc(stableQcId).set({
+            ...photoData,
+            createdAt: FieldValue.serverTimestamp()
+          });
         }
-        // ✅ --- [จบส่วนเพิ่มใหม่] ---
+        */
+        // ✅ --- [จบส่วนลบออก] ---
         return res.json({
             success: true,
             data: Object.assign(Object.assign({}, firestoreResult), storageResult)
@@ -856,6 +865,10 @@ apiRouter.post("/generate-report", async (req, res) => {
         // เพิ่ม URL และ Path ที่ได้จากการอัปโหลด
         generatedReportData.publicUrl = uploadResult.publicUrl;
         generatedReportData.storagePath = uploadResult.filePath;
+        // ✅ [ใหม่] Reset Notification เมื่อสร้างรายงานใหม่/อัปเดต
+        generatedReportData.newPhotosCount = 0;
+        generatedReportData.hasNewPhotos = false;
+        generatedReportData.checkPhotoAt = admin.firestore.FieldValue.serverTimestamp(); // บันทึกเวลาที่เช็คล่าสุด
         // ใช้ .set() เพื่อ "สร้างหรือเขียนทับ" เอกสารใน Firestore
         await reportDocRef.set(generatedReportData, { merge: true }); // merge:true เผื่อไว้
         console.log(`✅ Firestore Metadata Overwritten: ${stableDocId}`);
@@ -1272,7 +1285,7 @@ apiRouter.get("/projects/:projectId/shared-jobs", async (req, res) => {
             .collection("sharedJobs") // <-- สร้าง Subcollection ใหม่ชื่อ 'sharedJobs'
             .where("status", "==", "pending") // <-- กรองเฉพาะงานที่ยังไม่เสร็จ
             .orderBy("lastUpdatedAt", "desc") // <-- เรียงตามวันที่อัปเดตล่าสุด
-            .limit(20) // <-- จำกัดจำนวนที่ดึงมา (ปรับตามต้องการ)
+            // .limit(500) // <-- [แก้ไข] ปลด Limit ตามคำขอ (ระวังเรื่อง Performance ในระยะยาว)
             .get();
         if (jobsSnapshot.empty) {
             return res.json({ success: true, data: [] }); // ถ้าไม่มี ก็ส่ง array ว่างกลับไป
@@ -1289,73 +1302,83 @@ apiRouter.get("/projects/:projectId/shared-jobs", async (req, res) => {
     }
 });
 async function checkHasNewPhotos(projectId, reportData, reportCreatedAt) {
+    const debugLog = {
+        reportId: reportData.filename,
+        inputs: {
+            reportCreatedAt: reportCreatedAt ? reportCreatedAt.toDate().toISOString() : 'N/A',
+            dynamicFields: reportData.dynamicFields
+        },
+        query: {},
+        result: 0
+    };
     // ถ้าไม่มีเวลาอ้างอิง ก็ไม่ต้องเช็ค
     if (!reportCreatedAt)
-        return false;
+        return { count: 0, debug: debugLog };
     try {
         if (reportData.reportType === 'QC') {
-            // ✅ [แก้ไข] ใช้ latestQcPhotos แทน qcPhotos
-            const category = `${reportData.mainCategory} > ${reportData.subCategory}`;
-            console.log(`🔍 Checking for new photos in: ${category}`);
-            // 1. หา Topics ทั้งหมด
-            const allTopics = await (0, pdf_generator_1.getTopicsForFilter)(db, projectId, reportData.mainCategory, reportData.subCategory);
-            if (allTopics.length === 0) {
-                console.log('⚠️ No topics found for this category');
-                return false;
-            }
-            console.log(`🔍 Checking ${allTopics.length} topics for new photos...`);
-            // 2. ตรวจสอบแต่ละหัวข้อ
-            for (const topic of allTopics) {
-                // สร้าง stableId แบบเดียวกับตอนอัปโหลด
-                const stableId = createStableQcId(projectId, category, topic, reportData.dynamicFields || {});
-                // 3. ดึงรูปล่าสุด
-                const latestPhotoDoc = await db.collection('latestQcPhotos').doc(stableId).get();
-                if (latestPhotoDoc.exists) {
-                    const photoData = latestPhotoDoc.data();
-                    const photoCreatedAt = photoData === null || photoData === void 0 ? void 0 : photoData.createdAt;
-                    // 4. เช็คว่ารูปใหม่กว่ารายงานหรือไม่
-                    if (photoCreatedAt) {
-                        const photoTime = photoCreatedAt.toMillis();
-                        const reportTime = reportCreatedAt.toMillis();
-                        if (photoTime > reportTime) {
-                            console.log(`✅ Found new photo for topic "${topic}"`);
-                            console.log(`   Photo time: ${new Date(photoTime).toISOString()}`);
-                            console.log(`   Report time: ${new Date(reportTime).toISOString()}`);
-                            return true;
-                        }
+            const mainCat = (reportData.mainCategory || '').trim();
+            const subCat = (reportData.subCategory || '').trim();
+            const category = `${mainCat} > ${subCat}`;
+            debugLog.inputs.category = category;
+            // Query หา "รูปในหมวดนี้" ที่ "ใหม่กว่ารายงาน"
+            // Query หา "รูปในหมวดนี้" ที่ "ใหม่กว่ารายงาน"
+            // ✅ [FIX] ไม่ต้อง Filter Dynamic Fields ในท่อนนี้ เพื่อเลี่ยงปัญหา Index Missing
+            // เราจะไป Filter ใน Memory แทน
+            const query = db.collection('qcPhotos')
+                .where('projectId', '==', projectId)
+                .where('category', '==', category)
+                .where('createdAt', '>', reportCreatedAt);
+            debugLog.query = {
+                collection: 'qcPhotos',
+                projectId,
+                category,
+                minDate: reportCreatedAt.toDate().toISOString(),
+                filters: 'In-Memory'
+            };
+            // ✅ Fetch documents (ยอม trade-off read operation เพื่อความชัวร์และแก้ index error)
+            const snapshot = await query.get();
+            let count = 0;
+            const reportDynamicFields = reportData.dynamicFields || {};
+            // ✅ In-Memory Filtering Matcher
+            snapshot.forEach(doc => {
+                const photoData = doc.data();
+                const photoDynamicFields = photoData.dynamicFields || {};
+                let isMatch = true;
+                // เช็คว่า Photo นี้มี Dynamic Fields ตรงกับ Report หรือไม่
+                for (const [key, reportValue] of Object.entries(reportDynamicFields)) {
+                    // ใช้ String comparison เพื่อความชัวร์
+                    const pVal = String(photoDynamicFields[key] || '').trim();
+                    const rVal = String(reportValue || '').trim();
+                    if (pVal !== rVal) {
+                        isMatch = false;
+                        break;
                     }
                 }
+                if (isMatch) {
+                    count++;
+                }
+            });
+            // ✅ Assign count ที่นับได้จริง
+            // const count = snapshot.data().count; // Old way
+            debugLog.result = count;
+            if (count > 0) {
+                console.log(`✅ Found ${count} new photos for report ${reportData.filename}`);
             }
-            console.log('ℹ️ No new photos found');
-            return false;
+            return { count, debug: debugLog };
         }
         else if (reportData.reportType === 'Daily') {
-            // Daily Report - ใช้ logic เดิม
-            if (!reportData.reportDate)
-                return false;
-            const startDate = new Date(`${reportData.reportDate}T00:00:00+07:00`);
-            const endDate = new Date(startDate);
-            endDate.setDate(startDate.getDate() + 1);
-            const photoQuery = db.collection('dailyPhotos')
-                .where('projectId', '==', projectId)
-                .where('createdAt', '>=', startDate)
-                .where('createdAt', '<', endDate)
-                .where('createdAt', '>', reportCreatedAt)
-                .limit(1);
-            const snapshot = await photoQuery.get();
-            if (!snapshot.empty) {
-                console.log('✅ Found new daily photo');
-                return true;
-            }
-            return false;
+            // Daily Report
+            const count = 0; // TODO: Implement Daily logic debug if needed
+            return { count, debug: Object.assign(Object.assign({}, debugLog), { note: 'Daily report not fully debugged yet' }) };
         }
         else {
-            return false;
+            return { count: 0, debug: debugLog };
         }
     }
     catch (error) {
-        console.error(`❌ Error checking new photos for report:`, error);
-        return false;
+        console.warn(`⚠️ Error checking new photos (Optimized):`, error);
+        debugLog.error = error.message;
+        return { count: 0, debug: debugLog };
     }
 }
 apiRouter.get("/projects/:projectId/generated-reports", async (req, res) => {
@@ -1413,7 +1436,7 @@ apiRouter.get("/projects/:projectId/generated-reports", async (req, res) => {
         // --- ดึงข้อมูลและเรียงลำดับ ---
         const reportsSnapshot = await query
             .orderBy('createdAt', 'desc') // เรียงตามวันที่สร้างล่าสุด
-            .limit(30) // จำกัดจำนวนที่ดึง (ปรับตามต้องการ)
+            // .limit(500) // [แก้ไข] ปลด Limit ตามคำขอ
             .get();
         if (reportsSnapshot.empty) {
             console.log("  -> No matching reports found.");
@@ -1426,8 +1449,10 @@ apiRouter.get("/projects/:projectId/generated-reports", async (req, res) => {
             const reportCreatedAt = data.createdAt;
             // --- [สำคัญ] เรียกใช้ฟังก์ชัน Helper ที่เราสร้าง ---
             // (นี่อาจจะเป็นจุดที่ช้า ถ้า Query ซับซ้อน)
-            const hasNewPhotos = await checkHasNewPhotos(projectId, data, reportCreatedAt);
+            // const { count: newPhotosCount, debug } = await checkHasNewPhotos(projectId, data, reportCreatedAt);
             // --- จบส่วนแก้ไข ---
+            // ✅ [Optimization] อ่านจาก Field โดยตรง (ไม่ต้อง Query ใหม่)
+            const newPhotosCount = data.newPhotosCount || 0;
             return {
                 reportId: doc.id,
                 reportType: data.reportType,
@@ -1444,7 +1469,9 @@ apiRouter.get("/projects/:projectId/generated-reports", async (req, res) => {
                 reportDate: data.reportDate,
                 photosFound: data.photosFound,
                 totalTopics: data.totalTopics,
-                hasNewPhotos: hasNewPhotos, // <-- ใช้ค่าจริงที่ได้มา
+                hasNewPhotos: newPhotosCount > 0, // <-- ยังคง field นี้ไว้เพื่อ compability
+                newPhotosCount: newPhotosCount, // ✅ [ใหม่] ส่งจำนวนรูปใหม่ไปให้ Frontend
+                debug: { note: 'Optimized Read (From Field)' } // ✅ [ใหม่] ส่ง Debug Info ไปด้วย
             };
         });
         // รอให้ทุก Promise (การเช็ค) ทำงานเสร็จ
@@ -1561,7 +1588,11 @@ apiRouter.post("/checklist-status", async (req, res) => {
         if (reportType === 'QC') {
             // --- Logic สำหรับ QC ---
             if (!projectId || !mainCategory || !subCategory || !dynamicFields) {
-                return res.status(400).json({ success: false, error: "Missing required QC fields." });
+                console.error("Missing required QC fields:", { projectId, mainCategory, subCategory, dynamicFields });
+                return res.status(400).json({
+                    success: false,
+                    error: `Missing required QC fields. (proj=${!!projectId}, main=${!!mainCategory}, sub=${!!subCategory}, dyn=${!!dynamicFields})`
+                });
             }
             const category = `${mainCategory} > ${subCategory}`;
             // 1. หา "Total" (เรียกฟังก์ชันใหม่)
@@ -1651,10 +1682,9 @@ apiRouter.get("/projects/:projectId/dynamic-field-values", async (req, res) => {
                             if (!fieldValuesMap.has(fieldName)) {
                                 fieldValuesMap.set(fieldName, new Set());
                             }
-                            // ✅ [แก้ไข 4] ทำความสะอาดข้อมูลก่อนเก็บ
-                            const cleanValue = String(value).trim().toLowerCase();
+                            // ✅ [แก้ไข 4] เก็บค่าตามจริง (ไม่บังคับตัวเล็ก) เพื่อให้ตรงกับมาตรฐาน Uppercase
+                            const cleanValue = String(value).trim(); // ตัดแค่วรรคหน้าหลังพอ (ไม่ต้อง toLowerCase)
                             if (cleanValue && cleanValue !== 'undefined' && cleanValue !== 'null') {
-                                // ✅ แก้ไขให้ใช้ cleanValue
                                 fieldValuesMap.get(fieldName).add(cleanValue);
                             }
                         });
@@ -1681,9 +1711,65 @@ apiRouter.get("/projects/:projectId/dynamic-field-values", async (req, res) => {
         });
     }
 });
+// ✅ [ใหม่] Proxy Geocode Endpoint (แก้ CORS สำหรับ Nominatim)
+apiRouter.get("/proxy-geocode", async (req, res) => {
+    try {
+        const { lat, lon } = req.query;
+        if (!lat || !lon) {
+            return res.status(400).json({ success: false, error: "Missing lat/lon" });
+        }
+        const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=th&zoom=18&addressdetails=1`;
+        // ต้อง use import dynamic สำหรับ node-fetch (เหมือน proxy-image)
+        const fetch = (await Promise.resolve().then(() => __importStar(require('node-fetch')))).default;
+        const response = await fetch(url, {
+            headers: { 'User-Agent': 'QCReport-App/1.0 (Contact: thai.l@tts2004.co.th)' }
+        });
+        if (!response.ok) {
+            throw new Error(`Nominatim API Error: ${response.statusText}`);
+        }
+        const data = await response.json();
+        return res.json({ success: true, data });
+    }
+    catch (error) {
+        console.error("❌ Proxy Geocode Error:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ✅ [ใหม่] Proxy Image Endpoint (แก้ CORS)
+// Ensure body parsing is enabled for this route
+// apiRouter.use(express.json()); // <-- [ลบ] ย้ายไปข้างบนแล้ว
+apiRouter.post("/proxy-image", async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) {
+            return res.status(400).json({ success: false, error: "Missing URL" });
+        }
+        // validate URL to be from firebase storage
+        if (!url.includes("firebasestorage.googleapis.com") && !url.includes("storage.googleapis.com")) {
+            return res.status(400).json({ success: false, error: "Invalid URL domain" });
+        }
+        const fetch = (await Promise.resolve().then(() => __importStar(require('node-fetch')))).default;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64 = buffer.toString('base64');
+        const mimeType = response.headers.get('content-type') || 'image/jpeg';
+        return res.json({
+            success: true,
+            data: `data:${mimeType};base64,${base64}`
+        });
+    }
+    catch (error) {
+        console.error("❌ Proxy Image Error:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
 // --- [แก้ไข] ---
-// 4. บอก App หลัก ให้ใช้ apiRouter ที่ path "/api"
-mainApp.use("/api", apiRouter);
+// 4. บอก App หลัก ให้ใช้ apiRouter ที่ path "/api" (สำหรับ Production Hosting) และ "/" (สำหรับ Direct Call)
+mainApp.use(["/api", "/"], apiRouter);
 // --- จบการแก้ไข ---
 // ✅ Export Cloud Function
 exports.api = (0, https_1.onRequest)({
