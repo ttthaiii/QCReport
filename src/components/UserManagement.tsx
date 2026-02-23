@@ -3,14 +3,16 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { api, AdminUser } from '../utils/api';
-import { auth } from '../firebase'; 
+import { auth } from '../firebase';
 import styles from './UserManagement.module.css';
+import { useDialog } from '../contexts/DialogContext';
 
 // ✅ [ใหม่] 1. Import ไอคอน SVG
 import { FiAlertTriangle, FiCheckCircle } from 'react-icons/fi';
 
 interface UserManagementProps {
-  currentUserRole: 'user' | 'admin' | 'god'; 
+  currentUserRole: 'user' | 'admin' | 'god';
+  currentUserProjectId?: string | null;
 }
 
 // (Types และ consts เหมือนเดิม)
@@ -35,13 +37,14 @@ interface BatchConfirmModalState {
   action: 'approved' | 'rejected' | null;
 }
 
-const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
+const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole, currentUserProjectId }) => {
   // (States ทั้งหมดเหมือนเดิม)
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState(''); 
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]); 
+  const { showConfirm } = useDialog();
+  const [filter, setFilter] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
     isOpen: false,
     userToUpdate: null,
@@ -56,20 +59,24 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    setSelectedUsers([]); 
+    setSelectedUsers([]);
     const response = await api.getUsers();
     if (response.success && response.data) {
-      response.data.sort((a, b) => {
+      let fetchedUsers = response.data;
+      if (currentUserRole !== 'god' && currentUserProjectId) {
+        fetchedUsers = fetchedUsers.filter(u => u.assignedProjectId === currentUserProjectId);
+      }
+      fetchedUsers.sort((a, b) => {
         if (a.status === 'pending' && b.status !== 'pending') return -1;
         if (a.status !== 'pending' && b.status === 'pending') return 1;
         return 0;
       });
-      setUsers(response.data);
+      setUsers(fetchedUsers);
     } else {
       setError(response.error || 'Failed to fetch users');
     }
     setIsLoading(false);
-  }, []);
+  }, [currentUserRole, currentUserProjectId]);
 
   useEffect(() => {
     fetchUsers();
@@ -80,11 +87,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
     if (!userToUpdate || !action) return;
     const originalUsers = [...users];
     setUsers(users.map(u => u.uid === userToUpdate.uid ? { ...u, status: action } : u));
-    closeConfirmModal(); 
+    closeConfirmModal();
     const response = await api.updateUserStatus(userToUpdate.uid, action);
     if (!response.success) {
       setError(`Failed to ${action} user ${userToUpdate.uid}: ${response.error}`);
-      setUsers(originalUsers); 
+      setUsers(originalUsers);
     }
   };
   const handleUpdateStatus = (user: AdminUser, status: 'approved' | 'rejected') => {
@@ -93,7 +100,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
   const closeConfirmModal = () => {
     setConfirmModal({ isOpen: false, userToUpdate: null, action: null });
   };
-  
+
   const openBatchConfirmModal = (action: 'approved' | 'rejected') => {
     if (selectedUsers.length === 0) return;
     setBatchConfirmModal({ isOpen: true, action: action });
@@ -101,7 +108,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
   const closeBatchConfirmModal = () => {
     setBatchConfirmModal({ isOpen: false, action: null });
   };
-  
+
   const executeBatchUpdate = async () => {
     const { action } = batchConfirmModal;
     if (!action || selectedUsers.length === 0) return;
@@ -109,13 +116,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
     const originalUsers = [...users];
     setUsers(users.map(u => uidsToUpdate.includes(u.uid) ? { ...u, status: action } : u));
     closeBatchConfirmModal();
-    setSelectedUsers([]); 
+    setSelectedUsers([]);
     const updatePromises = uidsToUpdate.map(uid => api.updateUserStatus(uid, action));
     try {
       await Promise.all(updatePromises);
     } catch (batchError) {
       setError(`Failed during batch ${action}: ${(batchError as Error).message}`);
-      setUsers(originalUsers); 
+      setUsers(originalUsers);
     }
   };
 
@@ -137,13 +144,18 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
       setSelectedUsers(allUIDs);
     }
   };
-  
+
   const handleSetRole = async (uid: string, e: React.ChangeEvent<HTMLSelectElement>) => {
     const newRole = e.target.value as UserRole;
-    if (currentUserRole !== 'god') return; 
-    if (!window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการเปลี่ยนสิทธิ์ผู้ใช้รายนี้เป็น ${newRole}?`)) {
-        e.target.value = users.find(u => u.uid === uid)?.role || newRole; 
-        return;
+    if (currentUserRole !== 'god') return;
+
+    // สำรองค่าเดิมไว้เผื่อกรณีกด Cancel หรือ Error
+    const currentRole = users.find(u => u.uid === uid)?.role || newRole;
+
+    const isConfirmed = await showConfirm(`คุณแน่ใจหรือไม่ว่าต้องการเปลี่ยนสิทธิ์ผู้ใช้รายนี้เป็น ${newRole}?`, 'ยืนยันการเปลี่ยนสิทธิ์');
+    if (!isConfirmed) {
+      e.target.value = currentRole;
+      return;
     }
     const originalUsers = [...users];
     setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
@@ -156,17 +168,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
 
   const filteredUsers = useMemo(() => {
     const lowerFilter = filter.toLowerCase();
-    return users.filter(user => 
+    return users.filter(user =>
       (user.displayName?.toLowerCase().includes(lowerFilter) || '') ||
       (user.email?.toLowerCase().includes(lowerFilter) || '') ||
-      (user.assignedProjectName?.toLowerCase().includes(lowerFilter) || '') 
+      (user.assignedProjectName?.toLowerCase().includes(lowerFilter) || '')
     );
   }, [users, filter]);
 
   const pendingUsers = useMemo(() => filteredUsers.filter(u => u.status === 'pending'), [filteredUsers]);
   const otherUsers = useMemo(() => filteredUsers.filter(u => u.status !== 'pending'), [filteredUsers]);
-  
-  
+
+
   // ✅ [แก้ไข] 2. เปลี่ยน Emoji เป็น SVG Icon
   const renderConfirmModal = () => {
     if (!confirmModal.isOpen || !confirmModal.userToUpdate || !confirmModal.action) return null;
@@ -179,7 +191,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
       <div className={styles.modalBackdrop} onClick={closeConfirmModal}>
         <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
           <h3 className={isRejecting ? styles.modalHeaderDanger : styles.modalHeader}>
-            {isRejecting ? 
+            {isRejecting ?
               <><FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> ยืนยันการปฏิเสธ</> : // <--- ⚠️
               <><FiCheckCircle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> ยืนยันการอนุมัติ</> // <--- ✅
             }
@@ -200,7 +212,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
       </div>
     );
   };
-  
+
   // ✅ [แก้ไข] 3. เปลี่ยน Emoji เป็น SVG Icon
   const renderBatchConfirmModal = () => {
     if (!batchConfirmModal.isOpen || !batchConfirmModal.action) return null;
@@ -213,7 +225,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
       <div className={styles.modalBackdrop} onClick={closeBatchConfirmModal}>
         <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
           <h3 className={isRejecting ? styles.modalHeaderDanger : styles.modalHeader}>
-            {isRejecting ? 
+            {isRejecting ?
               <><FiAlertTriangle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> ยืนยันการปฏิเสธทั้งหมด</> : // <--- ⚠️
               <><FiCheckCircle style={{ verticalAlign: 'middle', marginRight: '8px' }} /> ยืนยันการอนุมัติทั้งหมด</> // <--- ✅
             }
@@ -229,11 +241,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
       </div>
     );
   };
-  
+
   // (Render Functions ที่เหลือเหมือนเดิม)
   const renderBatchActionBar = () => {
     if (selectedUsers.length === 0) return null;
-    const selectedAreAllPending = selectedUsers.every(uid => 
+    const selectedAreAllPending = selectedUsers.every(uid =>
       pendingUsers.some(u => u.uid === uid)
     );
     return (
@@ -335,7 +347,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
       </section>
     );
   };
-  
+
   const renderOtherUsersSection = () => {
     return (
       <section className={styles.userSection}>
@@ -349,6 +361,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
               <tr>
                 <th>ชื่อที่แสดง</th>
                 <th>อีเมล</th>
+                <th>โครงการ</th>
                 <th>สถานะ</th>
                 <th>สิทธิ์การเข้าถึง</th>
               </tr>
@@ -361,6 +374,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
                 <tr key={user.uid} className={user.status === 'rejected' ? styles.rejectedRow : ''}>
                   <td>{user.displayName}</td>
                   <td>{user.email}</td>
+                  <td>{user.assignedProjectName || '-'}</td>
                   <td>
                     <span className={`${styles.status} ${styles[user.status]}`}>
                       {translateStatus(user.status as UserStatus)}
@@ -371,7 +385,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
                       <select value={user.role} onChange={(e) => handleSetRole(user.uid, e)} disabled={user.uid === auth.currentUser?.uid}>
                         {ALL_ROLES.map(role => (<option key={role} value={role}>{role}</option>))}
                       </select>
-                    ) : ( user.role )}
+                    ) : (user.role)}
                   </td>
                 </tr>
               ))}
@@ -393,13 +407,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
               </div>
               <div className={styles.cardBody}>
                 <strong>โครงการ:</strong> {user.assignedProjectName}
-                <br/>
-                <strong>สิทธิ์:</strong> 
+                <br />
+                <strong>สิทธิ์:</strong>
                 {currentUserRole === 'god' ? (
                   <select value={user.role} onChange={(e) => handleSetRole(user.uid, e)} disabled={user.uid === auth.currentUser?.uid} onClick={(e) => e.stopPropagation()}>
                     {ALL_ROLES.map(role => (<option key={role} value={role}>{role}</option>))}
                   </select>
-                ) : ( user.role )}
+                ) : (user.role)}
               </div>
             </div>
           ))}
@@ -419,10 +433,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
       {renderBatchActionBar()}
 
       <h2>จัดการผู้ใช้ ({users.length})</h2>
-      
-      <input 
-        type="text" 
-        placeholder="ค้นหาด้วยชื่อ, อีเมล, โครงการ..." 
+
+      <input
+        type="text"
+        placeholder="ค้นหาด้วยชื่อ, อีเมล, โครงการ..."
         className={styles.searchInput}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}

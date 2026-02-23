@@ -4,34 +4,40 @@
 /* --- 1. Admin Button (Merged) --- */
 /* */
 .adminButton {
-  padding: 6px 10px; 
-  font-size: 12px; 
-  font-weight: 500; 
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   border: none;
   border-radius: 4px;
-  margin-left: 5px; 
+  margin-left: 5px;
 }
-.adminButton.edit { 
-  background-color: #ffc107; 
+
+.adminButton.edit {
+  background-color: #ffc107;
   color: #212529;
 }
-.adminButton.delete { 
-  background-color: #dc3545; 
+
+.adminButton.delete {
+  background-color: #dc3545;
   color: white;
 }
-.adminButton.manage { 
-  background-color: #007bff; 
+
+.adminButton.manage {
+  background-color: #007bff;
   color: white;
 }
-.adminButton.secondary { 
-  background-color: #6c757d; 
-  color: white; 
-}
-.adminButton.submit { 
-  background-color: #28a745; 
+
+.adminButton.secondary {
+  background-color: #6c757d;
   color: white;
 }
+
+.adminButton.submit {
+  background-color: #28a745;
+  color: white;
+}
+
 .adminButton.addNew {
   background-color: #17a2b8;
   color: white;
@@ -39,6 +45,7 @@
   padding: 8px 12px;
   font-size: 13px;
 }
+
 .adminButton:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -47,21 +54,26 @@
 /* --- 2. Main Accordion Layout (จาก AdminAccordion.css) --- */
 /* */
 .adminAccordion {
-  padding: 10px;
-  max-width: 800px;
+  padding: 20px;
+  max-width: 1200px;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0 auto;
 }
+
 .adminDivider {
   margin: 20px 0;
   border: 0;
   border-top: 1px solid #eee;
 }
+
 .accordionItem {
   border: 1px solid #ddd;
   border-radius: 4px;
   margin-bottom: 10px;
   background-color: #fff;
-  overflow: hidden; /* สำหรับขอบ */
+  overflow: hidden;
+  /* สำหรับขอบ */
 }
 
 /* --- 3. Accordion Headers (จาก AdminAccordion.css) --- */
@@ -75,17 +87,23 @@
   cursor: pointer;
   font-weight: bold;
 }
+
 .accordionHeader:hover {
   background-color: #f1f3f5;
 }
-.accordionItem > .accordionHeader {
-  color: #343a40; /* Main Category Header */
+
+.accordionItem>.accordionHeader {
+  color: #343a40;
+  /* Main Category Header */
 }
+
 .accordionItem .accordionItem .accordionHeader {
-  background-color: #fff; /* Sub Category Header */
+  background-color: #fff;
+  /* Sub Category Header */
   color: #495057;
   font-weight: 500;
-  padding-left: 25px; /* ย่อหน้า Sub */
+  padding-left: 25px;
+  /* ย่อหน้า Sub */
 }
 
 /* --- 4. Accordion Content (จาก AdminAccordion.css) --- */
@@ -94,9 +112,12 @@
   padding: 15px;
   border-top: 1px solid #eee;
 }
+
 .accordionItem .accordionItem .accordionContent {
-  padding: 10px 10px 10px 30px; /* ย่อหน้า Topic */
+  padding: 10px 10px 10px 30px;
+  /* ย่อหน้า Topic */
 }
+
 .topicItem {
   display: flex;
   justify-content: space-between;
@@ -116,6 +137,7 @@
   border-radius: 4px;
   background-color: #f8f9fa;
 }
+
 .adminAddForm input[type="text"],
 .adminAddForm textarea {
   width: 100%;
@@ -123,12 +145,15 @@
   font-size: 14px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  box-sizing: border-box; /* ป้องกันล้น */
+  box-sizing: border-box;
+  /* ป้องกันล้น */
 }
+
 .adminAddForm textarea {
   min-height: 100px;
   font-family: inherit;
 }
+
 .formActions {
   margin-top: 10px;
   display: flex;
@@ -141,20 +166,24 @@
   /* [แก้ไข] ลบ background, border, padding ออก
      เพราะตอนนี้มันถูกหุ้มด้วย .accordionContent
      แต่ยังคงเก็บ class ไว้เผื่อ CSS อื่นๆ */
-  margin-bottom: 0; 
+  margin-bottom: 0;
 }
+
 .reportSettingsBox h3,
 .reportSettingsBox h4 {
   margin-top: 0;
   margin-bottom: 20px;
   color: #495057;
 }
+
 .reportSettingsBox h4 {
-    margin-bottom: 15px;
+  margin-bottom: 15px;
 }
+
 .settingGroup {
   margin-bottom: 15px;
 }
+
 .settingGroup label {
   display: block;
   margin-bottom: 5px;
@@ -162,6 +191,7 @@
   font-size: 0.9em;
   color: #343a40;
 }
+
 .settingGroup select,
 .settingGroup input[type="text"],
 .settingGroup input[type="number"] {
@@ -170,8 +200,9 @@
   font-size: 14px;
   border: 1px solid #ced4da;
   border-radius: 4px;
-  box-sizing: border-box; 
+  box-sizing: border-box;
 }
+
 .settingGroup input[type="text"]::placeholder {
   color: #adb5bd;
   font-style: italic;
@@ -186,25 +217,31 @@
   border: 1px solid #eee;
   padding: 5px;
   background-color: #fff;
-  display: inline-block; 
+  display: inline-block;
   vertical-align: top;
 }
+
 .logoPreview img {
   /* [แก้ไข] จาก display: none เป็น block */
-  display: block; 
+  display: block;
   max-width: 100%;
   max-height: 70px;
   object-fit: contain;
 }
+
 .modalBackdrop {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(0,0,0,0.5);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
 }
+
 .modalContent {
   background-color: white;
   padding: 20px;
@@ -212,7 +249,11 @@
   width: 90%;
   max-width: 500px;
 }
-.modalContent h3 { margin-top: 0; }
+
+.modalContent h3 {
+  margin-top: 0;
+}
+
 .modalContent textarea {
   width: 100%;
   min-height: 100px;
@@ -223,7 +264,8 @@
 /* */
 .projectNameDisplay {
   text-align: center;
-  font-size: 1.2em; /* (ปรับปรุง) */
+  font-size: 1.2em;
+  /* (ปรับปรุง) */
   color: #333;
   margin-bottom: 20px;
   border-bottom: 1px solid #eee;
@@ -237,6 +279,7 @@
   margin-bottom: 20px;
   border-bottom: 1px solid #ddd;
 }
+
 .tabButton {
   padding: 12px 20px;
   border: none;
@@ -244,18 +287,23 @@
   cursor: pointer;
   font-size: 1em;
   color: #555;
-  margin-bottom: -1px; /* ชดเชย border-bottom */
+  margin-bottom: -1px;
+  /* ชดเชย border-bottom */
   border-bottom: 3px solid transparent;
   font-weight: 500;
 }
+
 .tabButton:hover {
   background-color: #f9f9f9;
 }
+
 .tabButton.activeTab {
-  color: #007bff; /* (สีหลัก) */
+  color: #007bff;
+  /* (สีหลัก) */
   font-weight: bold;
   border-bottom: 3px solid #007bff;
 }
+
 .tabContent {
   padding-top: 10px;
 }
@@ -271,20 +319,25 @@
 }
 
 .subTabButton {
-  flex: 1; /* แบ่งพื้นที่เท่ากัน */
+  flex: 1;
+  /* แบ่งพื้นที่เท่ากัน */
   padding: 10px 15px;
   border: none;
   background-color: transparent;
   cursor: pointer;
-  font-size: 0.9em; /* [ใหม่] ขนาดเล็กกว่าแท็บหลัก */
+  font-size: 0.9em;
+  /* [ใหม่] ขนาดเล็กกว่าแท็บหลัก */
   color: #555;
-  border-radius: 4px; /* [ใหม่] ทำให้ปุ่มมีขอบมน */
+  border-radius: 4px;
+  /* [ใหม่] ทำให้ปุ่มมีขอบมน */
   font-weight: 500;
   transition: background-color 0.2s, color 0.2s;
-  display: flex; /* [ใหม่] สำหรับจัดไอคอน */
+  display: flex;
+  /* [ใหม่] สำหรับจัดไอคอน */
   align-items: center;
   justify-content: center;
-  gap: 6px; /* [ใหม่] ระยะห่างระหว่างไอคอนกับข้อความ */
+  gap: 6px;
+  /* [ใหม่] ระยะห่างระหว่างไอคอนกับข้อความ */
 }
 
 .subTabButton:hover {
@@ -292,10 +345,12 @@
 }
 
 .subTabButton.activeSubTab {
-  color: #fff; /* [ใหม่] สีตัวอักษร */
+  color: #fff;
+  /* [ใหม่] สีตัวอักษร */
   font-weight: bold;
-  background-color: var(--primary-color); /* [ใหม่] ใช้สีหลักของธีม */
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background-color: var(--primary-color);
+  /* [ใหม่] ใช้สีหลักของธีม */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* [แก้ไข] ทำให้ Report Settings Box มี padding 
@@ -303,7 +358,7 @@
    (โค้ดนี้อาจจะมีอยู่แล้ว ให้ตรวจสอบ)
 */
 .reportSettingsBox {
-  margin-bottom: 0; 
+  margin-bottom: 0;
   /* [ใหม่] เพิ่ม padding ถ้ามันถูกย้ายออกมา */
   padding: 15px;
 }
@@ -312,7 +367,8 @@
 
 /* จัดการ 3 ช่องหลัก */
 .logoSlotItem {
-  margin-bottom: 15px; /* เว้นระยะห่างแต่ละช่อง */
+  margin-bottom: 15px;
+  /* เว้นระยะห่างแต่ละช่อง */
   padding-bottom: 10px;
   border-bottom: 1px solid #eee;
 }
@@ -326,7 +382,8 @@
 }
 
 .logoPreview img {
-  max-height: 40px; /* ย่อรูปตัวอย่าง */
+  max-height: 40px;
+  /* ย่อรูปตัวอย่าง */
   max-width: 150px;
   object-fit: contain;
   border: 1px solid #ccc;
@@ -337,12 +394,96 @@
 .logoPreview button {
   padding: 2px 6px;
   font-size: 11px;
-  background-color: #f44336; /* สีแดง */
+  background-color: #f44336;
+  /* สีแดง */
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
 }
+
 .logoPreview button:hover {
   background-color: #d32f2f;
+}
+
+/* === New Layout Classes for Report Settings === */
+.settingsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settingCard {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.2s;
+}
+
+.settingCard:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.05);
+}
+
+.settingGroupTitle {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 1.15em;
+  color: #2c3e50;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 12px;
+  font-weight: 600;
+}
+
+.rowGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.logoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+/* Override .logoSlotItem when inside .logoGrid */
+.logoGrid .logoSlotItem {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  background: #f8f9fa;
+  border: 1px dashed #d0d0d0;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.logoGrid .logoSlotItem:hover {
+  border-color: #007bff;
+}
+
+.logoGrid .logoSlotItem label {
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #495057;
+}
+
+.logoGrid .logoPreview {
+  margin-top: 15px;
+  width: 100%;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.logoGrid .logoPreview img {
+  max-width: 100%;
+  max-height: 80px;
+  border-radius: 4px;
 }

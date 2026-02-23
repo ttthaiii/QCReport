@@ -7,6 +7,7 @@ import * as persistentQueue from '../utils/persistentQueue';
 import styles from './Camera.module.css';
 import CustomModal from './CustomModal';
 import AutocompleteInput from './AutocompleteInput';
+import { useDialog } from '../contexts/DialogContext';
 
 import {
   FiClipboard, FiSun, FiMapPin, FiCheckCircle, FiLoader,
@@ -58,6 +59,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
   const watermarkPreferenceRef = useRef<boolean>(false); // ✅ เพิ่ม ref เก็บค่าจริง
+  const { showAlert, showConfirm } = useDialog();
   const [isProcessingPhoto, setIsProcessingPhoto] = useState<boolean>(false);
   const [photoQueue, setPhotoQueue] = useState<Map<string, PhotoQueueItem>>(() => persistentQueue.loadQueue(projectId));
   const [currentTopic, setCurrentTopic] = useState<string>('');
@@ -211,7 +213,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       }
     } catch (error) {
       console.error('Error fetching checklist status:', error);
-      alert(`ไม่สามารถดึงสถานะงาน: ${(error as Error).message}`);
+      await showAlert(`ไม่สามารถดึงสถานะงาน: ${(error as Error).message}`, 'เกิดข้อผิดพลาด');
     }
     setIsChecklistLoading(false);
   }, [projectId]);
@@ -362,7 +364,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
     } catch (error) {
       console.error("Error processing native photo:", error);
-      alert("เกิดข้อผิดพลาดในการประมวลผลรูป: " + (error as Error).message);
+      await showAlert("เกิดข้อผิดพลาดในการประมวลผลรูป: " + (error as Error).message, 'ข้อผิดพลาดเกี่ยวกับรูปภาพ');
     } finally {
       setIsProcessingPhoto(false);
     }
@@ -383,7 +385,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       );
 
     if (itemsToUpload.length === 0) {
-      alert("ไม่พบรูปที่รอการอัปโหลดสำหรับงานนี้");
+      await showAlert("ไม่พบรูปที่รอการอัปโหลดสำหรับงานนี้", 'ไม่มีข้อมูล');
       return;
     }
 
@@ -805,7 +807,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
           }
         } catch (e) {
           console.error("Proxy error:", e);
-          alert('ไม่สามารถดาวน์โหลดรูปได้ (CORS Error)');
+          await showAlert('ไม่สามารถดาวน์โหลดรูปได้ (CORS Error)', 'เกิดข้อผิดพลาด');
           setModalState(null);
           return;
         }
@@ -1074,7 +1076,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             <p style={{ color: '#888', marginBottom: '10px', fontSize: '0.8rem' }}>เครื่องมือสำหรับผู้ดูแลระบบ</p>
             <button
               onClick={async () => {
-                if (!window.confirm('ยืนยันที่จะแปลงข้อมูลเก่าทั้งหมดเป็นตัวพิมพ์ใหญ่ (Uppercase)?\nการกระทำนี้จะแก้ไขข้อมูลในฐานข้อมูลทันที')) return;
+                const isConfirmed = await showConfirm('ยืนยันที่จะแปลงข้อมูลเก่าทั้งหมดเป็นตัวพิมพ์ใหญ่ (Uppercase)?\nการกระทำนี้จะแก้ไขข้อมูลในฐานข้อมูลทันที', 'ยืนยันการแปลงข้อมูล');
+                if (!isConfirmed) return;
                 setModalState({ title: 'กำลังประมวลผล...', message: 'กำลังซ่อมแซมข้อมูล...' });
                 try {
                   const response = await api.getSharedJobs(projectId);
@@ -1113,16 +1116,17 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                           label: [job.mainCategory, job.subCategory, ...Object.values(newDynamicFields)].join(' / ')
                         };
 
-                        // 4. Save New
+                        // 4. Save New & Delete Old
                         await api.saveSharedJob(projectId, newJob);
+                        await api.deleteSharedJob(projectId, job.id); // ✅ Delete the old job
                         updatedCount++;
                       }
                     }
-                    alert(`✅ ซ่อมแซมข้อมูลเสร็จสิ้น!\nแก้ไขไปทั้งหมด ${updatedCount} รายการ`);
+                    await showAlert(`✅ ซ่อมแซมข้อมูลเสร็จสิ้น!\nแก้ไขไปทั้งหมด ${updatedCount} รายการ`, 'สำเร็จ');
                     fetchSharedJobs();
                   }
                 } catch (e) {
-                  alert('❌ เกิดข้อผิดพลาด: ' + (e as Error).message);
+                  await showAlert('❌ เกิดข้อผิดพลาด: ' + (e as Error).message, 'เกิดข้อผิดพลาด');
                 } finally {
                   setModalState(null);
                 }
@@ -1369,11 +1373,11 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                           addWatermark: false
                         });
                       } else {
-                        alert('ไม่พบรูปภาพ');
+                        await showAlert('ไม่พบรูปภาพ', 'ข้อผิดพลาด');
                       }
                     } catch (e) {
                       setModalState(null);
-                      alert('เกิดข้อผิดพลาดในการโหลดรูป');
+                      await showAlert('เกิดข้อผิดพลาดในการโหลดรูป', 'ข้อผิดพลาด');
                     }
                   };
 

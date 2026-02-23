@@ -7,6 +7,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Reports.module.css';
 import AutocompleteInput from './AutocompleteInput';
+import { useDialog } from '../contexts/DialogContext';
 
 import {
   FiClipboard, FiSun, FiPlus, FiRefreshCw, FiCheckCircle,
@@ -62,7 +63,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   const [sharedJobs, setSharedJobs] = useState<any[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(false);
 
-
+  const { showAlert } = useDialog();
 
   // --- 3. useEffects for Filters (ปรับปรุงเล็กน้อย) ---
   useEffect(() => {
@@ -316,11 +317,11 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   const generateReport = async () => {
     if (isGenerating || !previewStatus || previewStatus.found === 0) {
       if (!previewStatus) {
-        alert('กรุณากด "ค้นหา" เพื่อตรวจสอบข้อมูลก่อนสร้าง');
+        await showAlert('กรุณากด "ค้นหา" เพื่อตรวจสอบข้อมูลก่อนสร้าง', 'คำเตือน');
         return;
       }
       if (previewStatus.found === 0) {
-        alert('ไม่พบรูปภาพ จึงไม่สามารถสร้างรายงานได้');
+        await showAlert('ไม่พบรูปภาพ จึงไม่สามารถสร้างรายงานได้', 'ไม่สามารถสร้างรายงานได้');
         return;
       }
       return;
@@ -414,7 +415,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
       if (response.success && response.data) {
         setGeneratedReport(response.data);
-        alert('สร้างรายงานสำเร็จ! 🎉');
+        await showAlert('สร้างรายงานสำเร็จ! 🎉', 'สำเร็จ');
 
         // ✅ แสดง loading ขณะ refetch
         setIsPreviewLoading(true);
@@ -429,7 +430,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         throw new Error(response.error || 'ไม่สามารถสร้างรายงานได้');
       }
     } catch (error) {
-      alert('เกิดข้อผิดพลาด: ' + (error as Error).message);
+      await showAlert('เกิดข้อผิดพลาด: ' + (error as Error).message, 'เกิดข้อผิดพลาด');
     } finally {
       setIsGenerating(false);
     }
@@ -611,7 +612,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       {/* 2. Manual Creation Form (Always Visible) */}
       <div className={styles.formBox} style={{ marginBottom: '30px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-          <h3 className={styles.formBoxTitle} style={{ marginBottom: 0 }}>ตัวกรอง / สร้างรายงาน (Manual)</h3>
+          <h3 className={styles.formBoxTitle} style={{ marginBottom: 0 }}>ตัวกรอง / สร้างรายงาน</h3>
           {/* ✅ [New] Reset Filter Button */}
           <button
             onClick={() => {
@@ -718,7 +719,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         <div className={styles.activeFeedBox}>
           <h3 className={styles.activeFeedTitle}>
             <FiActivity style={{ marginRight: '8px', color: '#ffc107' }} />
-            รายการงานทั้งหมด (All Jobs & History)
+            รายการงานทั้งหมด
           </h3>
 
           {(() => {
@@ -924,7 +925,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                                               {(hasReport || isJustGenerated) && (
                                                 <a href={item.report?.publicUrl} target="_blank" rel="noopener noreferrer" className={styles.miniSuccessButton} style={{ marginRight: '5px', flex: 1 }} onClick={(e) => e.stopPropagation()}><FiCheckCircle /> ดู PDF</a>
                                               )}
-                                              <button className={styles.miniGenerateButton} style={{ flex: 2, backgroundColor: newPhotosCount > 0 ? '#ffc107' : (hasReport ? '#17a2b8' : '#007bff'), color: newPhotosCount > 0 ? '#000' : '#fff' }} onClick={(e) => {
+                                              <button className={styles.miniGenerateButton} style={{ flex: 2, backgroundColor: newPhotosCount > 0 ? '#ffc107' : (hasReport ? '#17a2b8' : '#007bff'), color: newPhotosCount > 0 ? '#000' : '#fff' }} onClick={async (e) => {
                                                 e.stopPropagation();
                                                 console.log('🔘 Button Clicked! Item:', item); // DEBUG
                                                 const payload = {
@@ -936,7 +937,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                                                 console.log('📦 Prepared Payload:', payload); // DEBUG
 
                                                 if (!payload.mainCategory || !payload.subCategory) {
-                                                  alert(`Error: Missing Category Data! (Main: ${payload.mainCategory}, Sub: ${payload.subCategory})`);
+                                                  await showAlert(`Error: Missing Category Data! (Main: ${payload.mainCategory}, Sub: ${payload.subCategory})`, 'เกิดข้อผิดพลาด');
                                                   return;
                                                 }
 
@@ -946,8 +947,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                                                     const statusRes = await api.getChecklistStatus({ projectId, ...payload });
                                                     if (statusRes.success && statusRes.data && statusRes.data.found > 0) {
                                                       setPreviewStatus(statusRes.data); await runGenerateReport(payload);
-                                                    } else { alert('ไม่พบรูปภาพในระบบ'); }
-                                                  } catch (err) { alert(err); }
+                                                    } else { await showAlert('ไม่พบรูปภาพในระบบ', 'ไม่พบรูปภาพ'); }
+                                                  } catch (err) { await showAlert(String(err), 'เกิดข้อผิดพลาด'); }
                                                 })();
                                               }} disabled={isGenerating}>
                                                 {isGenerating && formData.mainCategory === item.mainCategory && formData.subCategory === item.subCategory && JSON.stringify(dynamicFields) === JSON.stringify(item.dynamicFields) ? <FiLoader className={styles.iconSpin} /> : (newPhotosCount > 0 ? <FiAlertTriangle /> : (hasReport ? <FiRefreshCw /> : <FiActivity />))}
@@ -959,12 +960,14 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                                       })}
                                     </div>
                                   </div>
-                                )}
+                                )
+                                }
                               </div>
                             );
                           })}
                         </div>
-                      )}
+                      )
+                      }
                     </div>
                   );
                 })}
@@ -972,7 +975,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
             );
           })()}
         </div>
-      )}
+      )
+      }
       {renderPreviewBox()}
 
       {/* --- Generated Result Box (เหมือนเดิม) --- */}

@@ -136,6 +136,11 @@ const db = getFirestore();
 
 // --- [แก้ไข] ---
 const checkAuth = async (req: Request, res: Response, next: Function) => {
+  // ✅ อนุญาตให้เรียก API ดูรายชื่อโครงการได้โดยไม่ต้องล็อกอิน (หน้าสมัครสมาชิก)
+  if (req.method === 'GET' && req.path === '/projects') {
+    return next();
+  }
+
   // 1.1 ตรวจสอบว่ามี Header 'Authorization' (ตั๋ว) ส่งมาไหม
   if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer ')) {
     console.warn("Auth Error: No token provided.");
@@ -527,9 +532,9 @@ apiRouter.get("/project-config/:projectId", async (req: Request, res: Response):
     });
 
     if (finalConfig.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: "Config not found or is empty."
+      return res.json({
+        success: true,
+        data: []
       });
     }
 

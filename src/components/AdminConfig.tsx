@@ -14,6 +14,7 @@ import styles from './AdminConfig.module.css';
 
 import UserManagement from './UserManagement';
 import { UserProfile } from '../App';
+import { useDialog } from '../contexts/DialogContext';
 
 import {
   FiDatabase,
@@ -64,6 +65,8 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
   const [logoUploading, setLogoUploading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const { showAlert, showConfirm } = useDialog();
 
   useEffect(() => {
     setInternalConfig(projectConfig);
@@ -120,7 +123,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       setNewName("");
       setActiveForm(null);
     } else {
-      alert(`Error: ${response.error}`);
+      await showAlert(`Error: ${response.error}`, 'เกิดข้อผิดพลาด');
     }
     setIsAdding(false);
   };
@@ -150,7 +153,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       setNewName("");
       setActiveForm(null);
     } else {
-      alert(`Error: ${response.error}`);
+      await showAlert(`Error: ${response.error}`, 'เกิดข้อผิดพลาด');
     }
     setIsAdding(false);
   };
@@ -181,7 +184,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       await api.updateTopicOrder(projectId, subCat.id, newOrder);
 
     } catch (error: any) {
-      alert(`Error (บันทึกลำดับล้มเหลว): ${error.message}`);
+      await showAlert(`Error (บันทึกลำดับล้มเหลว): ${error.message}`, 'เกิดข้อผิดพลาด');
       setIsAdding(false);
       return; // ออก ถ้าบันทึกลำดับไม่สำเร็จ
     }
@@ -201,7 +204,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       setNewName("");
       setActiveForm(null);
     } else {
-      alert(`Error (สร้าง Topic ล้มเหลว): ${response.error}`);
+      await showAlert(`Error (สร้าง Topic ล้มเหลว): ${response.error}`, 'เกิดข้อผิดพลาด');
       // (ถ้าล้มเหลวตรงนี้ ลำดับอาจจะถูกบันทึกไปแล้ว แต่ Topic ไม่ถูกสร้าง)
     }
     setIsAdding(false);
@@ -209,7 +212,9 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
 
   const handleDelete = async (type: 'main' | 'sub' | 'topic', id: string) => {
     const typeName = type === 'main' ? 'หมวดงานหลัก' : (type === 'sub' ? 'หมวดงานย่อย' : 'หัวข้อ');
-    if (!window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ ${typeName} นี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้`) || !internalConfig) {
+
+    const isConfirmed = await showConfirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ ${typeName} นี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้`, 'ยืนยันการลบ');
+    if (!isConfirmed || !internalConfig) {
       return;
     }
 
@@ -242,11 +247,11 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
       }
 
       if (!response.success) {
-        alert(`Error: ${response.error}`);
+        await showAlert(`Error: ${response.error}`, 'เกิดข้อผิดพลาด');
       }
 
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      await showAlert(`Error: ${error.message}`, 'เกิดข้อผิดพลาด');
     }
   };
 
@@ -288,7 +293,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
 
       setEditingSubCat(null);
     } else {
-      alert(`Error: ${response.error}`);
+      await showAlert(`Error: ${response.error}`, 'เกิดข้อผิดพลาด');
     }
     setIsAdding(false);
   };
@@ -298,10 +303,10 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
     if (!reportSettings) return;
     const response = await api.saveReportSettings(projectId, reportSettings);
     if (response.success) {
-      alert('บันทึกการตั้งค่ารายงานแล้ว!');
+      await showAlert('บันทึกการตั้งค่ารายงานแล้ว!', 'สำเร็จ');
       onConfigUpdated(); // (การตั้งค่าทั่วไป ควรอัปเดตทั้งแอป)
     } else {
-      alert(`Error: ${response.error}`);
+      await showAlert(`Error: ${response.error}`, 'เกิดข้อผิดพลาด');
     }
   };
 
@@ -314,7 +319,7 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
 
     // [ป้องกัน] ถ้ายังอัปโหลดไม่เสร็จ ห้ามอัปโหลดซ้ำ
     if (logoUploading) {
-      alert("รอสักครู่... กำลังอัปโหลดโลโก้ก่อนหน้า");
+      await showAlert("รอสักครู่... กำลังอัปโหลดโลโก้ก่อนหน้า", 'กำลังประมวลผล');
       e.target.value = ''; // เคลียร์ค่าไฟล์ที่เลือก
       return;
     }
@@ -344,14 +349,14 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
         // alert('อัปโหลดโลโก้แล้ว!'); (เอาออกก่อน เพื่อให้บันทึก)
         // onConfigUpdated(); (ไม่ต้องเรียกทันที รอ handleSaveSettings)
       } else {
-        alert(`Error uploading logo: ${response.error}`);
+        await showAlert(`Error uploading logo: ${response.error}`, 'เกิดข้อผิดพลาด');
       }
       setLogoUploading(false);
       e.target.value = ''; // เคลียร์ค่าไฟล์ที่เลือก
     };
 
-    reader.onerror = (error) => {
-      alert(`Error reading file: ${error}`);
+    reader.onerror = async (error) => {
+      await showAlert(`Error reading file: ${error}`, 'เกิดข้อผิดพลาด');
       setLogoUploading(false);
       e.target.value = ''; // เคลียร์ค่าไฟล์ที่เลือก
     };
@@ -446,80 +451,111 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
             {/* --- SUB-TAB 1.1: SETTINGS --- */}
             {configView === 'settings' && (
               <div className={`${styles.accordionContent} ${styles.reportSettingsBox}`} style={{ borderTop: 'none', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
-                <form onSubmit={handleSaveSettings}>
-                  {/* (โค้ด Form ตั้งค่าเหมือนเดิม) */}
-                  <div className={styles.settingGroup}>
-                    <h4>Layout</h4>
-                    <label>ประเภท Layout:</label>
-                    <select value={reportSettings.layoutType} onChange={e => setReportSettings({ ...reportSettings, layoutType: e.target.value })}>
+                <form onSubmit={handleSaveSettings} className={styles.settingsGrid}>
+
+                  <div className={styles.settingCard}>
+                    <h4 className={styles.settingGroupTitle}>Layout</h4>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>ประเภท Layout:</label>
+                    <select
+                      style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+                      value={reportSettings.layoutType}
+                      onChange={e => setReportSettings({ ...reportSettings, layoutType: e.target.value })}
+                    >
                       <option value="default">Default</option>
                     </select>
                   </div>
-                  <div className={styles.settingGroup}>
-                    <h4>รูปภาพต่อหน้า</h4>
-                    <label>รายงาน QC (1, 2, 4, 6):</label>
-                    <input type="number" value={reportSettings.qcPhotosPerPage} onChange={e => setReportSettings({ ...reportSettings, qcPhotosPerPage: parseInt(e.target.value) as any })} min="1" max="6" />
-                    <label>รายงาน Daily (1, 2, 4, 6):</label>
-                    <input type="number" value={reportSettings.dailyPhotosPerPage} onChange={e => setReportSettings({ ...reportSettings, dailyPhotosPerPage: parseInt(e.target.value) as any })} min="1" max="6" />
+
+                  <div className={styles.settingCard}>
+                    <h4 className={styles.settingGroupTitle}>จำนวนรูปภาพต่อหน้า</h4>
+                    <div className={styles.rowGrid}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>รายงาน QC (1, 2, 4, 6):</label>
+                        <input
+                          type="number"
+                          style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+                          value={reportSettings.qcPhotosPerPage}
+                          onChange={e => setReportSettings({ ...reportSettings, qcPhotosPerPage: parseInt(e.target.value) as any })}
+                          min="1" max="6"
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>รายงาน Daily (1, 2, 4, 6):</label>
+                        <input
+                          type="number"
+                          style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
+                          value={reportSettings.dailyPhotosPerPage}
+                          onChange={e => setReportSettings({ ...reportSettings, dailyPhotosPerPage: parseInt(e.target.value) as any })}
+                          min="1" max="6"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className={styles.settingGroup}>
-                    <h4>โลโก้โครงการ (ซ้าย, กลาง, ขวา)</h4>
 
-                    {/* --- ช่องที่ 1: ซ้าย --- */}
-                    <div className={styles.logoSlotItem}>
-                      <label>โลโก้ซ้าย:</label>
-                      <input
-                        type="file"
-                        accept="image/png, image/jpeg"
-                        onChange={(e) => handleLogoUpload(e, 'left')}
-                        disabled={logoUploading}
-                      />
-                      {reportSettings.projectLogos?.left && (
-                        <div className={styles.logoPreview}>
-                          <img src={reportSettings.projectLogos.left} alt="Left Logo" />
-                          <button type="button" onClick={() => handleClearLogo('left')}>ลบ</button>
-                        </div>
-                      )}
-                    </div>
+                  <div className={styles.settingCard}>
+                    <h4 className={styles.settingGroupTitle}>โลโก้โครงการ (ซ้าย, กลาง, ขวา)</h4>
+                    <div className={styles.logoGrid}>
+                      {/* --- ช่องที่ 1: ซ้าย --- */}
+                      <div className={styles.logoSlotItem}>
+                        <label>โลโก้พื้นที่ซ้าย:</label>
+                        <input
+                          type="file"
+                          accept="image/png, image/jpeg"
+                          onChange={(e) => handleLogoUpload(e, 'left')}
+                          disabled={logoUploading}
+                          style={{ fontSize: '0.85em' }}
+                        />
+                        {reportSettings.projectLogos?.left && (
+                          <div className={styles.logoPreview}>
+                            <img src={reportSettings.projectLogos.left} alt="Left Logo" />
+                            <button type="button" onClick={() => handleClearLogo('left')}>ลบโลโก้</button>
+                          </div>
+                        )}
+                      </div>
 
-                    {/* --- ช่องที่ 2: กลาง --- */}
-                    <div className={styles.logoSlotItem}>
-                      <label>โลโก้กลาง:</label>
-                      <input
-                        type="file"
-                        accept="image/png, image/jpeg"
-                        onChange={(e) => handleLogoUpload(e, 'center')}
-                        disabled={logoUploading}
-                      />
-                      {reportSettings.projectLogos?.center && (
-                        <div className={styles.logoPreview}>
-                          <img src={reportSettings.projectLogos.center} alt="Center Logo" />
-                          <button type="button" onClick={() => handleClearLogo('center')}>ลบ</button>
-                        </div>
-                      )}
-                    </div>
+                      {/* --- ช่องที่ 2: กลาง --- */}
+                      <div className={styles.logoSlotItem}>
+                        <label>โลโก้พื้นที่กลาง:</label>
+                        <input
+                          type="file"
+                          accept="image/png, image/jpeg"
+                          onChange={(e) => handleLogoUpload(e, 'center')}
+                          disabled={logoUploading}
+                          style={{ fontSize: '0.85em' }}
+                        />
+                        {reportSettings.projectLogos?.center && (
+                          <div className={styles.logoPreview}>
+                            <img src={reportSettings.projectLogos.center} alt="Center Logo" />
+                            <button type="button" onClick={() => handleClearLogo('center')}>ลบโลโก้</button>
+                          </div>
+                        )}
+                      </div>
 
-                    {/* --- ช่องที่ 3: ขวา --- */}
-                    <div className={styles.logoSlotItem}>
-                      <label>โลโก้ขวา:</label>
-                      <input
-                        type="file"
-                        accept="image/png, image/jpeg"
-                        onChange={(e) => handleLogoUpload(e, 'right')}
-                        disabled={logoUploading}
-                      />
-                      {reportSettings.projectLogos?.right && (
-                        <div className={styles.logoPreview}>
-                          <img src={reportSettings.projectLogos.right} alt="Right Logo" />
-                          <button type="button" onClick={() => handleClearLogo('right')}>ลบ</button>
-                        </div>
-                      )}
+                      {/* --- ช่องที่ 3: ขวา --- */}
+                      <div className={styles.logoSlotItem}>
+                        <label>โลโก้พื้นที่ขวา:</label>
+                        <input
+                          type="file"
+                          accept="image/png, image/jpeg"
+                          onChange={(e) => handleLogoUpload(e, 'right')}
+                          disabled={logoUploading}
+                          style={{ fontSize: '0.85em' }}
+                        />
+                        {reportSettings.projectLogos?.right && (
+                          <div className={styles.logoPreview}>
+                            <img src={reportSettings.projectLogos.right} alt="Right Logo" />
+                            <button type="button" onClick={() => handleClearLogo('right')}>ลบโลโก้</button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {logoUploading && <p>กำลังอัปโหลด...</p>}
+                    {logoUploading && <p style={{ marginTop: '15px', color: '#007bff', fontWeight: '500' }}>กำลังอัปโหลดโลโก้ กรุณารอสักครู่...</p>}
                   </div>
-                  <button type="submit" className={`${styles.adminButton} ${styles.manage}`} disabled={logoUploading}>
-                    {logoUploading ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
-                  </button>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <button type="submit" className={`${styles.adminButton} ${styles.manage}`} disabled={logoUploading} style={{ fontSize: '1.05em', padding: '12px 24px' }}>
+                      {logoUploading ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่ารายงาน'}
+                    </button>
+                  </div>
                 </form>
               </div>
             )}
@@ -630,7 +666,10 @@ const AdminConfig: React.FC<AdminConfigProps> = ({
 
         {/* === TAB 2: USER MANAGEMENT (เหมือนเดิม) === */}
         {view === 'users' && (
-          <UserManagement currentUserRole={currentUserProfile.role} />
+          <UserManagement
+            currentUserRole={currentUserProfile.role}
+            currentUserProjectId={currentUserProfile.assignedProjectId}
+          />
         )}
 
       </div>

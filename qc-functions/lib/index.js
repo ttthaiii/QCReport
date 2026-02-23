@@ -117,6 +117,10 @@ if (!admin.apps.length) {
 const db = (0, firestore_1.getFirestore)();
 // --- [แก้ไข] ---
 const checkAuth = async (req, res, next) => {
+    // ✅ อนุญาตให้เรียก API ดูรายชื่อโครงการได้โดยไม่ต้องล็อกอิน (หน้าสมัครสมาชิก)
+    if (req.method === 'GET' && req.path === '/projects') {
+        return next();
+    }
     // 1.1 ตรวจสอบว่ามี Header 'Authorization' (ตั๋ว) ส่งมาไหม
     if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer ')) {
         console.warn("Auth Error: No token provided.");
@@ -439,9 +443,9 @@ apiRouter.get("/project-config/:projectId", async (req, res) => {
             });
         });
         if (finalConfig.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: "Config not found or is empty."
+            return res.json({
+                success: true,
+                data: []
             });
         }
         return res.json({ success: true, data: finalConfig });
@@ -1767,6 +1771,9 @@ apiRouter.post("/proxy-image", async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
+// --- [Audit Tool] ---
+const audit_lowercase_1 = __importDefault(require("./migrations/audit-lowercase"));
+mainApp.use('/audit', audit_lowercase_1.default);
 // --- [แก้ไข] ---
 // 4. บอก App หลัก ให้ใช้ apiRouter ที่ path "/api" (สำหรับ Production Hosting) และ "/" (สำหรับ Direct Call)
 mainApp.use(["/api", "/"], apiRouter);

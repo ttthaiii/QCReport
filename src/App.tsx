@@ -9,8 +9,8 @@ import Camera from './components/Camera';
 import Reports from './components/Reports';
 import AdminConfig from './components/AdminConfig';
 import styles from './App.module.css';
-
 import authStyles from './components/Auth.module.css';
+import { useDialog } from './contexts/DialogContext';
 
 import Login from './components/Login';
 import Register from './components/Register';
@@ -48,6 +48,7 @@ function App() {
   const [view, setView] = useState<View>('projects');
   const [newProjectName, setNewProjectName] = useState('');
   const [searchTerm, setSearchTerm] = useState(''); // ✅ [ใหม่] Search Term
+  const { showAlert } = useDialog();
   const [activeJobCount, setActiveJobCount] = useState(0); // ✅ [ใหม่] Active Job Badge
 
   useEffect(() => {
@@ -206,7 +207,7 @@ function App() {
     if (response.success) {
       setNewProjectName(''); // Clear input
       fetchProjects(); // Refresh project list
-      alert('สร้างโครงการสำเร็จ!');
+      await showAlert('สร้างโครงการสำเร็จ!', 'สำเร็จ'); // <--- CHANGED
     } else {
       setError(response.error || 'ไม่สามารถสร้างโครงการได้');
     }
@@ -289,7 +290,8 @@ function App() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              width: '100%',
+              width: '90%',
+              maxWidth: '400px',
               padding: '12px',
               marginBottom: '20px',
               fontSize: '1rem',

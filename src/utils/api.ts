@@ -790,6 +790,14 @@ export const api = {
     } catch (error: any) { return { success: false, error: error.message }; }
   },
 
+  deleteSharedJob: async (projectId: string, jobId: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/projects/${projectId}/shared-jobs/${jobId}`, {
+        method: 'DELETE'
+      });
+    } catch (error: any) { return { success: false, error: error.message }; }
+  },
+
   // [ใหม่] 6. เพิ่มฟังก์ชัน 'getPhotosByProject' ที่หายไป
   getPhotosByProject: async (projectId: string): Promise<ApiResponse<Photo[]>> => {
     try {
