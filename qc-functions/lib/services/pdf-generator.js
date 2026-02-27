@@ -209,6 +209,7 @@ async function getDailyPhotosByDate(projectId, date) {
             ? await fetchAndEncodeImage(data.driveUrl)
             : null;
         return {
+            id: doc.id, // ✅ คืนค่า id ควบคู่ไปด้วย
             topic: topicName,
             topicOrder: index,
             imageBase64: imageBase64,
@@ -250,7 +251,7 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, allTopics, 
             return;
         // ถ้ายังไม่มีใน Map หรือ รูปนี้ใหม่กว่ารูปที่มีอยู่
         if (!latestPhotosByTopic.has(topic)) {
-            latestPhotosByTopic.set(topic, data);
+            latestPhotosByTopic.set(topic, Object.assign({ id: doc.id }, data));
         }
         else {
             const existing = latestPhotosByTopic.get(topic);
@@ -258,7 +259,7 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, allTopics, 
             const existingTime = existing.createdAt ? existing.createdAt.toMillis() : 0;
             const newTime = data.createdAt ? data.createdAt.toMillis() : 0;
             if (newTime > existingTime) {
-                latestPhotosByTopic.set(topic, data);
+                latestPhotosByTopic.set(topic, Object.assign({ id: doc.id }, data));
             }
         }
     });
@@ -279,6 +280,7 @@ async function getLatestPhotos(projectId, mainCategory, subCategory, allTopics, 
             console.log(`     ⚠️ Failed to encode image for topic: "${topic}"`);
         }
         return {
+            id: data.id,
             topic: topic,
             imageBase64: imageBase64,
             isPlaceholder: false,

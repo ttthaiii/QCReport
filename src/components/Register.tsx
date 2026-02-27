@@ -4,10 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { api, Project } from '../utils/api'; 
+import { api, Project } from '../utils/api';
 
 // ✅ [ใหม่] 1. Import CSS Module (ใช้ไฟล์เดียวกับ Login)
-import styles from './Auth.module.css'; 
+import styles from './Auth.module.css';
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
@@ -28,19 +28,16 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   useEffect(() => {
     const fetchProjects = async () => {
       setIsLoadingProjects(true);
-      const response = await api.getProjects(); 
+      const response = await api.getProjects();
       if (response.success && response.data) {
         setProjects(response.data);
-        if (response.data.length > 0) {
-          setSelectedProject(response.data[0].id);
-        }
       } else {
         setError('ไม่สามารถโหลดรายการโครงการได้');
       }
       setIsLoadingProjects(false);
     };
     fetchProjects();
-  }, []); 
+  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,29 +45,29 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
       setError('กรุณาเลือกโครงการ');
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
-      const userDocRef = doc(db, 'users', user.uid); 
-      
+
+      const userDocRef = doc(db, 'users', user.uid);
+
       await setDoc(userDocRef, {
         uid: user.uid,
         email: user.email,
-        displayName: displayName || email.split('@')[0], 
+        displayName: displayName || email.split('@')[0],
         assignedProjectId: selectedProject,
-        role: 'user', 
-        status: 'pending', 
-        requestedAt: serverTimestamp(), 
+        role: 'user',
+        status: 'pending',
+        requestedAt: serverTimestamp(),
         approvedBy: null,
         approvedAt: null
       });
 
-      setIsSuccess(true); 
+      setIsSuccess(true);
 
     } catch (err) {
       setError('สมัครล้มเหลว: ' + (err as Error).message);
@@ -101,29 +98,32 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
         <h1 className={styles.title}>QC Report - สมัครสมาชิก</h1>
         <form onSubmit={handleRegister}>
           <div className={styles.formGroup}>
-            <label className={styles.label} htmlFor="email">Email:</label>
+            <label className={styles.label} htmlFor="email">Email <span style={{ color: 'red' }}>*</span> :</label>
             <input id="email" type="email" className={styles.input} value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.label} htmlFor="password">Password (อย่างน้อย 6 ตัวอักษร):</label>
+            <label className={styles.label} htmlFor="password">Password (อย่างน้อย 6 ตัวอักษร) <span style={{ color: 'red' }}>*</span> :</label>
             <input id="password" type="password" className={styles.input} value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.label} htmlFor="displayName">ชื่อ-นามสกุล (สำหรับแสดงผล):</label>
+            <label className={styles.label} htmlFor="displayName">ชื่อ-นามสกุล (สำหรับแสดงผล) <span style={{ color: 'red' }}>*</span> :</label>
             <input id="displayName" type="text" className={styles.input} value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
           </div>
           <div className={styles.formGroup}>
-            <label className={styles.label} htmlFor="project">เลือกโครงการของคุณ:</label>
-            <select 
+            <label className={styles.label} htmlFor="project">เลือกโครงการของคุณ <span style={{ color: 'red' }}>*</span> :</label>
+            <select
               id="project"
-              value={selectedProject} 
-              onChange={(e) => setSelectedProject(e.target.value)} 
-              required 
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              required
               className={styles.input} // <-- ใช้สไตล์ .input เดียวกันได้
               disabled={isLoadingProjects || projects.length === 0}
             >
-              {isLoadingProjects && <option>กำลังโหลดโครงการ...</option>}
-              {!isLoadingProjects && projects.length === 0 && <option>ไม่พบโครงการ</option>}
+              {isLoadingProjects && <option value="">กำลังโหลดโครงการ...</option>}
+              {!isLoadingProjects && projects.length === 0 && <option value="">ไม่พบโครงการ</option>}
+              {!isLoadingProjects && projects.length > 0 && (
+                <option value="" disabled>-- กรุณาเลือกโครงการ --</option>
+              )}
               {projects.map(project => (
                 <option key={project.id} value={project.id}>
                   {project.projectName}
@@ -131,16 +131,16 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               ))}
             </select>
           </div>
-          
+
           <button type="submit" disabled={isLoading || isLoadingProjects} className={styles.buttonPrimary}>
             {isLoading ? 'กำลังสมัคร...' : 'สมัครสมาชิก'}
           </button>
-          
+
           {error && <p className={styles.errorText}>{error}</p>}
         </form>
 
         <hr className={styles.separator} />
-        
+
         <button onClick={onSwitchToLogin} className={styles.buttonSecondary}>
           มีบัญชีแล้ว? กลับไปหน้า Log In
         </button>

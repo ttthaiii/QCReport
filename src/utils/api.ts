@@ -540,6 +540,26 @@ export const api = {
     }
   },
 
+  getQcPhotosPreview: async (
+    projectId: string,
+    mainCategory: string,
+    subCategory: string,
+    dynamicFields: Record<string, string>
+  ): Promise<ApiResponse<Photo[]>> => {
+    try {
+      const dynamicFieldsStr = JSON.stringify(dynamicFields);
+      const queryParams = new URLSearchParams({
+        mainCategory,
+        subCategory,
+        dynamicFields: dynamicFieldsStr
+      }).toString();
+      const data = await fetchWithAuth(`/projects/${projectId}/qc-photos?${queryParams}`, { method: 'GET' }, false);
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
   // --- Report Settings (สำหรับหน้า Admin) ---
   getReportSettings: async (projectId: string): Promise<ApiResponse<ReportSettings>> => {
     try {
@@ -808,6 +828,17 @@ export const api = {
       return { success: false, error: error.message, data: [] };
     }
   },
+
+  // [ใหม่] ดึงรูปภาพ Daily ของวันใดวันหนึ่ง
+  getDailyPhotos: async (projectId: string, date: string): Promise<ApiResponse<Photo[]>> => {
+    try {
+      const data = await fetchWithAuth(`/projects/${projectId}/daily-photos?date=${date}`, { method: 'GET' }, false); // Disable cache for fresh data
+      return data;
+    } catch (error: any) {
+      return { success: false, error: error.message, data: [] };
+    }
+  },
+
   // ดึงรายงานทั้งหมด (ทั้งที่มีและยังไม่มี)
   getAllPossibleReports: async (payload: {
     projectId: string;

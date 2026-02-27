@@ -42,7 +42,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole, curren
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { showConfirm } = useDialog();
+  const { showConfirm, showAlert } = useDialog();
   const [filter, setFilter] = useState('');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
@@ -147,7 +147,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole, curren
 
   const handleSetRole = async (uid: string, e: React.ChangeEvent<HTMLSelectElement>) => {
     const newRole = e.target.value as UserRole;
-    if (currentUserRole !== 'god') return;
+    if (currentUserRole !== 'god' && currentUserRole !== 'admin') return;
+
+    // Admin ไม่สามารถตั้งสิทธิ์ god ได้
+    if (currentUserRole === 'admin' && newRole === 'god') {
+      await showAlert('คุณไม่สามารถแต่งตั้ง God Admin ได้', 'สิทธิ์ไม่เพียงพอ');
+      e.target.value = users.find(u => u.uid === uid)?.role || 'user';
+      return;
+    }
 
     // สำรองค่าเดิมไว้เผื่อกรณีกด Cancel หรือ Error
     const currentRole = users.find(u => u.uid === uid)?.role || newRole;
@@ -381,9 +388,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole, curren
                     </span>
                   </td>
                   <td>
-                    {currentUserRole === 'god' ? (
+                    {(currentUserRole === 'god' || currentUserRole === 'admin') ? (
                       <select value={user.role} onChange={(e) => handleSetRole(user.uid, e)} disabled={user.uid === auth.currentUser?.uid}>
-                        {ALL_ROLES.map(role => (<option key={role} value={role}>{role}</option>))}
+                        {ALL_ROLES.filter(role => {
+                          // ถ้าเป็น Admin ห้ามเห็นตัวเลือก God
+                          if (currentUserRole === 'admin' && role === 'god') return false;
+                          return true;
+                        }).map(role => (<option key={role} value={role}>{role}</option>))}
                       </select>
                     ) : (user.role)}
                   </td>
@@ -409,9 +420,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole, curren
                 <strong>โครงการ:</strong> {user.assignedProjectName}
                 <br />
                 <strong>สิทธิ์:</strong>
-                {currentUserRole === 'god' ? (
+                {(currentUserRole === 'god' || currentUserRole === 'admin') ? (
                   <select value={user.role} onChange={(e) => handleSetRole(user.uid, e)} disabled={user.uid === auth.currentUser?.uid} onClick={(e) => e.stopPropagation()}>
-                    {ALL_ROLES.map(role => (<option key={role} value={role}>{role}</option>))}
+                    {ALL_ROLES.filter(role => {
+                      if (currentUserRole === 'admin' && role === 'god') return false;
+                      return true;
+                    }).map(role => (<option key={role} value={role}>{role}</option>))}
                   </select>
                 ) : (user.role)}
               </div>

@@ -2,19 +2,15 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 // ✅ [ใหม่] 1. Import Type ใหม่
-import { api, ProjectConfig, MainCategory, SubCategory, GeneratedReportInfo, ChecklistStatusResponse, SharedJob } from '../utils/api';
+import { api, ProjectConfig, MainCategory, SubCategory, GeneratedReportInfo, ChecklistStatusResponse, SharedJob, Photo } from '../utils/api';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Reports.module.css';
-import AutocompleteInput from './AutocompleteInput';
 import { useDialog } from '../contexts/DialogContext';
+import AutocompleteInput from './AutocompleteInput';
+import JSZip from 'jszip';
 
-import {
-  FiClipboard, FiSun, FiPlus, FiRefreshCw, FiCheckCircle,
-  FiAlertTriangle, FiFileText, FiDownload, FiLoader, FiBarChart2,
-  FiSearch, FiActivity, FiClock, FiInbox, // <-- [ใหม่]
-  FiChevronDown, FiChevronRight
-} from 'react-icons/fi';
+import { FiFileText, FiDownload, FiSearch, FiRefreshCw, FiActivity, FiCheckCircle, FiClock, FiChevronRight, FiChevronDown, FiChevronUp, FiZoomIn, FiZoomOut, FiEyeOff, FiEye, FiSave, FiAlertTriangle, FiLoader, FiDownloadCloud, FiClipboard, FiSun, FiPlus, FiInbox, FiX } from 'react-icons/fi';
 
 interface ReportsProps {
   projectId: string;
@@ -58,6 +54,24 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   const [previewStatus, setPreviewStatus] = useState<ChecklistStatusResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [fieldSuggestions, setFieldSuggestions] = useState<Record<string, string[]>>({});
+
+  // ✅ [ใหม่] Daily Photos States
+  const [dailyPhotos, setDailyPhotos] = useState<Photo[]>([]);
+  const [showDailyPreviewModal, setShowDailyPreviewModal] = useState<boolean>(false);
+  const [showDailyGenerateModal, setShowDailyGenerateModal] = useState<boolean>(false);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
+
+  // ✅ [ใหม่] QC Photos States
+  const [qcPhotos, setQcPhotos] = useState<Photo[]>([]);
+  const [showQcDownloadModal, setShowQcDownloadModal] = useState<boolean>(false);
+  const [selectedQcPhotoIds, setSelectedQcPhotoIds] = useState<Set<string>>(new Set());
+  const [isDownloadingPhotos, setIsDownloadingPhotos] = useState<boolean>(false); // สำหรับ Download Progress
+
+  // ✅ [ใหม่] แทนที่ fullScreenImage ด้วย previewData แบบละเอียด
+  const [previewData, setPreviewData] = useState<{ url: string, timestamp: string, location: string | null, addWatermark: boolean } | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [showInfoOverlay, setShowInfoOverlay] = useState<boolean>(true);
+  const [watermarkFontSize, setWatermarkFontSize] = useState<number>(24);
 
   // ✅ [ใหม่] 3. States สำหรับ Active Feed (SharedJobs)
   const [sharedJobs, setSharedJobs] = useState<any[]>([]);
@@ -152,6 +166,11 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     } else if (reportType === 'Daily') {
       // Daily: ต้องมี date
       if (selectedDate) {
+        // ✅ [Fix] Close modals and clear previous photos on date change
+        setShowDailyPreviewModal(false);
+        setShowDailyGenerateModal(false);
+        setDailyPhotos([]);
+        setPreviewStatus(null);
         handleAutoSearch();
       }
     }
@@ -249,6 +268,12 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     setPreviewStatus(null);
     setPreviewError(null);
 
+    // ✅ [Fix] Explicitly clear old daily photos when fetching new status to prevent showing old data
+    if (reportType === 'Daily') {
+      setDailyPhotos([]);
+      setSelectedPhotoIds(new Set());
+    }
+
     const currentMainCat = overrideParams?.mainCategory ?? (reportType === 'QC' ? formData.mainCategory : undefined);
     const currentSubCat = overrideParams?.subCategory ?? (reportType === 'QC' ? formData.subCategory : undefined);
     const currentDate = overrideParams?.date ?? (reportType === 'Daily' ? formatDateToYYYYMMDD(selectedDate) : undefined);
@@ -273,11 +298,22 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         return;
       }
 
-      const response = await api.getChecklistStatus(payload);
-      if (response.success && response.data) {
-        setPreviewStatus(response.data);
+      if (currentType === 'Daily') {
+        const response = await api.getDailyPhotos(projectId, currentDate!);
+        if (response.success && response.data) {
+          setPreviewStatus({ found: response.data.length, total: response.data.length });
+          setDailyPhotos(response.data);
+        } else {
+          setPreviewStatus({ found: 0, total: 0 });
+          setDailyPhotos([]);
+        }
       } else {
-        throw new Error(response.error || 'ไม่สามารถโหลดสถานะได้');
+        const response = await api.getChecklistStatus(payload);
+        if (response.success && response.data) {
+          setPreviewStatus(response.data);
+        } else {
+          throw new Error(response.error || 'ไม่สามารถโหลดสถานะได้');
+        }
       }
     } catch (error) {
       setPreviewError((error as Error).message);
@@ -309,11 +345,42 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
   // ✅ [ใหม่] (6.1) ปุ่ม "ค้นหา" (Manual)
   const handleSearch = async () => {
-    await fetchPreviewStatus();
-    await fetchGeneratedReports();
+    if (reportType === 'Daily') {
+      setIsPreviewLoading(true);
+      setPreviewStatus(null);
+      setPreviewError(null);
+
+      const dateStr = formatDateToYYYYMMDD(selectedDate);
+      if (!dateStr) {
+        setIsPreviewLoading(false);
+        return;
+      }
+
+      try {
+        const response = await api.getDailyPhotos(projectId, dateStr);
+        if (response.success && response.data) {
+          setDailyPhotos(response.data);
+          setPreviewStatus({ found: response.data.length, total: response.data.length });
+          // Default all selected
+          setSelectedPhotoIds(new Set(response.data.map((p: any) => p.id)));
+          setShowDailyGenerateModal(true); // เปิด Modal สร้างรายงานที่มีครบทุกอย่าง
+        } else {
+          setPreviewError(response.error || 'ไม่สามารถดึงรูปภาพได้');
+          setPreviewStatus({ found: 0, total: 0 });
+        }
+      } catch (err) {
+        setPreviewError((err as Error).message);
+      }
+      setIsPreviewLoading(false);
+      await fetchGeneratedReports(); // Update history list
+    } else {
+      // QC Search
+      await fetchPreviewStatus();
+      await fetchGeneratedReports();
+    }
   };
 
-  // (6.2) ปุ่ม "สร้างรายงาน" (เหมือนเดิม)
+  // (6.2) ปุ่ม "สร้างรายงาน" (เหมือนเดิม แต่ปรับรองรับ QC แบบเลือกรูป)
   const generateReport = async () => {
     if (isGenerating || !previewStatus || previewStatus.found === 0) {
       if (!previewStatus) {
@@ -327,15 +394,258 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       return;
     }
 
-    const filterDataFromState = {
-      reportType,
-      mainCategory: reportType === 'QC' ? formData.mainCategory : undefined,
-      subCategory: reportType === 'QC' ? formData.subCategory : undefined,
-      dynamicFields: reportType === 'QC' ? dynamicFields : undefined,
-      date: reportType === 'Daily' && selectedDate ? selectedDate.toISOString().split('T')[0] : undefined
-    };
+    if (reportType === 'Daily') {
+      // ✅ [Fix] ปิด Modal Preview รูปภาพก่อน เพื่อไม่ให้ซ้อนทับกัน
+      setShowDailyPreviewModal(false);
 
-    await runGenerateReport(filterDataFromState);
+      // สำหรับ Daily ให้เปิด Modal เลือกรูป แทนที่จะสร้างเลย
+      // ถ้ายังไม่ได้กดค้นหา (ไม่มี dailyPhotos ดึงข้อมูลใหม่ก่อน)
+      if (dailyPhotos.length === 0) {
+        setIsPreviewLoading(true);
+        const dateStr = formatDateToYYYYMMDD(selectedDate);
+        if (dateStr) {
+          const response = await api.getDailyPhotos(projectId, dateStr);
+          if (response.success && response.data) {
+            setDailyPhotos(response.data);
+            // ตั้งค่าเริ่มต้นให้เลือกทั้งหมด
+            setSelectedPhotoIds(new Set(response.data.map(p => p.id)));
+            setShowDailyGenerateModal(true);
+          } else {
+            await showAlert('ไม่พบรูปภาพ', 'ข้อผิดพลาด');
+          }
+        }
+        setIsPreviewLoading(false);
+      } else {
+        // มีข้อมูลอยู่แล้ว (อาจจะมาจากการกด Search ก่อนหน้า) เปิด Modal เลย
+        // ตั้งค่าเริ่มต้นให้เลือกทั้งหมด ในกรณีที่ไม่ได้กดเลือกค้างไว้
+        if (selectedPhotoIds.size === 0) {
+          setSelectedPhotoIds(new Set(dailyPhotos.map(p => p.id)));
+        }
+        setShowDailyGenerateModal(true);
+      }
+      return; // หยุดทำงาน ให้ผู้ใช้ไปกดยืนยันใน Modal
+    }
+
+    if (reportType === 'QC') {
+      // สำหรับ QC (การสร้างรายงานแบบเดิม) เผื่อกรณีมีการเรียกติดมา
+      const filterDataFromState = {
+        reportType,
+        mainCategory: formData.mainCategory,
+        subCategory: formData.subCategory,
+        dynamicFields: dynamicFields
+      };
+
+      await runGenerateReport(filterDataFromState);
+      return;
+    }
+  };
+
+  // ✅ [ใหม่] ฟังก์ชันสำหรับดาวน์โหลดรูปที่เลือกแบบ Zip (สำหรับ QC)
+  const handleDownloadSelectedPhotos = async () => {
+    if (selectedQcPhotoIds.size === 0) {
+      await showAlert('กรุณาเลือกรูปภาพอย่างน้อย 1 รูป', 'แจ้งเตือน');
+      return;
+    }
+
+    setIsDownloadingPhotos(true);
+    let successCount = 0;
+
+    try {
+      const selectedPhotos = qcPhotos.filter(p => selectedQcPhotoIds.has(p.id));
+      const zip = new JSZip();
+
+      // Build a string from dynamicFields (e.g., "Zone-A_Floor-2")
+      let dynamicFieldStr = '';
+      if (dynamicFields && Object.keys(dynamicFields).length > 0) {
+        dynamicFieldStr = '_' + Object.values(dynamicFields)
+          .map(val => String(val).replace(/[\/\\]/g, '-'))
+          .join('_');
+      }
+
+      const folderName = `${formData.mainCategory}_${formData.subCategory}${dynamicFieldStr}`.replace(/[\/\\]/g, '-');
+      const imgFolder = zip.folder(folderName);
+
+      if (!imgFolder) {
+        throw new Error("Cannot create zip folder");
+      }
+
+      for (let i = 0; i < selectedPhotos.length; i++) {
+        const photo = selectedPhotos[i];
+        const displayUrl = cdnUrl && photo.firepath
+          ? `${cdnUrl}/${photo.firepath.replace(/^\//, '')}`
+          : photo.driveUrl || '';
+
+        // Validate URL before loading
+        if (!displayUrl || displayUrl === '') {
+          console.warn(`Skipping photo ${photo.id} due to invalid URL.`);
+          continue;
+        }
+
+        try {
+          let finalUrl = displayUrl;
+          if (finalUrl.startsWith('http')) {
+            const resProxy = await api.proxyImage(finalUrl);
+            if (resProxy.success && resProxy.data) {
+              finalUrl = resProxy.data;
+            }
+          }
+
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob((b) => {
+                  if (b) resolve(b);
+                  else reject(new Error('Canvas toBlob failed'));
+                }, 'image/jpeg', 0.9);
+              } else {
+                reject(new Error('Failed to get canvas context'));
+              }
+            };
+            img.onerror = () => reject(new Error(`Failed to load image: ${finalUrl}`));
+            img.src = finalUrl;
+          });
+
+          const filePrefix = dynamicFieldStr ? dynamicFieldStr.substring(1) + '_' : '';
+          const filename = `${filePrefix}${photo.topic}_${i + 1}.jpg`.replace(/[\/\\]/g, '-');
+          imgFolder.file(filename, blob);
+          successCount++;
+        } catch (fetchErr) {
+          console.warn(`Failed to fetch image for zip: ${displayUrl}`, fetchErr);
+        }
+      }
+
+      if (successCount > 0) {
+        // Generate the zip file and trigger download
+        const content = await zip.generateAsync({ type: 'blob' });
+        const zipUrl = URL.createObjectURL(content);
+
+        const atag = document.createElement('a');
+        atag.href = zipUrl;
+        atag.download = `${folderName}_Photos.zip`;
+        document.body.appendChild(atag);
+        atag.click();
+        document.body.removeChild(atag);
+        setTimeout(() => URL.revokeObjectURL(zipUrl), 1000);
+
+        await showAlert(`สร้างไฟล์ Zip โปรเจ็กต์สำเร็จ! (รวม ${successCount} รูป)`, 'ดาวน์โหลดสำเร็จ');
+      } else {
+        await showAlert(`ระบบไม่สามารถดาวน์โหลดรูปภาพได้ (อาจจะติดปัญหาที่เบราว์เซอร์หรือเซิร์ฟเวอร์ปลายทาง)`, 'ดาวน์โหลดล้มเหลว');
+      }
+    } catch (err) {
+      console.error('Download error:', err);
+      await showAlert('เกิดข้อผิดพลาดในการดาวน์โหลดไฟล์รูปภาพแบบ Zip', 'ข้อผิดพลาด');
+    } finally {
+      setIsDownloadingPhotos(false);
+      setShowQcDownloadModal(false);
+    }
+  };
+
+  // ✅ [ใหม่] ฟังก์ชันสำหรับดาวน์โหลดรูปประจำวัน (Daily) แบบ Zip
+  const handleDownloadDailyPhotos = async () => {
+    if (selectedPhotoIds.size === 0) {
+      await showAlert('กรุณาเลือกรูปภาพอย่างน้อย 1 รูป', 'แจ้งเตือน');
+      return;
+    }
+
+    setIsDownloadingPhotos(true);
+    let successCount = 0;
+
+    try {
+      const selected = dailyPhotos.filter(p => selectedPhotoIds.has(p.id));
+      const zip = new JSZip();
+
+      // For daily, use the date as the folder name
+      const dateStr = selectedDate ? formatDateToYYYYMMDD(selectedDate) : 'Unknown_Date';
+      const folderName = `Daily_Report_${dateStr}`;
+      const imgFolder = zip.folder(folderName);
+
+      if (!imgFolder) {
+        throw new Error("Cannot create zip folder");
+      }
+
+      for (let i = 0; i < selected.length; i++) {
+        const photo = selected[i];
+        const displayUrl = cdnUrl && photo.firepath
+          ? `${cdnUrl}/${photo.firepath.replace(/^\//, '')}`
+          : photo.driveUrl || '';
+
+        // Validate URL before loading
+        if (!displayUrl || displayUrl === '') {
+          console.warn(`Skipping photo ${photo.id} due to invalid URL.`);
+          continue;
+        }
+
+        try {
+          let finalUrl = displayUrl;
+          if (finalUrl.startsWith('http')) {
+            const resProxy = await api.proxyImage(finalUrl);
+            if (resProxy.success && resProxy.data) {
+              finalUrl = resProxy.data;
+            }
+          }
+
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob((b) => {
+                  if (b) resolve(b);
+                  else reject(new Error('Canvas toBlob failed'));
+                }, 'image/jpeg', 0.9);
+              } else {
+                reject(new Error('Failed to get canvas context'));
+              }
+            };
+            img.src = finalUrl;
+          });
+
+          // Daily photos primarily use 'description', whereas QC uses 'topic'
+          const topicName = photo.description || photo.topic || 'Photo';
+          const filename = `${topicName}_${i + 1}.jpg`.replace(/[\/\\]/g, '-');
+          imgFolder.file(filename, blob);
+          successCount++;
+        } catch (fetchErr) {
+          console.warn(`Failed to fetch image for zip: ${displayUrl}`, fetchErr);
+        }
+      }
+
+      if (successCount > 0) {
+        // Generate the zip file and trigger download
+        const content = await zip.generateAsync({ type: 'blob' });
+        const zipUrl = URL.createObjectURL(content);
+
+        const atag = document.createElement('a');
+        atag.href = zipUrl;
+        atag.download = `${folderName}_Photos.zip`;
+        document.body.appendChild(atag);
+        atag.click();
+        document.body.removeChild(atag);
+        setTimeout(() => URL.revokeObjectURL(zipUrl), 1000);
+
+        await showAlert(`ดาวน์โหลดสำเร็จ! (รวม ${successCount} รูป)`, 'สำเร็จ');
+      } else {
+        await showAlert(`ระบบไม่สามารถดาวน์โหลดรูปภาพได้ (อาจจะติดปัญหาที่เบราว์เซอร์หรือเซิร์ฟเวอร์ปลายทาง)`, 'ดาวน์โหลดล้มเหลว');
+      }
+    } catch (err) {
+      console.error('Download error:', err);
+      await showAlert('เกิดข้อผิดพลาดในการดาวน์โหลดไฟล์รูปภาพแบบ Zip', 'ข้อผิดพลาด');
+    } finally {
+      setIsDownloadingPhotos(false);
+      setShowDailyGenerateModal(false);
+    }
   };
 
   // (Helper Functions ที่เหลือเหมือนเดิม)
@@ -400,6 +710,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     subCategory?: string;
     dynamicFields?: Record<string, string>;
     date?: string;
+    selectedPhotoIds?: string[]; // ✅ รับค่ารูปที่ถูกเลือก
   }) => {
     setIsGenerating(true);
     setGeneratedReport(null);
@@ -407,10 +718,16 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
     try {
       // ✅ แก้ไข: รวม projectId เข้าไปใน object
+      // ✅ [Fix] ส่ง selectedPhotoIds ที่เหมาะสมกับประเภทรายงานไปให้ Backend
+      const finalSelectedPhotos = filterData.reportType === 'QC'
+        ? (selectedQcPhotoIds.size > 0 ? Array.from(selectedQcPhotoIds) : undefined)
+        : filterData.selectedPhotoIds;
+
       const response = await api.generateReport({
         projectId,      // ← เพิ่มบรรทัดนี้
         projectName,    // ← เพิ่มบรรทัดนี้ (optional)
-        ...filterData
+        ...filterData,
+        selectedPhotoIds: finalSelectedPhotos // แทนที่ค่า selectedPhotoIds เดิม
       });
 
       if (response.success && response.data) {
@@ -603,6 +920,91 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   };
 
 
+  // ✅ [ใหม่] ฟังก์ชันดาวน์โหลดรูปพร้อมลายน้ำ และ Modal สำหรับเปิดดูรูป
+  const handleDownloadWithWatermark = async () => {
+    if (!previewData) return;
+    let imageSrc = previewData.url;
+
+    if (imageSrc.startsWith('http')) {
+      try {
+        const res = await api.proxyImage(imageSrc);
+        if (res.success && res.data) {
+          imageSrc = res.data;
+        } else {
+          throw new Error(res.error || 'Proxy failed');
+        }
+      } catch (e) {
+        console.error("Proxy error:", e);
+        await showAlert('ไม่สามารถดาวน์โหลดรูปได้ (CORS Error)', 'เกิดข้อผิดพลาด');
+        return;
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.src = imageSrc;
+
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0);
+
+      if (previewData.addWatermark && (previewData.timestamp || previewData.location)) {
+        const fontSize = Math.max(24, Math.floor(canvas.width * 0.03));
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.fillStyle = 'white';
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+
+        const padding = Math.floor(canvas.width * 0.02);
+        const lineHeight = fontSize * 1.5;
+        let currentY = canvas.height - padding;
+
+        if (previewData.timestamp) {
+          const formattedTimestamp = new Date(previewData.timestamp).toLocaleString('th-TH');
+          ctx.fillText(formattedTimestamp, canvas.width - padding, currentY);
+          currentY -= lineHeight;
+        }
+
+        if (previewData.location) {
+          const locationLines = previewData.location.split('\\n');
+          [...locationLines].reverse().forEach(line => {
+            if (line) {
+              ctx.fillText(line.trim(), canvas.width - padding, currentY);
+              currentY -= lineHeight;
+            }
+          });
+        }
+      }
+
+      const link = document.createElement('a');
+      link.download = `photo_${Date.now()}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.9);
+      link.click();
+    };
+  };
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const imgElement = e.currentTarget;
+    const naturalWidth = imgElement.naturalWidth;
+    let calcFont = 24;
+
+    if (naturalWidth > 0 && imgElement.clientWidth > 0) {
+      const scaleFactor = imgElement.clientWidth / naturalWidth;
+      const originalFontSize = Math.max(24, Math.floor(naturalWidth * 0.03));
+      calcFont = originalFontSize * scaleFactor;
+    }
+    setWatermarkFontSize(Math.max(12, calcFont));
+  };
+
+
   // ========== Main Render ==========
   return (
     <div className={styles.reportsContainer}>
@@ -709,13 +1111,28 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         {reportType === 'Daily' && (
           <div className={styles.formGroup}>
             <label className={styles.label}>เลือกวันที่:</label>
-            <DatePicker selected={selectedDate} onChange={(date: Date | null) => setSelectedDate(date)} dateFormat="dd/MM/yyyy" className="daily-datepicker" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <DatePicker selected={selectedDate} onChange={(date: Date | null) => setSelectedDate(date)} dateFormat="dd/MM/yyyy" className="daily-datepicker" />
+            </div>
+
+            {/* --- Buttons (Search & Generate) --- */}
+            <div className={styles.buttonContainer} style={{ marginTop: '15px' }}>
+              <button
+                onClick={handleSearch}
+                className={styles.generateButton}
+                style={{ width: '100%', maxWidth: '300px', backgroundColor: '#007bff' }}
+                disabled={isGenerating || isLoadingList || isPreviewLoading}
+              >
+                {isPreviewLoading ? <FiLoader className={styles.iconSpin} style={{ marginRight: '8px' }} /> : <FiSearch style={{ marginRight: '8px' }} />}
+                ตรวจสอบรูปภาพและสร้างรายงาน
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* 3. Unified List (Accordion) - Always Visible below Form */}
-      {(sharedJobs.length > 0 || generatedReportsList.length > 0) && (
+      {/* 3. Unified List (Accordion) - Always Visible below Form for QC */}
+      {reportType === 'QC' && (sharedJobs.length > 0 || generatedReportsList.length > 0) && (
         <div className={styles.activeFeedBox}>
           <h3 className={styles.activeFeedTitle}>
             <FiActivity style={{ marginRight: '8px', color: '#ffc107' }} />
@@ -921,11 +1338,51 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                                                 {hasReport && <span style={{ fontSize: '0.75rem', color: '#999' }}><FiClock style={{ marginRight: '3px' }} /> ล่าสุด: {new Date(item.report!.createdAt).toLocaleDateString('th-TH')} {new Date(item.report!.createdAt).toLocaleTimeString('th-TH')}</span>}
                                               </div>
                                             </div>
-                                            <div className={styles.jobCardActions}>
+                                            <div className={styles.jobCardActions} style={{ flexWrap: 'wrap', gap: '5px' }}>
                                               {(hasReport || isJustGenerated) && (
-                                                <a href={item.report?.publicUrl} target="_blank" rel="noopener noreferrer" className={styles.miniSuccessButton} style={{ marginRight: '5px', flex: 1 }} onClick={(e) => e.stopPropagation()}><FiCheckCircle /> ดู PDF</a>
+                                                <a href={item.report?.publicUrl} target="_blank" rel="noopener noreferrer" className={styles.miniSuccessButton} style={{ flex: '1 1 30%', minWidth: '80px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}><FiCheckCircle /> ดู PDF</a>
                                               )}
-                                              <button className={styles.miniGenerateButton} style={{ flex: 2, backgroundColor: newPhotosCount > 0 ? '#ffc107' : (hasReport ? '#17a2b8' : '#007bff'), color: newPhotosCount > 0 ? '#000' : '#fff' }} onClick={async (e) => {
+
+                                              <button className={styles.miniSecondaryButton} style={{ flex: '1 1 30%', minWidth: '100px', backgroundColor: '#6c757d', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }} onClick={async (e) => {
+                                                e.stopPropagation();
+                                                // ดึงข้อมูลรูปเพื่อเปิด Modal ดาวน์โหลด
+                                                setIsPreviewLoading(true);
+                                                try {
+                                                  const payloadParams = {
+                                                    reportType: 'QC',
+                                                    mainCategory: item.mainCategory,
+                                                    subCategory: item.subCategory,
+                                                    dynamicFields: item.dynamicFields
+                                                  };
+
+                                                  // Sync form state (visual feedback)
+                                                  setReportType('QC');
+                                                  setFormData({ mainCategory: item.mainCategory, subCategory: item.subCategory });
+                                                  setDynamicFields(item.dynamicFields);
+
+                                                  const response = await api.getQcPhotosPreview(projectId, item.mainCategory, item.subCategory, item.dynamicFields || {});
+                                                  if (response.success && response.data) {
+                                                    setQcPhotos(response.data);
+                                                    setSelectedQcPhotoIds(new Set(response.data.map(p => p.id)));
+                                                    if (response.data.length > 0) {
+                                                      setShowQcDownloadModal(true);
+                                                    } else {
+                                                      await showAlert('ไม่พบรูปภาพ QC ในหมวดหมู่นี้', 'ไม่พบรูปภาพ');
+                                                    }
+                                                  } else {
+                                                    await showAlert('ไม่สามารถดึงรูปภาพ QC ได้', 'เกิดข้อผิดพลาด');
+                                                  }
+                                                } catch (err) {
+                                                  console.error(err);
+                                                  await showAlert('เกิดข้อผิดพลาด', 'ข้อผิดพลาด');
+                                                } finally {
+                                                  setIsPreviewLoading(false);
+                                                }
+                                              }} disabled={isPreviewLoading}>
+                                                {isPreviewLoading && formData.mainCategory === item.mainCategory && formData.subCategory === item.subCategory ? <FiLoader className={styles.iconSpin} /> : <FiDownloadCloud />} ดาวน์โหลดรูป
+                                              </button>
+
+                                              <button className={styles.miniGenerateButton} style={{ flex: '1 1 30%', minWidth: '130px', backgroundColor: newPhotosCount > 0 ? '#ffc107' : (hasReport ? '#17a2b8' : '#007bff'), color: newPhotosCount > 0 ? '#000' : '#fff' }} onClick={async (e) => {
                                                 e.stopPropagation();
                                                 console.log('🔘 Button Clicked! Item:', item); // DEBUG
                                                 const payload = {
@@ -977,6 +1434,29 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         </div>
       )
       }
+
+      {/* --- Daily Reports List --- */}
+      {reportType === 'Daily' && (
+        <div className={styles.generatedReportsBox}>
+          <h3 className={styles.generatedReportsTitle}>
+            <FiClock style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+            ประวัติรายงานประจำวัน
+          </h3>
+
+          {isLoadingList ? (
+            <p className={styles.loadingText}><FiLoader className={styles.iconSpin} /> กำลังโหลดรายงาน...</p>
+          ) : listError ? (
+            <p className={styles.errorText}><FiAlertTriangle /> {listError}</p>
+          ) : generatedReportsList.filter(r => r.reportType === 'Daily').length === 0 ? (
+            <p className={styles.noReportsText}><FiInbox /> ไม่พบประวัติรายงานประจำวัน</p>
+          ) : (
+            <div className={styles.reportListContainer}>
+              {generatedReportsList.filter(r => r.reportType === 'Daily').map(renderReportItem)}
+            </div>
+          )}
+        </div>
+      )}
+
       {renderPreviewBox()}
 
       {/* --- Generated Result Box (เหมือนเดิม) --- */}
@@ -1019,6 +1499,223 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         )
       }
 
+      {/* --- Detailed Preview Modal --- */}
+      {previewData && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 10000,
+          display: 'flex', justifyContent: 'center', alignItems: 'center'
+        }} onClick={() => { setPreviewData(null); setZoomLevel(1); }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: 'white', padding: '20px', borderRadius: '8px',
+            width: '90%', maxWidth: '800px', maxHeight: '90vh', display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
+              <h3 style={{ margin: 0 }}>Preview</h3>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button onClick={() => setShowInfoOverlay(prev => !prev)} style={{ padding: '8px', borderRadius: '4px', border: 'none', backgroundColor: showInfoOverlay ? '#007bff' : '#eee', color: showInfoOverlay ? 'white' : 'black', cursor: 'pointer' }} title={showInfoOverlay ? "ซ่อนรายละเอียด" : "แสดงรายละเอียด"}>
+                  {showInfoOverlay ? <FiEye /> : <FiEyeOff />}
+                </button>
+                <button onClick={() => setZoomLevel(prev => Math.max(1, prev - 0.5))} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd', background: '#fff', cursor: 'pointer' }}><FiZoomOut /></button>
+                <span style={{ background: '#eee', padding: '5px 10px', borderRadius: '4px', minWidth: '40px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Math.round(zoomLevel * 100)}%</span>
+                <button onClick={() => setZoomLevel(prev => Math.min(3, prev + 0.5))} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd', background: '#fff', cursor: 'pointer' }}><FiZoomIn /></button>
+                <button onClick={handleDownloadWithWatermark} style={{ backgroundColor: '#27ae60', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <FiSave /> บันทึก
+                </button>
+                <button onClick={() => { setPreviewData(null); setZoomLevel(1); }} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', marginLeft: '10px' }}><FiX /></button>
+              </div>
+            </div>
+
+            <div style={{ overflow: 'auto', flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0', borderRadius: '4px' }}>
+              <div style={{ position: 'relative', display: 'inline-block', transform: `scale(${zoomLevel})`, transformOrigin: 'center center', transition: 'transform 0.2s ease' }}>
+                <img src={previewData.url} alt="Preview" onLoad={handleImageLoad} style={{ maxWidth: '100%', maxHeight: '70vh', display: 'block' }} />
+                {showInfoOverlay && previewData.addWatermark && (
+                  <div style={{
+                    position: 'absolute', bottom: `${watermarkFontSize}px`, right: `${watermarkFontSize}px`,
+                    textAlign: 'right', color: 'white', textShadow: '0px 0px 4px rgba(0,0,0,1)',
+                    fontWeight: 'bold', fontFamily: 'Arial, sans-serif', fontSize: `${watermarkFontSize}px`,
+                    lineHeight: '1.2', pointerEvents: 'none', whiteSpace: 'pre'
+                  }}>
+                    {previewData.location && (
+                      <div style={{ marginBottom: 0 }}>
+                        {[...previewData.location.split('\\n')].reverse().map((line, i) => (
+                          <div key={i}>{line}</div>
+                        ))}
+                      </div>
+                    )}
+                    {previewData.timestamp && <div>{new Date(previewData.timestamp).toLocaleString('th-TH')}</div>}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* --- Daily Generate Modal (Selection) --- */}
+      {
+        showDailyGenerateModal && (
+          <div className={styles.modalOverlay} onClick={() => setShowDailyGenerateModal(false)}>
+            <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ddd', paddingBottom: '10px', marginBottom: '15px' }}>
+                <h3 style={{ margin: 0 }}><FiFileText style={{ marginRight: '8px' }} />เลือกรูปภาพเพื่อสร้างรายงาน</h3>
+                <button
+                  onClick={() => setShowDailyGenerateModal(false)}
+                  style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#666' }}
+                >✕</button>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <span style={{ fontWeight: 'bold' }}>เลือก: {selectedPhotoIds.size} / {dailyPhotos.length} รูป</span>
+                <div>
+                  <button
+                    onClick={() => setSelectedPhotoIds(new Set(dailyPhotos.map(p => p.id)))}
+                    style={{ background: 'none', border: '1px solid #007bff', color: '#007bff', borderRadius: '4px', padding: '4px 8px', marginRight: '8px', cursor: 'pointer', fontSize: '0.85rem' }}
+                  >เลือกทั้งหมด</button>
+                  <button
+                    onClick={() => setSelectedPhotoIds(new Set())}
+                    style={{ background: 'none', border: '1px solid #dc3545', color: '#dc3545', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '0.85rem' }}
+                  >ล้างการเลือก</button>
+                </div>
+              </div>
+
+              <div style={{ overflowY: 'auto', flex: 1, paddingRight: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  {dailyPhotos.map((photo, index) => {
+                    const displayUrl = cdnUrl && photo.firepath
+                      ? `${cdnUrl}/${photo.firepath.replace(/^\//, '')}`
+                      : photo.driveUrl;
+                    const isSelected = selectedPhotoIds.has(photo.id);
+                    return (
+                      <label key={photo.id} style={{ display: 'flex', gap: '15px', alignItems: 'flex-start', background: isSelected ? '#e8f4fd' : '#f8f9fa', padding: '10px', borderRadius: '8px', border: `1px solid ${isSelected ? '#007bff' : '#eee'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newSelected = new Set(selectedPhotoIds);
+                            if (e.target.checked) newSelected.add(photo.id);
+                            else newSelected.delete(photo.id);
+                            setSelectedPhotoIds(newSelected);
+                          }}
+                          style={{ width: '20px', height: '20px', marginTop: '5px' }}
+                        />
+                        <div style={{ width: '100px', height: '100px', flexShrink: 0, overflow: 'hidden', borderRadius: '6px' }} onClick={(e) => { e.preventDefault(); setPreviewData({ url: displayUrl, timestamp: photo.createdAt, location: photo.location || null, addWatermark: false }); }}>
+                          <img src={displayUrl} alt={`Photo ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', color: '#333' }}>{index + 1}. {photo.topic || photo.description || 'ไม่มีคำบรรยาย'}</h4>
+                          <p style={{ margin: 0, fontSize: '0.9rem', color: '#666', whiteSpace: 'pre-wrap' }}>{photo.topic ? photo.description : ''}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ marginTop: '15px', borderTop: '1px solid #ddd', paddingTop: '15px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button onClick={() => setShowDailyGenerateModal(false)} disabled={isGenerating || isDownloadingPhotos} className={styles.searchButton} style={{ padding: '10px 20px', backgroundColor: '#e0e0e0', color: '#333', border: 'none' }}>ยกเลิก</button>
+
+                <button
+                  disabled={selectedPhotoIds.size === 0 || isDownloadingPhotos || isGenerating}
+                  onClick={handleDownloadDailyPhotos}
+                  className={styles.generateButton} style={{ padding: '10px 20px', margin: 0, backgroundColor: '#17a2b8' }}
+                >
+                  {isDownloadingPhotos ? <FiLoader className={styles.iconSpin} /> : <FiDownloadCloud />} ดาวน์โหลด ({selectedPhotoIds.size} รูป)
+                </button>
+
+                <button
+                  disabled={selectedPhotoIds.size === 0 || isGenerating}
+                  onClick={async () => {
+                    await runGenerateReport({
+                      reportType: 'Daily',
+                      date: selectedDate ? selectedDate.toISOString().split('T')[0] : undefined,
+                      selectedPhotoIds: Array.from(selectedPhotoIds)
+                    });
+                    setShowDailyGenerateModal(false); // Close ONLY after generation completes
+                  }}
+                  className={styles.generateButton} style={{ padding: '10px 20px', margin: 0 }}
+                >
+                  {isGenerating ? <FiLoader className={styles.iconSpin} /> : <FiFileText />} สร้างรายงาน ({selectedPhotoIds.size} รูป)
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* --- QC Download Modal (Bulk Images) --- */}
+      {
+        showQcDownloadModal && (
+          <div className={styles.modalOverlay} onClick={() => setShowQcDownloadModal(false)}>
+            <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ddd', paddingBottom: '10px', marginBottom: '15px' }}>
+                <h3 style={{ margin: 0 }}><FiDownloadCloud style={{ marginRight: '8px' }} />เลือกรูปภาพ QC เพื่อดาวน์โหลด</h3>
+                <button
+                  onClick={() => setShowQcDownloadModal(false)}
+                  style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#666' }}
+                >✕</button>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <span style={{ fontWeight: 'bold' }}>เลือก: {selectedQcPhotoIds.size} / {qcPhotos.length} รูป</span>
+                <div>
+                  <button
+                    onClick={() => setSelectedQcPhotoIds(new Set(qcPhotos.map(p => p.id)))}
+                    style={{ background: 'none', border: '1px solid #007bff', color: '#007bff', borderRadius: '4px', padding: '4px 8px', marginRight: '8px', cursor: 'pointer', fontSize: '0.85rem' }}
+                  >เลือกทั้งหมด</button>
+                  <button
+                    onClick={() => setSelectedQcPhotoIds(new Set())}
+                    style={{ background: 'none', border: '1px solid #dc3545', color: '#dc3545', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '0.85rem' }}
+                  >ล้างการเลือก</button>
+                </div>
+              </div>
+
+              <div style={{ overflowY: 'auto', flex: 1, paddingRight: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  {qcPhotos.map((photo, index) => {
+                    const displayUrl = cdnUrl && photo.firepath
+                      ? `${cdnUrl}/${photo.firepath.replace(/^\//, '')}`
+                      : photo.driveUrl || '';
+                    const isSelected = selectedQcPhotoIds.has(photo.id);
+                    return (
+                      <label key={photo.id} style={{ display: 'flex', gap: '15px', alignItems: 'flex-start', background: isSelected ? '#e8f4fd' : '#f8f9fa', padding: '10px', borderRadius: '8px', border: `1px solid ${isSelected ? '#007bff' : '#eee'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newSelected = new Set(selectedQcPhotoIds);
+                            if (e.target.checked) newSelected.add(photo.id);
+                            else newSelected.delete(photo.id);
+                            setSelectedQcPhotoIds(newSelected);
+                          }}
+                          style={{ width: '20px', height: '20px', marginTop: '5px' }}
+                        />
+                        <div style={{ width: '100px', height: '100px', flexShrink: 0, overflow: 'hidden', borderRadius: '6px' }} onClick={(e) => { e.preventDefault(); setPreviewData({ url: displayUrl, timestamp: photo.createdAt, location: photo.location || null, addWatermark: false }); }}>
+                          <img src={displayUrl} alt={`QC Photo ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', color: '#333' }}>{index + 1}. {photo.topic}</h4>
+                          <p style={{ margin: 0, fontSize: '0.9rem', color: '#666', whiteSpace: 'pre-wrap' }}>{photo.description || 'ไม่มีคำบรรยาย'}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ marginTop: '15px', borderTop: '1px solid #ddd', paddingTop: '15px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button onClick={() => setShowQcDownloadModal(false)} className={styles.searchButton} style={{ padding: '10px 20px', backgroundColor: '#e0e0e0', color: '#333', border: 'none' }}>ยกเลิก</button>
+                <button
+                  disabled={selectedQcPhotoIds.size === 0 || isDownloadingPhotos}
+                  onClick={handleDownloadSelectedPhotos}
+                  className={styles.generateButton} style={{ padding: '10px 20px', margin: 0 }}
+                >
+                  {isDownloadingPhotos ? <FiLoader className={styles.iconSpin} /> : <FiDownloadCloud />} ดาวน์โหลด ({selectedQcPhotoIds.size} รูป)
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
     </div >
   );
 };

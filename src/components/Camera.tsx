@@ -276,14 +276,13 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     });
   };
 
-  // (handleNativeFileSelected - แก้ไขแล้ว)
+  // (handleNativeFileSelected - ทยอยประมวลผลทีละไฟล์สำหรับ Bulk Upload)
   const handleNativeFileSelected = async (event: React.ChangeEvent<HTMLInputElement>, isNewCapture: boolean, forceWatermark?: boolean) => {
-    const file = event.target.files?.[0];
-    if (event.target) event.target.value = "";
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
     setIsProcessingPhoto(true);
 
-    const photoTimestamp = new Date().toISOString();
     let locationString: string | null = null;
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -302,59 +301,68 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     }
 
     try {
-      const photoBase64 = await processNativePhoto(file);
-      // ✅ แก้ไข: ใช้ค่าจาก ref แทน state เพื่อหลีกเลี่ยง timing issue
+      const { id: jobId, label: jobLabel } = getCurrentJobIdentifier();
       const shouldAddWatermark = isNewCapture ? true : watermarkPreferenceRef.current;
       console.log('🎨 shouldAddWatermark:', shouldAddWatermark, '| isNewCapture:', isNewCapture, '| watermarkPreferenceRef:', watermarkPreferenceRef.current);
 
-      // ✅ [แก้ไข 1.2] ดึง cả id และ label
-      const { id: jobId, label: jobLabel } = getCurrentJobIdentifier();
+      const newPhotos = new Map<string, PhotoQueueItem>();
 
-      let key: string;
-      // ✅ [แก้ไข 1.3] อัปเดต Type ให้ตรง
-      let uploadDataPayload: PhotoQueueItem['uploadData'];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const photoTimestamp = new Date().toISOString();
+        const photoBase64 = await processNativePhoto(file);
 
-      if (reportType === 'QC' && currentTopic) {
-        key = currentTopic;
-        uploadDataPayload = {
-          projectId, projectName: projectName || 'N/A', reportType,
+        let key: string;
+        let uploadDataPayload: PhotoQueueItem['uploadData'];
+
+        if (reportType === 'QC' && currentTopic) {
+          key = i === 0 ? currentTopic : `${currentTopic}_${i}`; // Handle multiple for QC just in case
+          uploadDataPayload = {
+            projectId, projectName: projectName || 'N/A', reportType,
+            timestamp: photoTimestamp,
+            location: locationString || 'ไม่สามารถระบุตำแหน่งได้',
+            jobId: jobId,
+            jobLabel: jobLabel,
+            mainCategory: selectedMainCategory,
+            subCategory: selectedSubCategory,
+            topic: currentTopic, // Use base topic
+            dynamicFields: dynamicFields
+          };
+        } else if (reportType === 'Daily' && step === 'camera') {
+          key = `daily_${Date.now()}_${i}`;
+          uploadDataPayload = {
+            projectId, projectName: projectName || 'N/A', reportType,
+            timestamp: photoTimestamp,
+            location: locationString || 'ไม่สามารถระบุตำแหน่งได้',
+            jobId: jobId,
+            jobLabel: jobLabel,
+            description: '',
+            dynamicFields: {}
+          };
+        } else {
+          console.warn("Skipping file: Invalid state for photo capture.");
+          continue;
+        }
+
+        const newQueueItem: PhotoQueueItem = {
+          key: key,
+          base64: photoBase64,
+          addWatermark: shouldAddWatermark,
           timestamp: photoTimestamp,
-          location: locationString || 'ไม่สามารถระบุตำแหน่งได้',
-          jobId: jobId,
-          jobLabel: jobLabel, // ✅ [เพิ่ม] บันทึก Label
-          mainCategory: selectedMainCategory,
-          subCategory: selectedSubCategory,
-          topic: key,
-          dynamicFields: dynamicFields // ✅ [แก้ไข 1.4] dynamicFields ถูกต้องแล้ว
+          location: locationString,
+          uploadData: uploadDataPayload,
+          status: 'pending'
         };
-      } else if (reportType === 'Daily' && step === 'camera') {
-        key = `daily_${Date.now()}`;
-        uploadDataPayload = {
-          projectId, projectName: projectName || 'N/A', reportType,
-          timestamp: photoTimestamp,
-          location: locationString || 'ไม่สามารถระบุตำแหน่งได้',
-          jobId: jobId,
-          jobLabel: jobLabel, // ✅ [เพิ่ม] บันทึก Label
-          description: '',
-          dynamicFields: {} // ✅ [แก้ไข 1.5] dynamicFields ถูกต้องแล้ว
-        };
-      } else {
-        throw new Error("Invalid state for photo capture.");
+
+        newPhotos.set(key, newQueueItem);
+
+        // Optional: clear topic if QC and we only wanted one photo per topic
+        // if (reportType === 'QC') break; 
       }
-
-      const newQueueItem: PhotoQueueItem = {
-        key: key,
-        base64: photoBase64,
-        addWatermark: shouldAddWatermark,
-        timestamp: photoTimestamp,
-        location: locationString,
-        uploadData: uploadDataPayload,
-        status: 'pending'
-      };
 
       setPhotoQueue(prevQueue => {
         const newQueue = new Map(prevQueue);
-        newQueue.set(key, newQueueItem);
+        newPhotos.forEach((value, key) => newQueue.set(key, value));
         return newQueue;
       });
 
@@ -366,6 +374,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       console.error("Error processing native photo:", error);
       await showAlert("เกิดข้อผิดพลาดในการประมวลผลรูป: " + (error as Error).message, 'ข้อผิดพลาดเกี่ยวกับรูปภาพ');
     } finally {
+      if (event.target) event.target.value = ""; // Clear input
       setIsProcessingPhoto(false);
     }
   };
@@ -999,8 +1008,26 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         />
       )}
 
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => handleNativeFileSelected(e, true)} />
-      <input ref={attachInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleNativeFileSelected(e, false)} />
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        ref={cameraInputRef}
+        style={{ display: 'none' }}
+        multiple
+        onChange={(e) => handleNativeFileSelected(e, true)}
+      />
+
+      <input
+        type="file"
+        accept="image/*"
+        ref={attachInputRef}
+        style={{ display: 'none' }}
+        multiple
+        onChange={(e) => {
+          handleNativeFileSelected(e, false, addWatermarkToAttached);
+        }}
+      />
       {renderPreviewModal()}
 
       {isProcessingPhoto && (
@@ -1573,6 +1600,39 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                 <p style={{ textAlign: 'center', color: '#666', marginTop: '20px' }}>
                   มี {dailyQueueSize} รูปในคิว
                 </p>
+
+                {/* ✅ [ใหม่] ปุ่มดูรายงานหน้า Reports */}
+                <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '10px' }}>
+                  <button
+                    style={{
+                      background: 'none', border: 'none', color: '#007bff',
+                      textDecoration: 'underline', cursor: 'pointer', fontSize: '1rem',
+                      display: 'inline-flex', alignItems: 'center', gap: '5px'
+                    }}
+                    onClick={async () => {
+                      // Option 1: Using api status
+                      const dateStr = new Date().toISOString().split('T')[0];
+                      setModalState({ title: 'กำลังโหลด...', message: 'ตรวจสอบรูปภาพวันนี้...' });
+                      try {
+                        const res = await api.getChecklistStatus({ projectId, reportType: 'Daily', date: dateStr });
+                        setModalState(null);
+                        if (res.success && res.data) {
+                          if (res.data.found > 0) {
+                            await showAlert(`วันนี้คุณถ่ายและอัปโหลดไปแล้ว ${res.data.found} รูป\n(สามารถตรวจสอบและสร้าง PDF ได้ที่เมนู "รายงาน")`, 'ข้อมูลรูปภาพวันนี้');
+                          } else {
+                            await showAlert(`วันนี้ยังไม่มีการอัปโหลดรูปภาพ`, 'ข้อมูลรูปภาพวันนี้');
+                          }
+                        }
+                      } catch (e) {
+                        setModalState(null);
+                        console.error(e);
+                      }
+                    }}
+                  >
+                    <FiEye /> ดูจำนวนรูปที่ส่งแล้ววันนี้
+                  </button>
+                </div>
+
                 <div className={styles['wizard-nav']}>
                   <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}> ย้อนกลับ </button>
                   {dailyQueueSize > 0 ? (
@@ -1679,8 +1739,14 @@ const PendingJobsManager: React.FC<PendingJobsManagerProps> = ({
       if (!jobId) return; // 'continue'
 
       if (!groups.has(jobId)) {
-        const label = item.uploadData.jobLabel ||
-          (item.uploadData.mainCategory ? `${item.uploadData.mainCategory} / ${item.uploadData.subCategory}` : 'งานไม่ระบุชื่อ');
+        let label = item.uploadData.jobLabel;
+        if (!label) {
+          if (reportType === 'QC') {
+            label = item.uploadData.mainCategory ? `${item.uploadData.mainCategory} / ${item.uploadData.subCategory}` : 'งานไม่ระบุชื่อ';
+          } else {
+            label = `รายงานประจำวัน (${new Date(item.timestamp).toLocaleDateString('th-TH')})`;
+          }
+        }
 
         groups.set(jobId, {
           jobId: jobId,

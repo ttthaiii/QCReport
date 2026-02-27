@@ -33,6 +33,7 @@
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.8.1",
+    "@types/node-fetch": "^2.6.13",
     "@types/puppeteer": "^5.4.7",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",

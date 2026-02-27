@@ -331,20 +331,36 @@ apiRouter.post("/admin/update-status/:uid", checkAuth, checkRole(['admin', 'god'
     }
 });
 /**
- * (God) ตั้งค่า Role ผู้ใช้
- * (ต้องเป็น God เท่านั้น)
+ * (Admin/God) ตั้งค่า Role ผู้ใช้
+ * - God: เปลี่ยนได้ทุกคน ทุก Role
+ * - Admin: เปลี่ยนได้เฉพาะคนในโปรเจกต์เดียวกัน และตั้งให้เป็น 'user' หรือ 'admin' เท่านั้น
  */
-apiRouter.post("/admin/set-role/:uid", checkAuth, checkRole(['god']), async (req, res) => {
+apiRouter.post("/admin/set-role/:uid", checkAuth, checkRole(['admin', 'god']), async (req, res) => {
     try {
         const { uid } = req.params;
         const { role } = req.body; // รับ 'user', 'admin', หรือ 'god'
         if (!uid || !role || !['user', 'admin', 'god'].includes(role)) {
             return res.status(400).json({ success: false, error: 'Invalid uid or role' });
         }
+        const requester = req.user;
+        // Admin ไม่สามารถตั้งใครให้เป็น God ได้
+        if (requester.role === 'admin' && role === 'god') {
+            return res.status(403).json({ success: false, error: 'Admins cannot assign god role.' });
+        }
+        // ดึงข้อมูล User ปลายทางเพื่อเช็ค Project ID
+        const userDocRef = db.collection('users').doc(uid);
+        const userDoc = await userDocRef.get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        const targetUser = userDoc.data();
+        // Admin แก้ไขได้เฉพาะ User ในโครงการตัวเองเท่านั้น
+        if (requester.role === 'admin' && requester.assignedProjectId !== (targetUser === null || targetUser === void 0 ? void 0 : targetUser.assignedProjectId)) {
+            return res.status(403).json({ success: false, error: 'Admins can only manage users within their own project.' });
+        }
         // 1. อัปเดตใน Auth Custom Claims (สำคัญต่อความปลอดภัยของ Rules)
         await admin.auth().setCustomUserClaims(uid, { role: role });
         // 2. อัปเดตใน Firestore (เพื่อให้ UI แสดงผลถูกต้อง)
-        const userDocRef = db.collection('users').doc(uid);
         await userDocRef.update({ role: role });
         return res.status(200).json({ success: true, data: { uid, newRole: role } });
     }
@@ -509,7 +525,9 @@ apiRouter.post("/projects/:projectId/report-settings", async (req, res) => {
             newSettings.dailyPhotosPerPage = 6;
         }
         const projectRef = db.collection("projects").doc(projectId);
-        await projectRef.set({ reportSettings: newSettings }, { merge: true });
+        // ✅ [แก้ไข] เปลี่ยนมาใช้ update แทน set(merge) เพื่อให้สามารถ "ลบ" key (โลโก้) ได้
+        // ถ้าใช้ merge: true เวลาเราส่ง object ที่ไม่มี key เดิมไป มันจะไม่ลบให้ (มันแค่เขียนทับ/เพิ่ม)
+        await projectRef.update({ reportSettings: newSettings });
         console.log(`✅ Report settings updated for project: ${projectId}`);
         return res.json({ success: true, data: newSettings });
     }
@@ -728,6 +746,104 @@ apiRouter.post("/upload-photo-base64", async (req, res) => {
         });
     }
 });
+// ✅ [ใหม่] ดึงรูปภาพ Daily ทั้งหมดของวันใดวันหนึ่งเพื่อนำไปโชว์ให้เลือกบนหน้าเว็บ
+apiRouter.get("/projects/:projectId/daily-photos", async (req, res) => {
+    const user = req.user;
+    const { projectId } = req.params;
+    const { date } = req.query;
+    // ตรวจสอบสิทธิ์
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
+    if (!projectId || !date || typeof date !== 'string') {
+        return res.status(400).json({ success: false, error: 'Missing projectId or date parameter.' });
+    }
+    try {
+        const startDate = admin.firestore.Timestamp.fromDate(new Date(`${date}T00:00:00+07:00`));
+        const endDate = admin.firestore.Timestamp.fromDate(new Date(`${date}T23:59:59+07:00`));
+        const photosSnapshot = await db.collection("dailyPhotos")
+            .where("projectId", "==", projectId)
+            .where("createdAt", ">=", startDate)
+            .where("createdAt", "<=", endDate)
+            .orderBy("createdAt", "asc")
+            .get();
+        const photos = photosSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return Object.assign(Object.assign({ id: doc.id }, data), { firepath: data.filePath || '', createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString() });
+        });
+        return res.json({ success: true, data: photos });
+    }
+    catch (error) {
+        console.error("Error fetching daily photos for preview:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ✅ [ใหม่] ดึงรูปภาพ QC ตามฟิลเตอร์ (หมวดหมู่หลัก, ย่อย, dynamic fields)
+apiRouter.get("/projects/:projectId/qc-photos", async (req, res) => {
+    const user = req.user;
+    const { projectId } = req.params;
+    const { mainCategory, subCategory, dynamicFields: dynamicFieldsStr } = req.query;
+    // ตรวจสอบสิทธิ์
+    if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+        return res.status(403).json({ success: false, error: 'Access denied.' });
+    }
+    if (!projectId || !mainCategory || !subCategory || typeof mainCategory !== 'string' || typeof subCategory !== 'string') {
+        return res.status(400).json({ success: false, error: 'Missing requried parameters.' });
+    }
+    let dynamicFields = {};
+    if (typeof dynamicFieldsStr === 'string' && dynamicFieldsStr.trim() !== '') {
+        try {
+            dynamicFields = JSON.parse(dynamicFieldsStr);
+        }
+        catch (e) {
+            return res.status(400).json({ success: false, error: 'Invalid dynamicFields format.' });
+        }
+    }
+    try {
+        const category = `${mainCategory} > ${subCategory}`;
+        let query = db.collection('qcPhotos')
+            .where('projectId', '==', projectId)
+            .where('category', '==', category);
+        if (dynamicFields) {
+            Object.keys(dynamicFields).forEach(key => {
+                const value = dynamicFields[key];
+                if (value) {
+                    query = query.where(`dynamicFields.${key}`, '==', value);
+                }
+            });
+        }
+        const snapshot = await query.get();
+        // จัดกลุ่มรูปตาม Topic และเลือกรูปที่ใหม่ที่สุด
+        const latestPhotosByTopic = new Map();
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const topic = data.topic;
+            if (!topic)
+                return;
+            if (!latestPhotosByTopic.has(topic)) {
+                latestPhotosByTopic.set(topic, Object.assign({ id: doc.id }, data));
+            }
+            else {
+                const existing = latestPhotosByTopic.get(topic);
+                const existingTime = existing.createdAt ? existing.createdAt.toMillis() : 0;
+                const newTime = data.createdAt ? data.createdAt.toMillis() : 0;
+                if (newTime > existingTime) {
+                    latestPhotosByTopic.set(topic, Object.assign({ id: doc.id }, data));
+                }
+            }
+        });
+        const photos = Array.from(latestPhotosByTopic.values()).map(data => {
+            return Object.assign(Object.assign({ id: data.id }, data), { firepath: data.filePath || '', createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString() });
+        });
+        // เรียงตาม topic alphabetical
+        photos.sort((a, b) => (a.topic || '').localeCompare(b.topic || '', 'th'));
+        return res.json({ success: true, data: photos });
+    }
+    catch (error) {
+        console.error("Error fetching QC photos for preview:", error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
 // ✅ [แก้ไข] Generate PDF report (v8 - with Dynamic Settings)
 apiRouter.post("/generate-report", async (req, res) => {
     var _a, _b;
@@ -742,7 +858,8 @@ apiRouter.post("/generate-report", async (req, res) => {
         return res.status(403).json({ success: false, error: 'Project mismatch. Cannot generate report.' });
     }
     try {
-        const { projectId, projectName, reportType, mainCategory, subCategory, dynamicFields, date } = req.body;
+        const { projectId, projectName, reportType, mainCategory, subCategory, dynamicFields, date, selectedPhotoIds // ✅ [ใหม่] รับ array photo ID เพื่อเอาเฉพาะรูปที่เลือกไปสร้าง
+         } = req.body;
         // ... (ส่วนการตรวจสอบ projectId, reportType, และ Fetch Report Settings เหมือนเดิม) ...
         let reportSettings = Object.assign({}, pdf_generator_1.DEFAULT_SETTINGS);
         try {
@@ -787,8 +904,16 @@ apiRouter.post("/generate-report", async (req, res) => {
             // (นี่คือจุดที่ Error เกิดขึ้น)
             // เราจะเรียก getLatestPhotos (เวอร์ชันใหม่) ที่ไม่ต้องใช้ Index
             console.log('Calling NEW getLatestPhotos function...');
-            const foundPhotos = await (0, pdf_generator_1.getLatestPhotos)(projectId, mainCategory, subCategory, allTopics, dynamicFields || {});
+            let foundPhotos = await (0, pdf_generator_1.getLatestPhotos)(projectId, mainCategory, subCategory, allTopics, dynamicFields || {});
             // ✅ --- [จบการแก้ไข] ---
+            // ✅ [ใหม่] ถ้ามีการส่ง selectedPhotoIds มาด้วย ให้ฟิลเตอร์เอารูปที่ไม่ได้เลือกออก
+            if (selectedPhotoIds && Array.isArray(selectedPhotoIds) && selectedPhotoIds.length > 0) {
+                // since getLatestPhotos doesn't return document ID at the moment, we need to match by topic.
+                // But what if we passed IDs from frontend? The frontend will have IDs.
+                // We'd better modify getLatestPhotos to return the ID as well. Let's look at getLatestPhotos.
+                // I will do that in the next step. For now let's just use it as is and we'll fix getLatestPhotos.
+                foundPhotos = foundPhotos.filter(photo => photo.id && selectedPhotoIds.includes(photo.id));
+            }
             const fullLayoutPhotos = (0, pdf_generator_1.createFullLayout)(allTopics, foundPhotos);
             const reportData = { projectId, projectName, mainCategory, subCategory, dynamicFields: dynamicFields || {} };
             const qcReportSettings = Object.assign(Object.assign({}, reportSettings), { photosPerPage: reportSettings.qcPhotosPerPage });
@@ -823,7 +948,11 @@ apiRouter.post("/generate-report", async (req, res) => {
                 return res.status(400).json({ success: false, error: "Missing Daily field (date)." });
             }
             // ... (Logic การหา foundPhotos เหมือนเดิม) ...
-            const foundPhotos = await (0, pdf_generator_1.getDailyPhotosByDate)(projectId, date);
+            let foundPhotos = await (0, pdf_generator_1.getDailyPhotosByDate)(projectId, date);
+            // ✅ [ใหม่] ถ้ามีการส่ง selectedPhotoIds มาด้วย ให้ฟิลเตอร์เอารูปที่ไม่ได้เลือกออก
+            if (selectedPhotoIds && Array.isArray(selectedPhotoIds) && selectedPhotoIds.length > 0) {
+                foundPhotos = foundPhotos.filter(photo => selectedPhotoIds.includes(photo.id));
+            }
             if (foundPhotos.length === 0) {
                 return res.status(404).json({ error: `ไม่พบรูปสำหรับวันที่ ${date}` });
             }

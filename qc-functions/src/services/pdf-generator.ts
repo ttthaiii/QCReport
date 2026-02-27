@@ -70,6 +70,7 @@ export interface PhotoData {
   imageUrl?: string;
   location?: string;
   timestamp?: string;
+  id?: string; // ✅ เพิ่ม id
 }
 
 export interface FullLayoutPhoto extends PhotoData {
@@ -265,6 +266,7 @@ export async function getDailyPhotosByDate(
         : null;
 
       return {
+        id: doc.id, // ✅ คืนค่า id ควบคู่ไปด้วย
         topic: topicName,
         topicOrder: index,
         imageBase64: imageBase64,
@@ -324,15 +326,15 @@ export async function getLatestPhotos(
 
     // ถ้ายังไม่มีใน Map หรือ รูปนี้ใหม่กว่ารูปที่มีอยู่
     if (!latestPhotosByTopic.has(topic)) {
-      latestPhotosByTopic.set(topic, data);
+      latestPhotosByTopic.set(topic, { id: doc.id, ...data } as any);
     } else {
-      const existing = latestPhotosByTopic.get(topic)!;
+      const existing: any = latestPhotosByTopic.get(topic)!;
       // เปรียบเทียบ createdAt (ถ้ามี)
       const existingTime = existing.createdAt ? (existing.createdAt as Timestamp).toMillis() : 0;
       const newTime = data.createdAt ? (data.createdAt as Timestamp).toMillis() : 0;
 
       if (newTime > existingTime) {
-        latestPhotosByTopic.set(topic, data);
+        latestPhotosByTopic.set(topic, { id: doc.id, ...data } as any);
       }
     }
   });
@@ -358,6 +360,7 @@ export async function getLatestPhotos(
     }
 
     return {
+      id: (data as any).id,
       topic: topic,
       imageBase64: imageBase64,
       isPlaceholder: false,
