@@ -364,7 +364,21 @@ async function getUploadedTopicStatus(projectId, category, dynamicFields) {
 // ========================================
 // HTML/CSS GENERATION (Original Layout Style)
 // ========================================
-function getInlineCSS() {
+function getInlineCSS(photosPerPage = 6) {
+    let gridCols = 2;
+    let gridRows = 3;
+    if (photosPerPage === 1) {
+        gridCols = 1;
+        gridRows = 1;
+    }
+    else if (photosPerPage === 2) {
+        gridCols = 1;
+        gridRows = 2;
+    }
+    else if (photosPerPage === 4) {
+        gridCols = 2;
+        gridRows = 2;
+    }
     return `
     <style>
       @page {
@@ -487,8 +501,8 @@ function getInlineCSS() {
       
       .photos-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        grid-template-rows: repeat(3, 1fr); /* บังคับ 3 แถว */
+        grid-template-columns: repeat(${gridCols}, 1fr);
+        grid-template-rows: repeat(${gridRows}, 1fr); /* บังคับจำนวนแถวตามการตั้งค่า */
         gap: 10px 12px;
         margin-top: 10px;
         
@@ -739,8 +753,7 @@ function createPhotosGrid(photos, pageIndex) {
 }
 function createOptimizedHTML(reportData, photos, 
 // ✅ [แก้ไข 1] รับเป็น Object ที่มี 3 ช่อง (เหมือน createDynamicHeader)
-projectLogoBase64s = null) {
-    const photosPerPage = 6;
+projectLogoBase64s = null, photosPerPage = 6) {
     const pages = [];
     // ✅ Debug: ตรวจสอบรูปก่อน slice
     console.log(`\n📄 Creating HTML for ${photos.length} photos:`);
@@ -774,7 +787,7 @@ projectLogoBase64s = null) {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>รายงานการตรวจสอบ</title>
-      ${getInlineCSS()}
+      ${getInlineCSS(photosPerPage)}
     </head>
     <body>
       ${pageHTML}
@@ -831,14 +844,14 @@ async function generatePDF(reportData, fullLayoutPhotos, settings) {
     console.log(`📊 Generating QC Report PDF...`);
     // ✅ [แก้ไข] เรียก fetchProjectLogos (เติม s) และส่ง settings.projectLogos (object)
     const projectLogoBase64s = await fetchProjectLogos(settings.projectLogos);
-    const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s);
+    const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s, settings.photosPerPage);
     return generateOptimizedPDF(finalHtml);
 }
 async function generateDailyPDFWrapper(reportData, fullLayoutPhotos, settings) {
     console.log(`📊 Generating Daily Report PDF...`);
     // ✅ [แก้ไข] เรียก fetchProjectLogos (เติม s) และส่ง settings.projectLogos (object)
     const projectLogoBase64s = await fetchProjectLogos(settings.projectLogos);
-    const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s);
+    const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s, settings.photosPerPage);
     return generateOptimizedPDF(finalHtml);
 }
 // ========================================

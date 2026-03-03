@@ -56,8 +56,22 @@ async function logPhotoToFirestore(photoData) {
         // **KEY CHANGE**: เปลี่ยนชื่อ Collection ตาม reportType เพื่อการ Query ที่มีประสิทธิภาพ
         const collectionName = photoData.reportType === 'QC' ? 'qcPhotos' : 'dailyPhotos';
         const collectionRef = db.collection(collectionName);
+        // ✅ [ใหม่] รองรับการ Replace รูป Daily
+        if (photoData.reportType === 'Daily' && photoData.replaceDailyPhotoId) {
+            console.log(`🔄 Replacing Daily Photo ID: ${photoData.replaceDailyPhotoId}`);
+            const replaceDocRef = collectionRef.doc(photoData.replaceDailyPhotoId);
+            const updateData = Object.assign({}, photoData);
+            delete updateData.replaceDailyPhotoId; // ลบ field ชั่วคราวออกไป
+            await replaceDocRef.update(Object.assign({}, updateData));
+            console.log(`Successfully updated mapped Daily photo ID: ${photoData.replaceDailyPhotoId}`);
+            return { success: true, firestoreId: photoData.replaceDailyPhotoId };
+        }
         // 1. Save to Main Collection (qcPhotos or dailyPhotos)
-        const docRef = await collectionRef.add(Object.assign(Object.assign({}, photoData), { createdAt: firestore_1.FieldValue.serverTimestamp() }));
+        const dataToSave = Object.assign({}, photoData);
+        if (dataToSave.replaceDailyPhotoId === undefined) {
+            delete dataToSave.replaceDailyPhotoId;
+        }
+        const docRef = await collectionRef.add(Object.assign(Object.assign({}, dataToSave), { createdAt: firestore_1.FieldValue.serverTimestamp() }));
         // 2. [New] If QC, Sync to latestQcPhotos for Suggestions
         if (photoData.reportType === 'QC' && photoData.category) {
             try {

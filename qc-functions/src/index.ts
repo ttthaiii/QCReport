@@ -763,7 +763,8 @@ apiRouter.post("/upload-photo-base64", async (req: Request, res: Response): Prom
       topic,
       description,
       location,
-      dynamicFields
+      dynamicFields,
+      replaceDailyPhotoId // ✅ [ใหม่] รับ ID สำหรับแทนที่รูป
     } = req.body;
 
     // [แก้ไข] เปลี่ยน 'photo' เป็น 'photoBase64'
@@ -825,7 +826,8 @@ apiRouter.post("/upload-photo-base64", async (req: Request, res: Response): Prom
         driveUrl: '',
         filePath: '',
         category: '',
-        topic: ''
+        topic: '',
+        replaceDailyPhotoId // ✅ ส่งผ่านไปยัง logPhotoToFirestore
       };
     } else {
       return res.status(400).json({
@@ -949,6 +951,60 @@ apiRouter.get("/projects/:projectId/daily-photos", async (req: Request, res: Res
     return res.json({ success: true, data: photos });
   } catch (error) {
     console.error("Error fetching daily photos for preview:", error);
+    return res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// ✅ [ใหม่] อัปเดตคำอธิบาย (Description) ของรูปภาพ Daily
+apiRouter.put("/projects/:projectId/daily-photos/:photoId", async (req: Request, res: Response): Promise<Response> => {
+  const user = (req as any).user;
+  const { projectId, photoId } = req.params;
+  const { description } = req.body;
+
+  if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+    return res.status(403).json({ success: false, error: 'Access denied.' });
+  }
+
+  if (!photoId || typeof description !== 'string') {
+    return res.status(400).json({ success: false, error: 'Missing requried parameters.' });
+  }
+
+  try {
+    const docRef = db.collection("dailyPhotos").doc(photoId);
+    await docRef.update({
+      description: description.trim(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return res.json({ success: true, data: { status: 'updated' } });
+  } catch (error) {
+    console.error(`Error updating daily photo ${photoId}:`, error);
+    return res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// ✅ [ใหม่] ลบรูปภาพ Daily (แบบ Hard Delete ออกจาก Firestore)
+apiRouter.delete("/projects/:projectId/daily-photos/:photoId", async (req: Request, res: Response): Promise<Response> => {
+  const user = (req as any).user;
+  const { projectId, photoId } = req.params;
+
+  if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+    return res.status(403).json({ success: false, error: 'Access denied.' });
+  }
+
+  if (!photoId) {
+    return res.status(400).json({ success: false, error: 'Missing requried parameters.' });
+  }
+
+  try {
+    const docRef = db.collection("dailyPhotos").doc(photoId);
+
+    // Optional: Could delete from Storage here if desired, but we'll stick to DB for now
+    await docRef.delete();
+
+    return res.json({ success: true, data: { status: 'deleted' } });
+  } catch (error) {
+    console.error(`Error deleting daily photo ${photoId}:`, error);
     return res.status(500).json({ success: false, error: (error as Error).message });
   }
 });

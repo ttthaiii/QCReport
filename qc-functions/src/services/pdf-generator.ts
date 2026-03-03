@@ -477,7 +477,13 @@ export async function getUploadedTopicStatus(
 // HTML/CSS GENERATION (Original Layout Style)
 // ========================================
 
-function getInlineCSS(): string {
+function getInlineCSS(photosPerPage: number = 6): string {
+  let gridCols = 2;
+  let gridRows = 3;
+  if (photosPerPage === 1) { gridCols = 1; gridRows = 1; }
+  else if (photosPerPage === 2) { gridCols = 1; gridRows = 2; }
+  else if (photosPerPage === 4) { gridCols = 2; gridRows = 2; }
+
   return `
     <style>
       @page {
@@ -600,8 +606,8 @@ function getInlineCSS(): string {
       
       .photos-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        grid-template-rows: repeat(3, 1fr); /* บังคับ 3 แถว */
+        grid-template-columns: repeat(${gridCols}, 1fr);
+        grid-template-rows: repeat(${gridRows}, 1fr); /* บังคับจำนวนแถวตามการตั้งค่า */
         gap: 10px 12px;
         margin-top: 10px;
         
@@ -886,9 +892,9 @@ function createOptimizedHTML(
     left: string | null;
     center: string | null;
     right: string | null;
-  } | null = null
+  } | null = null,
+  photosPerPage: number = 6
 ): string {
-  const photosPerPage = 6;
   const pages: FullLayoutPhoto[][] = [];
 
   // ✅ Debug: ตรวจสอบรูปก่อน slice
@@ -927,7 +933,7 @@ function createOptimizedHTML(
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>รายงานการตรวจสอบ</title>
-      ${getInlineCSS()}
+      ${getInlineCSS(photosPerPage)}
     </head>
     <body>
       ${pageHTML}
@@ -1003,7 +1009,7 @@ export async function generatePDF(
   // ✅ [แก้ไข] เรียก fetchProjectLogos (เติม s) และส่ง settings.projectLogos (object)
   const projectLogoBase64s = await fetchProjectLogos(settings.projectLogos);
 
-  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s);
+  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s, settings.photosPerPage);
   return generateOptimizedPDF(finalHtml);
 }
 
@@ -1018,7 +1024,7 @@ export async function generateDailyPDFWrapper(
   // ✅ [แก้ไข] เรียก fetchProjectLogos (เติม s) และส่ง settings.projectLogos (object)
   const projectLogoBase64s = await fetchProjectLogos(settings.projectLogos);
 
-  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s);
+  const finalHtml = createOptimizedHTML(reportData, fullLayoutPhotos, projectLogoBase64s, settings.photosPerPage);
   return generateOptimizedPDF(finalHtml);
 }
 

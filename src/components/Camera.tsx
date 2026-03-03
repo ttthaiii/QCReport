@@ -96,6 +96,15 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     onConfirm?: () => void;
   } | null>(null);
 
+  // ✅ [ใหม่] State สำหรับ Daily Feed & Date Selector
+  const [selectedDailyDate, setSelectedDailyDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  );
+  const [fetchedDailyPhotos, setFetchedDailyPhotos] = useState<any[]>([]);
+  const [isFetchingDaily, setIsFetchingDaily] = useState<boolean>(false);
+  const [pendingReplaceDailyPhotoId, setPendingReplaceDailyPhotoId] = useState<string | null>(null); // ✅ เก็บ ID รูปรอแทนที่
+  const [refreshDailyTrigger, setRefreshDailyTrigger] = useState<number>(0); // ✅ รีเฟรชหน้า Daily
+
   useEffect(() => {
     persistentQueue.saveQueue(projectId, photoQueue);
   }, [projectId, photoQueue]);
@@ -140,6 +149,28 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
       setFieldSuggestions({});
     }
   }, [projectId, reportType, selectedSubCategory, subCategories]);
+
+  // ✅ [ใหม่] Effect ดึงรูป Daily ตามวันที่เลือก
+  useEffect(() => {
+    const fetchDaily = async () => {
+      if (reportType !== 'Daily' || step !== 'camera') return;
+      setIsFetchingDaily(true);
+      try {
+        const res = await api.getDailyPhotos(projectId, selectedDailyDate);
+        if (res.success && res.data) {
+          setFetchedDailyPhotos(res.data);
+        } else {
+          setFetchedDailyPhotos([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch daily photos', err);
+        setFetchedDailyPhotos([]);
+      } finally {
+        setIsFetchingDaily(false);
+      }
+    };
+    fetchDaily();
+  }, [projectId, reportType, selectedDailyDate, step, refreshDailyTrigger]);
 
   // (fetchSharedJobs)
   const fetchSharedJobs = useCallback(async () => {
@@ -328,7 +359,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             topic: currentTopic, // Use base topic
             dynamicFields: dynamicFields
           };
-        } else if (reportType === 'Daily' && step === 'camera') {
+        } else if (reportType === 'Daily' && (step === 'camera' || step === 'topicList')) {
           key = `daily_${Date.now()}_${i}`;
           uploadDataPayload = {
             projectId, projectName: projectName || 'N/A', reportType,
@@ -336,8 +367,9 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
             location: locationString || 'ไม่สามารถระบุตำแหน่งได้',
             jobId: jobId,
             jobLabel: jobLabel,
-            description: '',
-            dynamicFields: {}
+            description: pendingAttachTopic || '', // ✅ สืบทอดคำบรรยาย
+            dynamicFields: {},
+            replaceDailyPhotoId: pendingReplaceDailyPhotoId || undefined, // ✅ แนบ ID รูปที่จะถูกแทนที่
           };
         } else {
           console.warn("Skipping file: Invalid state for photo capture.");
@@ -368,6 +400,16 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
       if (reportType === 'QC') {
         setCurrentTopic('');
+      } else if (reportType === 'Daily') {
+        setPendingAttachTopic(''); // ✅ ล้างค่าหัวข้อหลังจากคิวแล้ว
+        setPendingReplaceDailyPhotoId(null); // ✅ ล้างค่าเซสชันการแทนที่
+      }
+
+      // ✅ [เพิ่ม] นำทางไปยังหน้าคิวหลังจากเลือกรูปเสร็จ
+      if (reportType === 'QC') {
+        setStep('topicList');
+      } else if (reportType === 'Daily') {
+        setStep('dailyReview');
       }
 
     } catch (error) {
@@ -477,6 +519,11 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
     }
 
     setUploadStatus(`อัปโหลดสำเร็จ ${successCount} / ${totalPhotosToUpload} รูป!`);
+
+    // ✅ Refresh Daily Data if we uploaded any Daily photos
+    if (itemsToUpload.some(item => item.uploadData.reportType === 'Daily')) {
+      setRefreshDailyTrigger(prev => prev + 1);
+    }
 
     const newUploadedStatus = new Map(uploadedStatus);
     topicsJustUploaded.forEach((value, key) => newUploadedStatus.set(key, value));
@@ -661,6 +708,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
   const handleCancelWatermarkModal = () => {
     setShowWatermarkModal(false);
     setPendingAttachTopic('');
+    setPendingReplaceDailyPhotoId(null); // ✅ ยกเลิกการแทนที่ด้วย
   };
   const handleDailyDescriptionChange = (photoKey: string, text: string) => {
     const newDescriptions = new Map(dailyDescriptions);
@@ -1601,45 +1649,90 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                   มี {dailyQueueSize} รูปในคิว
                 </p>
 
-                {/* ✅ [ใหม่] ปุ่มดูรายงานหน้า Reports */}
-                <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '10px' }}>
-                  <button
-                    style={{
-                      background: 'none', border: 'none', color: '#007bff',
-                      textDecoration: 'underline', cursor: 'pointer', fontSize: '1rem',
-                      display: 'inline-flex', alignItems: 'center', gap: '5px'
-                    }}
-                    onClick={async () => {
-                      // Option 1: Using api status
-                      const dateStr = new Date().toISOString().split('T')[0];
-                      setModalState({ title: 'กำลังโหลด...', message: 'ตรวจสอบรูปภาพวันนี้...' });
-                      try {
-                        const res = await api.getChecklistStatus({ projectId, reportType: 'Daily', date: dateStr });
-                        setModalState(null);
-                        if (res.success && res.data) {
-                          if (res.data.found > 0) {
-                            await showAlert(`วันนี้คุณถ่ายและอัปโหลดไปแล้ว ${res.data.found} รูป\n(สามารถตรวจสอบและสร้าง PDF ได้ที่เมนู "รายงาน")`, 'ข้อมูลรูปภาพวันนี้');
-                          } else {
-                            await showAlert(`วันนี้ยังไม่มีการอัปโหลดรูปภาพ`, 'ข้อมูลรูปภาพวันนี้');
-                          }
-                        }
-                      } catch (e) {
-                        setModalState(null);
-                        console.error(e);
-                      }
-                    }}
-                  >
-                    <FiEye /> ดูจำนวนรูปที่ส่งแล้ววันนี้
-                  </button>
-                </div>
+
 
                 <div className={styles['wizard-nav']}>
                   <button className={`${styles['wizard-button']} ${styles.secondary}`} onClick={goBack}> ย้อนกลับ </button>
                   {dailyQueueSize > 0 ? (
                     <button className={styles['wizard-button']} onClick={() => setStep('dailyReview')} title="จัดการรูปและเพิ่มคำบรรยาย">
-                      <FiEdit style={{ verticalAlign: 'middle', marginRight: '4px' }} /> จัดการรูป ({dailyQueueSize})
+                      <FiEdit style={{ verticalAlign: 'middle', marginRight: '4px' }} /> จัดการคิวก่อนอัปโหลด ({dailyQueueSize})
                     </button>
                   ) : (<div style={{ minWidth: '120px', display: 'inline-block' }}></div>)}
+                </div>
+
+                <hr style={{ margin: '30px 0', border: 'none', borderTop: '2px dashed #eee' }} />
+
+                {/* ✅ [ใหม่] Daily Resume Dashboard */}
+                <div style={{ background: '#f8f9fa', padding: '20px', borderRadius: '12px', border: '1px solid #e0e0e0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#333' }}>
+                      <FiInbox style={{ marginRight: '8px', color: '#007bff' }} /> รูปที่ส่งแล้ว
+                    </h3>
+                    <input
+                      type="date"
+                      value={selectedDailyDate}
+                      onChange={(e) => setSelectedDailyDate(e.target.value)}
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '1rem', cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  {isFetchingDaily ? (
+                    <div style={{ textAlign: 'center', padding: '30px', color: '#666' }}>
+                      <FiLoader className={styles.iconSpin} style={{ fontSize: '1.5rem', marginBottom: '10px' }} /><br />
+                      กำลังโหลดข้อมูล...
+                    </div>
+                  ) : fetchedDailyPhotos.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px', color: '#888', background: '#fff', borderRadius: '8px', border: '1px dashed #ccc' }}>
+                      ไม่มีรูปภาพสำหรับวันที่ {new Date(selectedDailyDate).toLocaleDateString('th-TH')}
+                    </div>
+                  ) : (
+                    <>
+                      <p style={{ margin: '0 0 15px 0', color: '#555', fontSize: '0.9rem' }}>พบ {fetchedDailyPhotos.length} รูป (สามารถแก้ไขได้ที่หน้ารายงาน)</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+                        {fetchedDailyPhotos.map((photo, index) => {
+                          const cdnUrl = process.env.REACT_APP_FIREBASE_CDN_HOST;
+                          const displayUrl = cdnUrl && photo.firepath
+                            ? `${cdnUrl}/${photo.firepath.replace(/^\//, '')}`
+                            : photo.driveUrl || '';
+                          return (
+                            <div key={photo.id} style={{ display: 'flex', gap: '15px', background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #eee' }}>
+                              <div style={{ width: '80px', height: '80px', flexShrink: 0, overflow: 'hidden', borderRadius: '6px', cursor: 'pointer' }} onClick={() => setPreviewData({ url: displayUrl, timestamp: photo.createdAt, addWatermark: false })}>
+                                <img src={displayUrl} alt={`Daily ${index}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              </div>
+                              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                <strong style={{ fontSize: '0.95rem', color: '#333', marginBottom: '4px' }}>{index + 1}. {photo.description || 'ไม่มีคำบรรยาย'}</strong>
+                                <small style={{ color: '#888' }}>{new Date(photo.createdAt).toLocaleTimeString('th-TH')}</small>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <button
+                                  style={{ background: 'white', border: '1px solid #007bff', borderRadius: '4px', padding: '6px', cursor: 'pointer', color: '#007bff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  title="ถ่ายรูปแทนที่ (บังคับลายน้ำ)"
+                                  onClick={() => {
+                                    setPendingAttachTopic(photo.description || ''); // เก็บหัวข้อเดิมไว้
+                                    setPendingReplaceDailyPhotoId(photo.id); // ✅ ตั้งค่า ID ของรูปที่จะถูกแทนที่
+                                    handleStartPhotoForTopic(photo.description || '', 'capture');
+                                  }}
+                                >
+                                  <FiCamera />
+                                </button>
+                                <button
+                                  style={{ background: 'white', border: '1px solid #28a745', borderRadius: '4px', padding: '6px', cursor: 'pointer', color: '#28a745', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  title="แนบรูปแทนที่"
+                                  onClick={() => {
+                                    setPendingAttachTopic(photo.description || ''); // เก็บหัวข้อเดิมไว้
+                                    setPendingReplaceDailyPhotoId(photo.id); // ✅ ตั้งค่า ID ของรูปที่จะถูกแทนที่
+                                    setShowWatermarkModal(true); // เปิด Modal ให้เลือกลายน้ำใหม่
+                                  }}
+                                >
+                                  <FiImage />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               </>
             );

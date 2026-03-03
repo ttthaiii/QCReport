@@ -10,7 +10,7 @@ import { useDialog } from '../contexts/DialogContext';
 import AutocompleteInput from './AutocompleteInput';
 import JSZip from 'jszip';
 
-import { FiFileText, FiDownload, FiSearch, FiRefreshCw, FiActivity, FiCheckCircle, FiClock, FiChevronRight, FiChevronDown, FiChevronUp, FiZoomIn, FiZoomOut, FiEyeOff, FiEye, FiSave, FiAlertTriangle, FiLoader, FiDownloadCloud, FiClipboard, FiSun, FiPlus, FiInbox, FiX } from 'react-icons/fi';
+import { FiFileText, FiDownload, FiSearch, FiRefreshCw, FiActivity, FiCheckCircle, FiClock, FiChevronRight, FiChevronDown, FiChevronUp, FiZoomIn, FiZoomOut, FiEyeOff, FiEye, FiSave, FiAlertTriangle, FiLoader, FiDownloadCloud, FiClipboard, FiSun, FiPlus, FiInbox, FiX, FiEdit2, FiTrash2 } from 'react-icons/fi';
 
 interface ReportsProps {
   projectId: string;
@@ -67,17 +67,20 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
   const [selectedQcPhotoIds, setSelectedQcPhotoIds] = useState<Set<string>>(new Set());
   const [isDownloadingPhotos, setIsDownloadingPhotos] = useState<boolean>(false); // สำหรับ Download Progress
 
-  // ✅ [ใหม่] แทนที่ fullScreenImage ด้วย previewData แบบละเอียด
   const [previewData, setPreviewData] = useState<{ url: string, timestamp: string, location: string | null, addWatermark: boolean } | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [showInfoOverlay, setShowInfoOverlay] = useState<boolean>(true);
   const [watermarkFontSize, setWatermarkFontSize] = useState<number>(24);
 
+  // ✅ [ใหม่] Edit Photo Modal States
+  const [showEditPhotoModal, setShowEditPhotoModal] = useState<boolean>(false);
+  const [editPhotoData, setEditPhotoData] = useState<{ id: string, description: string, topic?: string } | null>(null);
+
   // ✅ [ใหม่] 3. States สำหรับ Active Feed (SharedJobs)
   const [sharedJobs, setSharedJobs] = useState<any[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(false);
 
-  const { showAlert } = useDialog();
+  const { showAlert, showConfirm } = useDialog();
 
   // --- 3. useEffects for Filters (ปรับปรุงเล็กน้อย) ---
   useEffect(() => {
@@ -457,8 +460,9 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       // Build a string from dynamicFields (e.g., "Zone-A_Floor-2")
       let dynamicFieldStr = '';
       if (dynamicFields && Object.keys(dynamicFields).length > 0) {
-        dynamicFieldStr = '_' + Object.values(dynamicFields)
-          .map(val => String(val).replace(/[\/\\]/g, '-'))
+        dynamicFieldStr = '_' + Object.entries(dynamicFields)
+          // รวม Key เข้าไปด้วย (ใช้ - เชื่อมแทน : เพื่อป้องกันปัญหาระบบไฟล์ Windows ไม่อนุญาตให้ตั้งชื่อไฟล์มีเครื่องหมาย :)
+          .map(([key, val]) => `${key}-${String(val).replace(/[\/\\]/g, '-')}`)
           .join('_');
       }
 
@@ -547,6 +551,58 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     }
   };
 
+  // ✅ [ใหม่] ฟังก์ชันเปิด Modal แก้ไขคำบรรยาย Daily Photo
+  const handleEditDailyPhoto = (photo: any) => {
+    setEditPhotoData({
+      id: photo.id,
+      description: photo.description || photo.topic || '',
+      topic: photo.topic
+    });
+    setShowEditPhotoModal(true);
+  };
+
+  // ✅ [ใหม่] ฟังก์ชันบันทึกคำบรรยายที่แก้ไขจาก Modal
+  const handleSavePhotoDescription = async () => {
+    if (!editPhotoData) return;
+
+    try {
+      const res = await api.updateDailyPhotoDescription(projectId, editPhotoData.id, editPhotoData.description);
+      if (res.success) {
+        // Update local state to reflect UI immediately
+        setDailyPhotos(prev => prev.map(p => p.id === editPhotoData.id ? { ...p, description: editPhotoData.description } : p));
+        setShowEditPhotoModal(false);
+        setEditPhotoData(null);
+      } else {
+        await showAlert(`ไม่สามารถแก้ไขข้อความได้: ${res.error}`, 'ข้อผิดพลาด');
+      }
+    } catch (e: any) {
+      await showAlert(`เกิดข้อผิดพลาด: ${e.message}`, 'ข้อผิดพลาด');
+    }
+  };
+
+  // ✅ [ใหม่] ฟังก์ชันลบ Daily Photo (Resume Work)
+  const handleDeleteDailyPhoto = async (photo: any) => {
+    const confirmed = await showConfirm(`คุณต้องการลบรูปภาพ "${photo.description || photo.topic || 'ไม่มีชื่อ'}" ใช่หรือไม่?`, 'ยืนยันการลบ');
+    if (!confirmed) return;
+
+    try {
+      const res = await api.deleteDailyPhoto(projectId, photo.id);
+      if (res.success) {
+        // Remove from UI state
+        setDailyPhotos(prev => prev.filter(p => p.id !== photo.id));
+        setSelectedPhotoIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(photo.id);
+          return newSet;
+        });
+      } else {
+        await showAlert(`ไม่สามารถลบรูปได้: ${res.error}`, 'ข้อผิดพลาด');
+      }
+    } catch (e: any) {
+      await showAlert(`เกิดข้อผิดพลาด: ${e.message}`, 'ข้อผิดพลาด');
+    }
+  };
+
   // ✅ [ใหม่] ฟังก์ชันสำหรับดาวน์โหลดรูปประจำวัน (Daily) แบบ Zip
   const handleDownloadDailyPhotos = async () => {
     if (selectedPhotoIds.size === 0) {
@@ -614,7 +670,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
           // Daily photos primarily use 'description', whereas QC uses 'topic'
           const topicName = photo.description || photo.topic || 'Photo';
-          const filename = `${topicName}_${i + 1}.jpg`.replace(/[\/\\]/g, '-');
+          const filename = `${i + 1}_${topicName}_${dateStr}.jpg`.replace(/[\/\\]/g, '-');
           imgFolder.file(filename, blob);
           successCount++;
         } catch (fetchErr) {
@@ -896,6 +952,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
     const { found, total } = previewStatus;
 
     if (found === 0) {
+      if (reportType === 'Daily') return null; // ไม่แสดงในหน้า Daily เพราะมีแจ้งเตือนต่างหากแล้ว
       return (
         <div className={styles.previewBox}>
           <p className={styles.previewWarningText}>
@@ -906,14 +963,15 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       );
     }
 
+    if (reportType === 'Daily') {
+      return null;
+    }
+
     return (
       <div className={styles.previewBox}>
         <p className={styles.previewStatusText}>
           <FiCheckCircle style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-          {reportType === 'QC' ?
-            `พบรูปภาพแล้ว ${found} / ${total} หัวข้อ` :
-            `พบรูปภาพแล้ว ${found} รูป`
-          }
+          พบรูปภาพแล้ว {found} / {total} หัวข้อ
         </p>
       </div>
     );
@@ -1046,10 +1104,26 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
         </div>
         <div className={styles.reportTypeToggle}>
           {/* ... Toggle Buttons ... */}
-          <button onClick={() => { setReportType('QC'); setGeneratedReport(null); setPreviewStatus(null); }} className={`${styles.reportTypeButton} ${reportType === 'QC' ? styles.activeQc : ''}`} >
+          <button onClick={() => {
+            setReportType('QC');
+            setGeneratedReport(null);
+            setPreviewStatus(null);
+            setDailyPhotos([]);
+            setSelectedPhotoIds(new Set());
+            setQcPhotos([]);
+            setSelectedQcPhotoIds(new Set());
+          }} className={`${styles.reportTypeButton} ${reportType === 'QC' ? styles.activeQc : ''}`} >
             <FiClipboard style={{ verticalAlign: 'middle', marginRight: '4px' }} /> รายงาน QC
           </button>
-          <button onClick={() => { setReportType('Daily'); setGeneratedReport(null); setPreviewStatus(null); }} className={`${styles.reportTypeButton} ${reportType === 'Daily' ? styles.activeDaily : ''}`} >
+          <button onClick={() => {
+            setReportType('Daily');
+            setGeneratedReport(null);
+            setPreviewStatus(null);
+            setDailyPhotos([]);
+            setSelectedPhotoIds(new Set());
+            setQcPhotos([]);
+            setSelectedQcPhotoIds(new Set());
+          }} className={`${styles.reportTypeButton} ${reportType === 'Daily' ? styles.activeDaily : ''}`} >
             <FiSun style={{ verticalAlign: 'middle', marginRight: '4px' }} /> รายงานประจำวัน
           </button>
         </div>
@@ -1335,82 +1409,117 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                                                     มี {newPhotosCount} รูปใหม่
                                                   </div>
                                                 )}
-                                                {hasReport && <span style={{ fontSize: '0.75rem', color: '#999' }}><FiClock style={{ marginRight: '3px' }} /> ล่าสุด: {new Date(item.report!.createdAt).toLocaleDateString('th-TH')} {new Date(item.report!.createdAt).toLocaleTimeString('th-TH')}</span>}
+
+                                                {/* ✅ [ใหม่] ปุ่มดาวน์โหลดถูกย้ายมามุมขวาบนเป็นไอคอนเล็กๆ */}
+                                                <button
+                                                  onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    setIsPreviewLoading(true);
+                                                    try {
+                                                      const payloadParams = {
+                                                        reportType: 'QC',
+                                                        mainCategory: item.mainCategory,
+                                                        subCategory: item.subCategory,
+                                                        dynamicFields: item.dynamicFields
+                                                      };
+                                                      setReportType('QC');
+                                                      setFormData({ mainCategory: item.mainCategory, subCategory: item.subCategory });
+                                                      setDynamicFields(item.dynamicFields);
+                                                      const response = await api.getQcPhotosPreview(projectId, item.mainCategory, item.subCategory, item.dynamicFields || {});
+                                                      if (response.success && response.data) {
+                                                        setQcPhotos(response.data);
+                                                        setSelectedQcPhotoIds(new Set(response.data.map(p => p.id)));
+                                                        if (response.data.length > 0) {
+                                                          setShowQcDownloadModal(true);
+                                                        } else {
+                                                          await showAlert('ไม่พบรูปภาพ QC ในหมวดหมู่นี้', 'ไม่พบรูปภาพ');
+                                                        }
+                                                      } else {
+                                                        await showAlert('ไม่สามารถดึงรูปภาพ QC ได้', 'เกิดข้อผิดพลาด');
+                                                      }
+                                                    } catch (err) {
+                                                      console.error(err);
+                                                      await showAlert('เกิดข้อผิดพลาด', 'ข้อผิดพลาด');
+                                                    } finally {
+                                                      setIsPreviewLoading(false);
+                                                    }
+                                                  }}
+                                                  disabled={isPreviewLoading}
+                                                  style={{
+                                                    position: 'absolute',
+                                                    top: '10px',
+                                                    right: '10px',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#6c757d',
+                                                    cursor: 'pointer',
+                                                    fontSize: '1.2rem',
+                                                    padding: '4px'
+                                                  }}
+                                                  title="ดาวน์โหลดรูปภาพทั้งหมดของงานนี้"
+                                                >
+                                                  {isPreviewLoading && formData.mainCategory === item.mainCategory && formData.subCategory === item.subCategory ? <FiLoader className={styles.iconSpin} /> : <FiDownloadCloud />}
+                                                </button>
+
+                                                {hasReport && <span style={{ fontSize: '0.75rem', color: '#999', marginTop: '5px', display: 'block' }}><FiClock style={{ marginRight: '3px' }} /> ล่าสุด: {new Date(item.report!.createdAt).toLocaleDateString('th-TH')} {new Date(item.report!.createdAt).toLocaleTimeString('th-TH')}</span>}
                                               </div>
                                             </div>
                                             <div className={styles.jobCardActions} style={{ flexWrap: 'wrap', gap: '5px' }}>
-                                              {(hasReport || isJustGenerated) && (
-                                                <a href={item.report?.publicUrl} target="_blank" rel="noopener noreferrer" className={styles.miniSuccessButton} style={{ flex: '1 1 30%', minWidth: '80px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}><FiCheckCircle /> ดู PDF</a>
+
+                                              {/* 1. กรณี "ยังไม่มีรายงาน" */}
+                                              {(!hasReport && !isJustGenerated) && (
+                                                <button className={styles.miniGenerateButton} style={{ flex: '1', width: '100%', backgroundColor: '#007bff', color: '#fff' }} onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const payload = { reportType: 'QC' as const, mainCategory: item.mainCategory, subCategory: item.subCategory, dynamicFields: item.dynamicFields };
+                                                  if (!payload.mainCategory || !payload.subCategory) { await showAlert(`Error: Missing Category!`, 'เกิดข้อผิดพลาด'); return; }
+                                                  setReportType('QC'); setFormData({ mainCategory: item.mainCategory, subCategory: item.subCategory }); setDynamicFields(item.dynamicFields);
+                                                  (async () => {
+                                                    try {
+                                                      const statusRes = await api.getChecklistStatus({ projectId, ...payload });
+                                                      if (statusRes.success && statusRes.data && statusRes.data.found > 0) {
+                                                        setPreviewStatus(statusRes.data); await runGenerateReport(payload);
+                                                      } else { await showAlert('ไม่พบรูปภาพในระบบ', 'ไม่พบรูปภาพ'); }
+                                                    } catch (err) { await showAlert(String(err), 'เกิดข้อผิดพลาด'); }
+                                                  })();
+                                                }} disabled={isGenerating}>
+                                                  {isGenerating && formData.mainCategory === item.mainCategory && formData.subCategory === item.subCategory && JSON.stringify(dynamicFields) === JSON.stringify(item.dynamicFields) ? <FiLoader className={styles.iconSpin} /> : <FiActivity />}
+                                                  {' สร้าง PDF'}
+                                                </button>
                                               )}
 
-                                              <button className={styles.miniSecondaryButton} style={{ flex: '1 1 30%', minWidth: '100px', backgroundColor: '#6c757d', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }} onClick={async (e) => {
-                                                e.stopPropagation();
-                                                // ดึงข้อมูลรูปเพื่อเปิด Modal ดาวน์โหลด
-                                                setIsPreviewLoading(true);
-                                                try {
-                                                  const payloadParams = {
-                                                    reportType: 'QC',
-                                                    mainCategory: item.mainCategory,
-                                                    subCategory: item.subCategory,
-                                                    dynamicFields: item.dynamicFields
-                                                  };
+                                              {/* 2. กรณี "มีรายงานแล้ว" แต่ "ไม่มีรูปใหม่" */}
+                                              {(hasReport || isJustGenerated) && newPhotosCount === 0 && (
+                                                <a href={item.report?.publicUrl} target="_blank" rel="noopener noreferrer" className={styles.miniSuccessButton} style={{ flex: '1', width: '100%', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                                  <FiCheckCircle /> ดู PDF
+                                                </a>
+                                              )}
 
-                                                  // Sync form state (visual feedback)
-                                                  setReportType('QC');
-                                                  setFormData({ mainCategory: item.mainCategory, subCategory: item.subCategory });
-                                                  setDynamicFields(item.dynamicFields);
+                                              {/* 3. กรณี "มีรายงานแล้ว" และ "มีรูปใหม่" */}
+                                              {hasReport && newPhotosCount > 0 && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '5px' }}>
+                                                  <button className={styles.miniGenerateButton} style={{ flex: '1', width: '100%', backgroundColor: '#ffc107', color: '#000' }} onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    const payload = { reportType: 'QC' as const, mainCategory: item.mainCategory, subCategory: item.subCategory, dynamicFields: item.dynamicFields };
+                                                    if (!payload.mainCategory || !payload.subCategory) { await showAlert(`Error: Missing Category!`, 'เกิดข้อผิดพลาด'); return; }
+                                                    setReportType('QC'); setFormData({ mainCategory: item.mainCategory, subCategory: item.subCategory }); setDynamicFields(item.dynamicFields);
+                                                    (async () => {
+                                                      try {
+                                                        const statusRes = await api.getChecklistStatus({ projectId, ...payload });
+                                                        if (statusRes.success && statusRes.data && statusRes.data.found > 0) {
+                                                          setPreviewStatus(statusRes.data); await runGenerateReport(payload);
+                                                        } else { await showAlert('ไม่พบรูปภาพในระบบ', 'ไม่พบรูปภาพ'); }
+                                                      } catch (err) { await showAlert(String(err), 'เกิดข้อผิดพลาด'); }
+                                                    })();
+                                                  }} disabled={isGenerating}>
+                                                    {isGenerating && formData.mainCategory === item.mainCategory && formData.subCategory === item.subCategory && JSON.stringify(dynamicFields) === JSON.stringify(item.dynamicFields) ? <FiLoader className={styles.iconSpin} /> : <FiAlertTriangle />}
+                                                    {` อัปเดต (${newPhotosCount} รูปใหม่)`}
+                                                  </button>
+                                                  <a href={item.report?.publicUrl} target="_blank" rel="noopener noreferrer" style={{ textAlign: 'center', fontSize: '0.8rem', color: '#28a745', textDecoration: 'underline', padding: '4px' }} onClick={(e) => e.stopPropagation()}>
+                                                    ดู PDF เดิม
+                                                  </a>
+                                                </div>
+                                              )}
 
-                                                  const response = await api.getQcPhotosPreview(projectId, item.mainCategory, item.subCategory, item.dynamicFields || {});
-                                                  if (response.success && response.data) {
-                                                    setQcPhotos(response.data);
-                                                    setSelectedQcPhotoIds(new Set(response.data.map(p => p.id)));
-                                                    if (response.data.length > 0) {
-                                                      setShowQcDownloadModal(true);
-                                                    } else {
-                                                      await showAlert('ไม่พบรูปภาพ QC ในหมวดหมู่นี้', 'ไม่พบรูปภาพ');
-                                                    }
-                                                  } else {
-                                                    await showAlert('ไม่สามารถดึงรูปภาพ QC ได้', 'เกิดข้อผิดพลาด');
-                                                  }
-                                                } catch (err) {
-                                                  console.error(err);
-                                                  await showAlert('เกิดข้อผิดพลาด', 'ข้อผิดพลาด');
-                                                } finally {
-                                                  setIsPreviewLoading(false);
-                                                }
-                                              }} disabled={isPreviewLoading}>
-                                                {isPreviewLoading && formData.mainCategory === item.mainCategory && formData.subCategory === item.subCategory ? <FiLoader className={styles.iconSpin} /> : <FiDownloadCloud />} ดาวน์โหลดรูป
-                                              </button>
-
-                                              <button className={styles.miniGenerateButton} style={{ flex: '1 1 30%', minWidth: '130px', backgroundColor: newPhotosCount > 0 ? '#ffc107' : (hasReport ? '#17a2b8' : '#007bff'), color: newPhotosCount > 0 ? '#000' : '#fff' }} onClick={async (e) => {
-                                                e.stopPropagation();
-                                                console.log('🔘 Button Clicked! Item:', item); // DEBUG
-                                                const payload = {
-                                                  reportType: 'QC' as const,
-                                                  mainCategory: item.mainCategory,
-                                                  subCategory: item.subCategory,
-                                                  dynamicFields: item.dynamicFields
-                                                };
-                                                console.log('📦 Prepared Payload:', payload); // DEBUG
-
-                                                if (!payload.mainCategory || !payload.subCategory) {
-                                                  await showAlert(`Error: Missing Category Data! (Main: ${payload.mainCategory}, Sub: ${payload.subCategory})`, 'เกิดข้อผิดพลาด');
-                                                  return;
-                                                }
-
-                                                setReportType('QC'); setFormData({ mainCategory: item.mainCategory, subCategory: item.subCategory }); setDynamicFields(item.dynamicFields);
-                                                (async () => {
-                                                  try {
-                                                    const statusRes = await api.getChecklistStatus({ projectId, ...payload });
-                                                    if (statusRes.success && statusRes.data && statusRes.data.found > 0) {
-                                                      setPreviewStatus(statusRes.data); await runGenerateReport(payload);
-                                                    } else { await showAlert('ไม่พบรูปภาพในระบบ', 'ไม่พบรูปภาพ'); }
-                                                  } catch (err) { await showAlert(String(err), 'เกิดข้อผิดพลาด'); }
-                                                })();
-                                              }} disabled={isGenerating}>
-                                                {isGenerating && formData.mainCategory === item.mainCategory && formData.subCategory === item.subCategory && JSON.stringify(dynamicFields) === JSON.stringify(item.dynamicFields) ? <FiLoader className={styles.iconSpin} /> : (newPhotosCount > 0 ? <FiAlertTriangle /> : (hasReport ? <FiRefreshCw /> : <FiActivity />))}
-                                                {hasReport ? (newPhotosCount > 0 ? ` อัปเดต (${newPhotosCount} รูปใหม่)` : ' อัปเดตข้อมูล') : ' สร้าง PDF'}
-                                              </button>
                                             </div>
                                           </div>
                                         );
@@ -1557,7 +1666,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       {
         showDailyGenerateModal && (
           <div className={styles.modalOverlay} onClick={() => setShowDailyGenerateModal(false)}>
-            <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ddd', paddingBottom: '10px', marginBottom: '15px' }}>
                 <h3 style={{ margin: 0 }}><FiFileText style={{ marginRight: '8px' }} />เลือกรูปภาพเพื่อสร้างรายงาน</h3>
                 <button
@@ -1588,7 +1697,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                       : photo.driveUrl;
                     const isSelected = selectedPhotoIds.has(photo.id);
                     return (
-                      <label key={photo.id} style={{ display: 'flex', gap: '15px', alignItems: 'flex-start', background: isSelected ? '#e8f4fd' : '#f8f9fa', padding: '10px', borderRadius: '8px', border: `1px solid ${isSelected ? '#007bff' : '#eee'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
+                      <label key={photo.id} style={{ display: 'flex', gap: '15px', alignItems: 'center', background: isSelected ? '#e8f4fd' : '#f8f9fa', padding: '10px', borderRadius: '8px', border: `1px solid ${isSelected ? '#007bff' : '#eee'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -1598,13 +1707,31 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                             else newSelected.delete(photo.id);
                             setSelectedPhotoIds(newSelected);
                           }}
-                          style={{ width: '20px', height: '20px', marginTop: '5px' }}
+                          style={{ width: '20px', height: '20px', margin: 0, flexShrink: 0 }}
                         />
                         <div style={{ width: '100px', height: '100px', flexShrink: 0, overflow: 'hidden', borderRadius: '6px' }} onClick={(e) => { e.preventDefault(); setPreviewData({ url: displayUrl, timestamp: photo.createdAt, location: photo.location || null, addWatermark: false }); }}>
                           <img src={displayUrl} alt={`Photo ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                         <div style={{ flex: 1 }}>
-                          <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', color: '#333' }}>{index + 1}. {photo.topic || photo.description || 'ไม่มีคำบรรยาย'}</h4>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', color: '#333' }}>{index + 1}. {photo.topic || photo.description || 'ไม่มีคำบรรยาย'}</h4>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                              <button
+                                onClick={(e) => { e.preventDefault(); handleEditDailyPhoto(photo); }}
+                                style={{ background: 'white', border: '1px solid #ccc', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#007bff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="แก้ไขคำบรรยาย"
+                              >
+                                <FiEdit2 />
+                              </button>
+                              <button
+                                onClick={(e) => { e.preventDefault(); handleDeleteDailyPhoto(photo); }}
+                                style={{ background: 'white', border: '1px solid #ff4d4f', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', color: '#ff4d4f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="ลบรูปภาพ"
+                              >
+                                <FiTrash2 />
+                              </button>
+                            </div>
+                          </div>
                           <p style={{ margin: 0, fontSize: '0.9rem', color: '#666', whiteSpace: 'pre-wrap' }}>{photo.topic ? photo.description : ''}</p>
                         </div>
                       </label>
@@ -1647,7 +1774,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       {
         showQcDownloadModal && (
           <div className={styles.modalOverlay} onClick={() => setShowQcDownloadModal(false)}>
-            <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ddd', paddingBottom: '10px', marginBottom: '15px' }}>
                 <h3 style={{ margin: 0 }}><FiDownloadCloud style={{ marginRight: '8px' }} />เลือกรูปภาพ QC เพื่อดาวน์โหลด</h3>
                 <button
@@ -1678,7 +1805,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                       : photo.driveUrl || '';
                     const isSelected = selectedQcPhotoIds.has(photo.id);
                     return (
-                      <label key={photo.id} style={{ display: 'flex', gap: '15px', alignItems: 'flex-start', background: isSelected ? '#e8f4fd' : '#f8f9fa', padding: '10px', borderRadius: '8px', border: `1px solid ${isSelected ? '#007bff' : '#eee'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
+                      <label key={photo.id} style={{ display: 'flex', gap: '15px', alignItems: 'center', background: isSelected ? '#e8f4fd' : '#f8f9fa', padding: '10px', borderRadius: '8px', border: `1px solid ${isSelected ? '#007bff' : '#eee'}`, cursor: 'pointer', transition: 'all 0.2s' }}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -1688,7 +1815,7 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                             else newSelected.delete(photo.id);
                             setSelectedQcPhotoIds(newSelected);
                           }}
-                          style={{ width: '20px', height: '20px', marginTop: '5px' }}
+                          style={{ width: '20px', height: '20px', margin: 0, flexShrink: 0 }}
                         />
                         <div style={{ width: '100px', height: '100px', flexShrink: 0, overflow: 'hidden', borderRadius: '6px' }} onClick={(e) => { e.preventDefault(); setPreviewData({ url: displayUrl, timestamp: photo.createdAt, location: photo.location || null, addWatermark: false }); }}>
                           <img src={displayUrl} alt={`QC Photo ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1716,7 +1843,45 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
           </div>
         )
       }
-    </div >
+
+      {/* --- Edit Photo Description Modal --- */}
+      {showEditPhotoModal && editPhotoData && (
+        <div className={styles.modalOverlay} onClick={() => setShowEditPhotoModal(false)}>
+          <div className={styles.modalContent} style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 15px 0', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
+              <FiEdit2 style={{ marginRight: '8px' }} /> แก้ไขคำบรรยายรูปภาพ
+            </h3>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>คำบรรยาย/รายละเอียด:</label>
+              <textarea
+                value={editPhotoData.description}
+                onChange={(e) => setEditPhotoData(prev => prev ? { ...prev, description: e.target.value } : null)}
+                style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', minHeight: '100px', resize: 'vertical' }}
+                placeholder="ป้อนคำบรรยายรูปภาพ..."
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setShowEditPhotoModal(false)}
+                style={{ padding: '8px 16px', backgroundColor: '#e0e0e0', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleSavePhotoDescription}
+                style={{ padding: '8px 16px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                บันทึก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 };
 

@@ -18,6 +18,9 @@ export interface PhotoData {
   // --- Fields for Daily Report ---
   description?: string; // เพิ่ม field นี้
   createdAt?: admin.firestore.Timestamp;
+
+  // ✅ [ใหม่] Field สำหรับแทนที่รูปใน Daily Report (Optional)
+  replaceDailyPhotoId?: string;
 }
 
 // ✅ [New Helper] Create Stable ID for latestQcPhotos
@@ -50,9 +53,30 @@ export async function logPhotoToFirestore(photoData: PhotoData): Promise<{ succe
     const collectionName = photoData.reportType === 'QC' ? 'qcPhotos' : 'dailyPhotos';
     const collectionRef = db.collection(collectionName);
 
+    // ✅ [ใหม่] รองรับการ Replace รูป Daily
+    if (photoData.reportType === 'Daily' && photoData.replaceDailyPhotoId) {
+      console.log(`🔄 Replacing Daily Photo ID: ${photoData.replaceDailyPhotoId}`);
+      const replaceDocRef = collectionRef.doc(photoData.replaceDailyPhotoId);
+
+      const updateData = { ...photoData };
+      delete updateData.replaceDailyPhotoId; // ลบ field ชั่วคราวออกไป
+
+      await replaceDocRef.update({
+        ...updateData,
+        // สำคัญ: เราไม่แก้ไข createdAt เพื่อให้ลำดับภาพยังคงเหมือนเดิม
+      });
+      console.log(`Successfully updated mapped Daily photo ID: ${photoData.replaceDailyPhotoId}`);
+      return { success: true, firestoreId: photoData.replaceDailyPhotoId };
+    }
+
     // 1. Save to Main Collection (qcPhotos or dailyPhotos)
+    const dataToSave = { ...photoData };
+    if (dataToSave.replaceDailyPhotoId === undefined) {
+      delete dataToSave.replaceDailyPhotoId;
+    }
+
     const docRef = await collectionRef.add({
-      ...photoData,
+      ...dataToSave,
       createdAt: FieldValue.serverTimestamp(),
     });
 

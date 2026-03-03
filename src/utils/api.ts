@@ -66,6 +66,7 @@ export interface UploadPhotoData {
   location?: string;
   dynamicFields?: object;
   jobId?: string;
+  replaceDailyPhotoId?: string;
 }
 
 
@@ -478,6 +479,7 @@ export const api = {
         description: data.description,
         location: data.location,
         dynamicFields: data.dynamicFields,
+        replaceDailyPhotoId: data.replaceDailyPhotoId, // ✅ [เพิ่ม] ส่ง ID ไป Backend
         // (เราไม่ต้องส่ง 'jobId', 'projectName' หรือ 'timestamp' ไป
         // เพราะ Backend ตัวเก่าไม่ได้ใช้)
       };
@@ -836,6 +838,29 @@ export const api = {
       return data;
     } catch (error: any) {
       return { success: false, error: error.message, data: [] };
+    }
+  },
+
+  // ✅ [ใหม่] อัปเดตคำอธิบาย (Description) ของรูปภาพ Daily (Resume Work)
+  updateDailyPhotoDescription: async (projectId: string, photoId: string, description: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/projects/${projectId}/daily-photos/${photoId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ description })
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  // ✅ [ใหม่] ลบรูปภาพ Daily (Resume Work)
+  deleteDailyPhoto: async (projectId: string, photoId: string): Promise<ApiResponse<any>> => {
+    try {
+      return await fetchWithAuth(`/projects/${projectId}/daily-photos/${photoId}`, {
+        method: 'DELETE'
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
   },
 

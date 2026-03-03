@@ -381,32 +381,9 @@ function App() {
         <button
           className={`${styles.navButton} ${view === 'reports' ? styles.active : ''}`}
           onClick={() => setView('reports')}
-          style={{ position: 'relative' }} // ✅ Enable relative positioning for badge
         >
           <span className={styles.icon}><FiBarChart2 /></span>
           <span>รายงาน</span>
-          {/* ✅ Notification Badge */}
-          {activeJobCount > 0 && (
-            <div style={{
-              position: 'absolute',
-              top: '5px',
-              right: '25px', // Adjust based on icon position
-              background: '#dc3545', // Danger color
-              color: 'white',
-              borderRadius: '50%',
-              width: '18px',
-              height: '18px',
-              fontSize: '0.7rem',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-              border: '2px solid white'
-            }}>
-              {activeJobCount}
-            </div>
-          )}
         </button>
 
         {(userProfile.role === 'admin' || userProfile.role === 'god') && (
