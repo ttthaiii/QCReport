@@ -1,0 +1,1194 @@
+รายงานประวัติการกรอกข้อมูล งานเสา (แบ่งตามชั้น)
+ดึงข้อมูลจาก latestQcPhotos
+=======================================================
+
+🏢 ไม่มีชั้น (Unknown)
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+
+🏢 1
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: 1 | Gridline: ไม่มี Gridline
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 1
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: L/9
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: 28/Q-Y
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: N/13
+   📌 เสา: ST02
+       - โซน: ไม่มีโซน | Gridline: 22-24/I-P
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: Q/26
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: M/21
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: E/2
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: M/25
+       - โซน: ไม่มีโซน | Gridline: M/26
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: P/28
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: Y/26
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: X/12
+       - โซน: ไม่มีโซน | Gridline: Y/26
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: 15/N
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: 15/N
+       - โซน: ไม่มีโซน | Gridline: 18/M
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: 1/B
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: 4/B
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: 5/B
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: S/3
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: 11/B
+   📌 เสา: C17
+       - โซน: ไม่มีโซน | Gridline: J/24
+   📌 เสา: C18
+       - โซน: ไม่มีโซน | Gridline: 14/A
+       - โซน: ไม่มีโซน | Gridline: 14/C
+       - โซน: ไม่มีโซน | Gridline: 15/G
+       - โซน: ไม่มีโซน | Gridline: 15/K
+       - โซน: ไม่มีโซน | Gridline: 17/A
+       - โซน: ไม่มีโซน | Gridline: 17/C
+       - โซน: ไม่มีโซน | Gridline: 18/K
+       - โซน: ไม่มีโซน | Gridline: 20/A
+       - โซน: ไม่มีโซน | Gridline: 22/D
+       - โซน: ไม่มีโซน | Gridline: G/18
+       - โซน: ไม่มีโซน | Gridline: G/21
+   📌 เสา: C19
+       - โซน: ไม่มีโซน | Gridline: 15/I
+       - โซน: ไม่มีโซน | Gridline: 18/I
+       - โซน: ไม่มีโซน | Gridline: 21/I
+   📌 เสา: C20
+       - โซน: ไม่มีโซน | Gridline: 20/C
+       - โซน: ไม่มีโซน | Gridline: K/21
+   📌 เสา: C21
+       - โซน: ไม่มีโซน | Gridline: 22/I
+   📌 เสา: C22
+       - โซน: ไม่มีโซน | Gridline: 13/K
+       - โซน: ไม่มีโซน | Gridline: 14/G
+       - โซน: ไม่มีโซน | Gridline: 22/D
+   📌 เสา: C23
+       - โซน: ไม่มีโซน | Gridline: 13/I
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: E/7
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: H/10
+   📌 เสา: C26
+       - โซน: ไม่มีโซน | Gridline: 6/H
+       - โซน: ไม่มีโซน | Gridline: E/2
+       - โซน: ไม่มีโซน | Gridline: F/6
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: 19/U
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: T/12
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: T/16
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: T/8
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: X/3
+       - โซน: ไม่มีโซน | Gridline: Y/3
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: X/8
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: 19/Y
+       - โซน: ไม่มีโซน | Gridline: X/16
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: W/22
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: Y/23
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: U/23
+   📌 เสา: C40
+       - โซน: ไม่มีโซน | Gridline: H/1
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+
+🏢 ชั้น2
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: X/12
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: T/12
+
+🏢 ชั้น 2
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: 28/Q-Y
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: Q/26
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: M/21
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: M/25
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: P/28
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: Y/26
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: X/12
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: 18/M
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: T/3
+       - โซน: ไม่มีโซน | Gridline: X/3
+   📌 เสา: C17
+       - โซน: ไม่มีโซน | Gridline: J/24
+   📌 เสา: C18
+       - โซน: ไม่มีโซน | Gridline: 18/J
+   📌 เสา: C20
+       - โซน: ไม่มีโซน | Gridline: 21/J
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: T/12
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: T/8
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: X/3
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: X/8
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: W/22
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: Y/23
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: U/23
+
+🏢 ชั้น 2A
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C17
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 2A RAMP
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+   📌 เสา: C18
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+   📌 เสา: C20
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 2B
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 3
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: 22-23/I-P
+
+🏢 ชั้น 3A
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C22
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 3B
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+
+🏢 4
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: 1 | Gridline: ไม่มี Gridline
+       - โซน: 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 4
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: 9/L
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: 28/Q-Y
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: 13/N
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: 22-23/M-P
+       - โซน: โซน 2 | Gridline: 23-23/M-P
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: 26/Q
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: 20/M
+       - โซน: โซน 2 | Gridline: 21/M
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: 2/E
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: 25/M
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: 28/P
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: 26/Y
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: 12/X
+   📌 เสา: C11
+       - โซน: โซน 1 | Gridline: 15/N
+       - โซน: โซน 2 | Gridline: 18/M
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: 1/B
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: 4/B
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: 5/B
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: 3/S
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: 11/B
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: 7/E
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: 10/H
+   📌 เสา: C28
+       - โซน: โซน 1 | Gridline: 16/R
+       - โซน: โซน 2 | Gridline: 19/U
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: 12/R
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: 8/T
+   📌 เสา: C32
+       - โซน: โซน 2 | Gridline: 3/X
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: 8/X
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: 16/X
+       - โซน: โซน 2 | Gridline: 19/Y
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: 22/W
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: 23/Y
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: 23/U
+
+🏢 5
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 5
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: 9/N
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: 28/Q-Y
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: 13/N
+       - โซน: โซน 2 | Gridline: 13/N
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: 22-23/M-P
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: 26/Q
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: 21/M
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: 2/E
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: 26/M
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: 28/P
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: 26/Y
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: 12/X
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: 15/N
+   📌 เสา: C11
+       - โซน: โซน 1 | Gridline: 11/B
+       - โซน: โซน 2 | Gridline: 18/M
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: 1/B
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: 4/B
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: 5/B
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: 11/B
+       - โซน: โซน 1 | Gridline: 3/S
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: 11/B
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: 7/E
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: 10/H
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: 19/U
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: 12/T
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: 16/T
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: 8/T
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: 3/X
+       - โซน: โซน 1 | Gridline: C32
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: 8/X
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: 16/X
+       - โซน: โซน 2 | Gridline: 19/Y
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: 22/W
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: 23/Y
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: 23/U
+
+🏢 6
+   📌 เสา: C39
+       - โซน: ไม่มีโซน | Gridline: BN/B1
+
+🏢 ชั้น 6
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: 9/L
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: 28/Q-Y
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: 13/N
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: 22-23/M-P
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: 26/Q
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: 20/M
+       - โซน: โซน 2 | Gridline: 21/M
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: 2/E
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: 25/M
+       - โซน: โซน 2 | Gridline: 28/M
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: 28/P
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: 26/Y
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: 12/T
+       - โซน: โซน 1 | Gridline: 12/X
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: 15/M
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: 18/M
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: 1-B
+       - โซน: โซน 1 | Gridline: 1/B
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: 4/B
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: 5/B
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: 3/S
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: 11/B
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: 7/E
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: 10/H
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: 19/U
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: 12/T
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: 16/R
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: 8/T
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: 3/X
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: 8/X
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: 16/X
+       - โซน: โซน 2 | Gridline: 19/Y
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: 22/W
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: 23/Y
+       - โซน: โซน 2 | Gridline: 29/Y
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: 23/U
+
+🏢 ชั้น 7
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 8
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 9
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 10
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 11
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 12
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 13
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 13
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 14
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 15
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 16
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 พื้นชั้น 16
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 17
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 18
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 19
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CW1
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: CORE ST02
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C3
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C4
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C6
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C7
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C8
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C11
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C13
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C14
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C28
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C35
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C36
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+   📌 เสา: C37
+       - โซน: โซน 2 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 20
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C1
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C2
+       - โซน: โซน 1 | Gridline: 13/O
+   📌 เสา: C5
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C9
+       - โซน: โซน 1 | Gridline: 12/X
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C10
+       - โซน: โซน 1 | Gridline: 15/N
+   📌 เสา: C12
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C15
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C16
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C24
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C25
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C29
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C30
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C31
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C32
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C33
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+   📌 เสา: C34
+       - โซน: โซน 1 | Gridline: ไม่มี Gridline
+
+🏢 ชั้น 2A RAMP. K/15
+   📌 เสา: C18
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline
+

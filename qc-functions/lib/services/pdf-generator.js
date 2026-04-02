@@ -58,7 +58,7 @@ const crypto_1 = require("crypto");
 // ========================================
 function createStableQcId(projectId, category, topic, dynamicFields) {
     const sortedFields = Object.keys(dynamicFields || {}).sort()
-        .map(key => `${key}=${(dynamicFields[key] || '').toLowerCase().trim()}`) // <-- ✅ ต้องแก้บรรทัดนี้
+        .map(key => `${key}=${(dynamicFields[key] || '').toUpperCase().trim()}`) // <-- ✅ เปลี่ยนเป็น toUpperCase
         .join('&');
     const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
     return (0, crypto_1.createHash)('md5').update(rawId).digest('hex');

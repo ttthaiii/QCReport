@@ -10,6 +10,7 @@ interface AutocompleteInputProps {
   suggestions: string[];
   placeholder?: string;
   className?: string;
+  strict?: boolean; // ป้องกันการกรอกข้อมูลนอกเหนือจากในลิสต์
 }
 
 const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
@@ -17,7 +18,8 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
   onChange,
   suggestions,
   placeholder,
-  className
+  className,
+  strict = false
 }) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
@@ -79,6 +81,9 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
         const target = event.target as HTMLElement;
         if (!target.closest(`.${styles.suggestionsList}`)) {
           setShowSuggestions(false);
+          if (strict && value && !suggestions.includes(value)) {
+              onChange(''); 
+          }
         }
       }
     };
@@ -102,6 +107,17 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
   const handleInputFocus = () => {
     setShowSuggestions(true);
     updateDropdownPosition();
+  };
+
+  const handleInputBlur = () => {
+    // Delay to allow suggestion click to register first
+    setTimeout(() => {
+      if (strict && inputRef.current?.value) {
+         if (!suggestions.includes(inputRef.current.value)) {
+             onChange('');
+         }
+      }
+    }, 200);
   };
 
   // Render dropdown using Portal
@@ -147,6 +163,7 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
         value={value}
         onChange={handleInputChange}
         onFocus={handleInputFocus}
+        onBlur={handleInputBlur}
         placeholder={placeholder}
         className={className || styles.autocompleteInput}
       />

@@ -1,0 +1,1574 @@
+รายงานประวัติการกรอกข้อมูล งานเสา (แบ่งตามชั้น)
+ดึงข้อมูลจาก sharedJobs และ generatedReports
+=======================================================
+
+🏢 ใต้ดิน
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: - | Gridline: - [sharedJobs]
+
+🏢 ไม่มีชั้น (Unknown)
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 1
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: 1 | Gridline: - [sharedJobs]
+       - โซน: 1 | Gridline: 11-14/C-F [sharedJobs]
+       - โซน: 1 | Gridline: 26-28/O-S [sharedJobs]
+       - โซน: 1 | Gridline: 3-8/L-S [sharedJobs]
+       - โซน: 1 | Gridline: ไม่มี Gridline [sharedJobs]
+       - โซน: 1A | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 1
+   📌 เสา: C17
+       - โซน: ไม่มีโซน | Gridline: J/24 [generatedReports]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: Zone 1 | Gridline: - [generatedReports]
+       - โซน: zone 1 | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: zone 2 | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: zone 3 | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+
+🏢 2
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: A | Gridline: - [sharedJobs]
+
+🏢 ชั้น 2
+   📌 เสา: C18
+       - โซน: ไม่มีโซน | Gridline: 18/J [generatedReports]
+
+🏢 3
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: A | Gridline: - [sharedJobs]
+
+🏢 ชั้น 3
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ZONE 1 | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 3b
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+
+🏢 ชั้น 3B
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 4
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: - | Gridline: - [sharedJobs]
+       - โซน: 1 | Gridline: - [sharedJobs]
+       - โซน: 1 | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: 1 | Gridline: ไม่มี Gridline [sharedJobs]
+       - โซน: 2 | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: 2 | Gridline: ไม่มี Gridline [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 4
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 5
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 5
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 6
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 7
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 8
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 9
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 10
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: 1 | Gridline: ไม่มี Gridline [sharedJobs]
+       - โซน: 2 | Gridline: ไม่มี Gridline [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 10
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 11
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: 1 | Gridline: ไม่มี Gridline [sharedJobs]
+       - โซน: 2 | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 11
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 12
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 13
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 3a โซน 1
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+
+🏢 ชั้น 3a โซน 2
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+
+🏢 ชั้น 3A โซน 2
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 3b-4
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+
+🏢 ชั้น 4 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: 9/L [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 9/L [sharedJobs]
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: 15/N [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 15/N [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: 1/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 1/B [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: 4/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 4/B [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: 5/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 5/B [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: 3/S [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 3/S [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: 11/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 11/B [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: 13/N [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 13/N [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: 7/E [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 7/E [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: 10/H [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 10/H [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: 16/R [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 16/R [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: 12/R [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 12/R [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: 8/T [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 8/T [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: 8/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 8/X [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: 16/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 16/X [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: 2/E [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 2/E [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 4 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: 18/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 18/M [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: 19/U [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 19/U [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: 26/Q [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 26/Q [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: 3/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 3/X [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: 19/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 19/Y [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: 22/W [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 22/W [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: 23/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 23/Y [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: 23/U [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 23/U [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: 20/M [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: 21/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 21/M [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: 25/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 25/M [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: 28/P [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 28/P [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: 26/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 26/Y [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: 22-23/M-P [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 22-23/M-P [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: 28/Q-Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 28/Q-Y [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 5 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: 9/N [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 9/N [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: 15/N [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 15/N [sharedJobs]
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: 11/B [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: 1/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 1/B [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: 4/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 4/B [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: 5/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 5/B [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: 11/B [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: 3/S [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 3/S [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: 11/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 11/B [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: 13/N [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 13/N [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: 7/E [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 7/E [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: 10/H [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 10/H [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: 12/T [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 12/T [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: 16/T [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 16/T [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: 8/T [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 8/T [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: 3/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 3/X [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: C32 [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: 8/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 8/X [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: 16/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 16/X [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: 2/E [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 2/E [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: 12/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 12/X [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 5 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: 18/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 18/M [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: 13/N [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: 19/U [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 19/U [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: 26/Q [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 26/Q [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: 19/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 19/Y [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: 22/W [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 22/W [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: 23/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 23/Y [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: 23/U [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 23/U [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: 21/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 21/M [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: 26/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 26/M [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: 28/P [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 28/P [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: 26/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 26/Y [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: 22-23/M-P [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 22-23/M-P [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: 28/Q-Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 28/Q-Y [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 5-6
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 6 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: 9/L [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 9/L [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: 15/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 15/M [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: 1-B [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: 1/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 1/B [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: 4/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 4/B [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: 5/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 5/B [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: 3/S [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 3/S [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: 11/B [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 11/B [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: 13/N [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 13/N [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: 7/E [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 7/E [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: 10/H [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 10/H [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: 12/T [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 12/T [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: 16/R [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 16/R [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: 8/T [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 8/T [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: 3/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 3/X [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: 8/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 8/X [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: 16/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 16/X [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: 2/E [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 2/E [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: 12/T [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: 12/X [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 12/X [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 6 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: 18/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 18/M [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: 19/U [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 19/U [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: 26/Q [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 26/Q [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: 19/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 19/Y [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: 22/W [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 22/W [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: 23/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 23/Y [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: 23/U [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 23/U [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: 20/M [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: 21/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 21/M [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: 25/M [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 25/M [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: 28/M [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: 28/P [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 28/P [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: 26/Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 26/Y [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: 22-23/M-P [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: 28/Q-Y [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: 28/Q-Y [sharedJobs]
+   📌 เสา: Core ST02
+       - โซน: ไม่มีโซน | Gridline: 22-23/M-P [generatedReports]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 6-7
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 7 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 7 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 7-8
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 8 โซน 1
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 8 โซน 2
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 8-9
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 9 โซน 1
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 9 โซน 2
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 10 โซน 1
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 10 โซน 2
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 11 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 11 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 12 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 12 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 13 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 13 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 14 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 14 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 15 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 15 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 16 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 16 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+
+🏢 พื้นชั้น 16 โซน 2
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 17 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 17 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 18 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 18 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 19 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 19 โซน 2
+   📌 เสา: C11
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C28
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C3
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C35
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C36
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C37
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C4
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C6
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C7
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C8
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CORE ST02
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: CW1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 20 โซน 1
+   📌 เสา: C1
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C10
+       - โซน: ไม่มีโซน | Gridline: 15/N [sharedJobs]
+   📌 เสา: C12
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C13
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C14
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C15
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C16
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C2
+       - โซน: ไม่มีโซน | Gridline: 13/O [sharedJobs]
+   📌 เสา: C24
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C25
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C29
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C30
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C31
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C32
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C33
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C34
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C5
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+   📌 เสา: C9
+       - โซน: ไม่มีโซน | Gridline: - [sharedJobs]
+       - โซน: ไม่มีโซน | Gridline: 12/X [sharedJobs]
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 20 โซน 2
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 9-10
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 10-11
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 11-12
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 12-13
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 13-14
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 14-15
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 15-16
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 16-17
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 17-18
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 18-19
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 19-20
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 20-21
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 21-22
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 22-23
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [generatedReports]
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+
+🏢 ชั้น 23-24
+   📌 เสา: ไม่มีชื่อเสา
+       - โซน: ไม่มีโซน | Gridline: ไม่มี Gridline [sharedJobs]
+

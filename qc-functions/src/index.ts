@@ -1793,12 +1793,11 @@ apiRouter.get("/projects/:projectId/shared-jobs", async (req: Request, res: Resp
     // const { projectId } = req.params; // (ประกาศซ้ำซ้อน)
 
     const jobsSnapshot = await db
-      .collection("projects") // <-- [สำคัญ] แก้ไข Collection หลักให้ถูกต้อง (ถ้าจำเป็น)
+      .collection("projects")
       .doc(projectId)
-      .collection("sharedJobs") // <-- สร้าง Subcollection ใหม่ชื่อ 'sharedJobs'
-      .where("status", "==", "pending") // <-- กรองเฉพาะงานที่ยังไม่เสร็จ
-      .orderBy("lastUpdatedAt", "desc") // <-- เรียงตามวันที่อัปเดตล่าสุด
-      // .limit(500) // <-- [แก้ไข] ปลด Limit ตามคำขอ (ระวังเรื่อง Performance ในระยะยาว)
+      .collection("sharedJobs")
+      .where("status", "in", ["pending", "completed"]) // <-- [แก้ไข] แสดงทั้ง pending และ completed เพื่อไม่ให้ card หายตอนถ่ายรูปครบ
+      .orderBy("lastUpdatedAt", "desc")
       .get();
 
     if (jobsSnapshot.empty) {

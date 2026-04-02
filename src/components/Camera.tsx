@@ -8,6 +8,7 @@ import styles from './Camera.module.css';
 import CustomModal from './CustomModal';
 import AutocompleteInput from './AutocompleteInput';
 import { useDialog } from '../contexts/DialogContext';
+import { COLUMN_OPTIONS } from '../utils/columnData';
 
 import {
   FiClipboard, FiSun, FiMapPin, FiCheckCircle, FiLoader,
@@ -603,34 +604,58 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
    * Example: Select "Room 1" -> Auto select "ECN-..." for "Code note"
    */
   const handleDynamicFieldChange = useCallback((fieldName: string, value: string) => {
-    // ✅ [แก้ไข] บังคับเป็นตัวพิมพ์ใหญ่ (Uppercase) เสมอ เพื่อแก้ปัญหาข้อมูล Case Sensitive
-    const upperValue = value ? value.toUpperCase() : '';
+    // บังคับเป็นตัวพิมพ์ใหญ่ ยกเว้นโซนที่ใช้ format ปกติ
+    // 🚨 เอาระบบ .trim() ออกตอนพิมพ์สดๆ เพื่อให้ User สามารถกด Spacebar พิมพ์เว้นวรรคได้
+    let finalValue = value ? value : '';
+    if (fieldName !== 'โซน') {
+        finalValue = finalValue.toUpperCase();
+    }
 
     setDynamicFields(prev => {
-      const newFields = { ...prev, [fieldName]: upperValue };
+      const newFields = { ...prev, [fieldName]: finalValue };
 
-      // DEBUG
-      console.log('📷 [Camera] Field Change:', fieldName, '=', upperValue);
-      console.log('📷 [Camera] Selected SubCat:', selectedSubCat);
+      // 💥 [MODIFIED] Auto-fill Logic for COLUMN_OPTIONS
+      if (selectedSubCat?.name === 'งานเสา' && fieldName === 'เสาเบอร์') {
+          const options = COLUMN_OPTIONS[finalValue];
+          if (options) {
+              if (options.length === 1) {
+                  // 1:1 match -> Auto fill and lock
+                  newFields['Gridline'] = options[0].gridline;
+                  newFields['โซน'] = options[0].zone;
+              } else {
+                  // 1:N match -> Clear them so user is forced to pick new Gridline
+                  newFields['Gridline'] = '';
+                  newFields['โซน'] = '';
+              }
+          } else {
+              // Not a valid column
+              newFields['Gridline'] = '';
+              newFields['โซน'] = '';
+          }
+      }
+
+      // If they manually pick a Gridline (for 1:N), auto-fill the Zone correctly
+      if (selectedSubCat?.name === 'งานเสา' && fieldName === 'Gridline' && newFields['เสาเบอร์']) {
+          const options = COLUMN_OPTIONS[newFields['เสาเบอร์']];
+          if (options) {
+             const matched = options.find(o => o.gridline === finalValue);
+             if (matched) {
+                 newFields['โซน'] = matched.zone;
+             }
+          }
+      }
 
       // 1. Check for dependencies using 'selectedSubCat'
       if (selectedSubCat && selectedSubCat.fieldDependencies) {
-        console.log('📷 [Camera] Dependencies found:', selectedSubCat.fieldDependencies);
         const dependency = selectedSubCat.fieldDependencies[fieldName];
         if (dependency) {
-          console.log('📷 [Camera] Dependency match!', dependency);
-          // ✅ [แก้ไข] ใช้ upperValue ในการ Lookup
-          const targetValue = dependency.mapping[upperValue];
-          console.log('📷 [Camera] Target Value:', targetValue);
-
+          const targetValue = dependency.mapping[finalValue];
           if (targetValue) {
             newFields[dependency.targetField] = targetValue;
-          } else if (upperValue === '' || upperValue === null) {
+          } else if (finalValue === '' || finalValue === null) {
             newFields[dependency.targetField] = '';
           }
         }
-      } else {
-        console.warn('📷 [Camera] No dependencies found in SubCat');
       }
       return newFields;
     });
@@ -1146,80 +1171,7 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
 
           {/* sharedJobs list removed as per new workflow */}
 
-          {/* ✅ [ใหม่] ปุ่มซ่อมแซมข้อมูล (Migration Tool) */}
-          <div style={{ marginTop: '30px', textAlign: 'center', padding: '20px', borderTop: '1px solid #eee' }}>
-            <p style={{ color: '#888', marginBottom: '10px', fontSize: '0.8rem' }}>เครื่องมือสำหรับผู้ดูแลระบบ</p>
-            <button
-              onClick={async () => {
-                const isConfirmed = await showConfirm('ยืนยันที่จะแปลงข้อมูลเก่าทั้งหมดเป็นตัวพิมพ์ใหญ่ (Uppercase)?\nการกระทำนี้จะแก้ไขข้อมูลในฐานข้อมูลทันที', 'ยืนยันการแปลงข้อมูล');
-                if (!isConfirmed) return;
-                setModalState({ title: 'กำลังประมวลผล...', message: 'กำลังซ่อมแซมข้อมูล...' });
-                try {
-                  const response = await api.getSharedJobs(projectId);
-                  if (response.success && response.data) {
-                    let updatedCount = 0;
-                    const jobs = response.data;
 
-                    for (const job of jobs) {
-                      let needsUpdate = false;
-                      const newDynamicFields: Record<string, string> = {};
-
-                      // 1. Check & Convert Fields
-                      for (const [key, value] of Object.entries(job.dynamicFields)) {
-                        if (value && value !== value.toUpperCase()) {
-                          needsUpdate = true;
-                          newDynamicFields[key] = value.toUpperCase();
-                        } else {
-                          newDynamicFields[key] = value;
-                        }
-                      }
-
-                      if (needsUpdate) {
-                        // 2. Re-generate ID/Label
-                        const sanitizeForFirestoreId = (str: string) => str.replace(/[\/\.\$\[\]#]/g, '_');
-
-                        const mainId = sanitizeForFirestoreId(job.mainCategory);
-                        const subId = sanitizeForFirestoreId(job.subCategory);
-                        const fieldValues = Object.keys(newDynamicFields).sort().map(k => newDynamicFields[k]).map(sanitizeForFirestoreId).join('_');
-                        const newId = `${mainId}_${subId}_${fieldValues}`;
-
-                        // 3. Prepare New Job Data
-                        const newJob = {
-                          ...job,
-                          id: newId, // New ID
-                          dynamicFields: newDynamicFields,
-                          label: [job.mainCategory, job.subCategory, ...Object.values(newDynamicFields)].join(' / ')
-                        };
-
-                        // 4. Save New & Delete Old
-                        await api.saveSharedJob(projectId, newJob);
-                        await api.deleteSharedJob(projectId, job.id); // ✅ Delete the old job
-                        updatedCount++;
-                      }
-                    }
-                    await showAlert(`✅ ซ่อมแซมข้อมูลเสร็จสิ้น!\nแก้ไขไปทั้งหมด ${updatedCount} รายการ`, 'สำเร็จ');
-                    fetchSharedJobs();
-                  }
-                } catch (e) {
-                  await showAlert('❌ เกิดข้อผิดพลาด: ' + (e as Error).message, 'เกิดข้อผิดพลาด');
-                } finally {
-                  setModalState(null);
-                }
-              }}
-              style={{
-                background: '#f8f9fa',
-                border: '1px dashed #ccc',
-                color: '#dc3545',
-                padding: '10px 15px',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                fontWeight: 'bold'
-              }}
-            >
-              🔧 Fix Data Case (เปลี่ยนเป็นตัวพิมพ์ใหญ่)
-            </button>
-          </div>
         </div>
       )}
 
@@ -1309,15 +1261,103 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
         <div className={styles['wizard-step']}>
           <h2>4. กรอกข้อมูลเพิ่มเติม</h2>
           {renderChecklistHeader()}
-          {requiredDynamicFields.map((fieldConfig: string | any) => {
+          {(() => {
+              let fieldsToRender = [...requiredDynamicFields];
+              if (selectedSubCategory === 'งานเสา') {
+                  const getLabel = (f: any) => typeof f === 'string' ? f : f.label;
+                  
+                  if (!fieldsToRender.find(f => getLabel(f) === 'โซน')) {
+                      fieldsToRender.push('โซน');
+                  }
+                  
+                  // Reorder to put 'ชั้น' before 'เสาเบอร์'
+                  const floorIndex = fieldsToRender.findIndex(f => getLabel(f) === 'ชั้น');
+                  const colIndex = fieldsToRender.findIndex(f => getLabel(f) === 'เสาเบอร์');
+                  if (floorIndex > -1 && colIndex > -1 && floorIndex > colIndex) {
+                      const temp = fieldsToRender[floorIndex];
+                      fieldsToRender[floorIndex] = fieldsToRender[colIndex];
+                      fieldsToRender[colIndex] = temp;
+                  }
+              }
+              return fieldsToRender;
+          })().map((fieldConfig: string | any) => {
             const fieldLabel = typeof fieldConfig === 'string' ? fieldConfig : fieldConfig.label;
             const staticOptions = (typeof fieldConfig === 'object' && fieldConfig.options) ? fieldConfig.options : [];
-            const suggestions = [
+            let suggestions = [
               ...staticOptions,
               ...(fieldSuggestions[fieldLabel] || [])
             ];
-            // Remove duplicates
+
+            // 🚨 Clean "โซน" out of Floor suggestions dynamically to remove legacy dirty data
+            if (fieldLabel === 'ชั้น') {
+                suggestions = suggestions.map(s => s.replace(/\s*(โซน|zone)\s*[a-zA-Z0-9-]+\s*/ig, ' ').trim()).filter(Boolean);
+            }
+
             const uniqueSuggestions = Array.from(new Set(suggestions));
+
+            if (selectedSubCategory === 'งานเสา') {
+               if (fieldLabel === 'เสาเบอร์') {
+                   return (
+                      <div className={styles['form-group']} key={fieldLabel}>
+                        <label>{fieldLabel}</label>
+                        <AutocompleteInput
+                          strict={true}
+                          value={dynamicFields[fieldLabel] || ''}
+                          onChange={(value) => handleDynamicFieldChange(fieldLabel, value)}
+                          suggestions={Object.keys(COLUMN_OPTIONS)}
+                          placeholder="ค้นหาหรือเลือกเสาเบอร์..."
+                        />
+                      </div>
+                   );
+               }
+               if (fieldLabel === 'Gridline') {
+                   const selCol = dynamicFields['เสาเบอร์'];
+                   const colOpts = COLUMN_OPTIONS[selCol] || [];
+                   const isLocked = colOpts.length <= 1;
+
+                   return (
+                      <div className={styles['form-group']} key={fieldLabel}>
+                        <label>{fieldLabel}</label>
+                        {isLocked ? (
+                            <input 
+                              type="text" 
+                              style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '16px', backgroundColor: '#f5f5f5', color: '#666' }}
+                              value={dynamicFields[fieldLabel] || ''} 
+                              disabled 
+                              placeholder="เลือกเสาเบอร์เพื่อแสดงข้อมูลออโต้" 
+                            />
+                        ) : (
+                            <select 
+                              className={styles['select-input']} 
+                              style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '16px' }}
+                              value={dynamicFields[fieldLabel] || ''} 
+                              onChange={(e) => handleDynamicFieldChange(fieldLabel, e.target.value)}
+                            >
+                               <option value="">-- เลือก Gridline --</option>
+                               {colOpts.map((opt, i) => (
+                                   // Added i index as fallback key to avoid react duplicate key warnings in extreme cases
+                                   <option key={opt.gridline + '-' + i} value={opt.gridline}>{opt.gridline}</option>
+                               ))}
+                            </select>
+                        )}
+                      </div>
+                   );
+               }
+               if (fieldLabel === 'โซน') {
+                   return (
+                      <div className={styles['form-group']} key={fieldLabel}>
+                        <label>{fieldLabel}</label>
+                        <input 
+                          type="text" 
+                          style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '16px', backgroundColor: '#f5f5f5', color: '#666' }}
+                          value={dynamicFields[fieldLabel] || ''} 
+                          disabled 
+                          placeholder="อิงตาม Gridline อัตโนมัติ" 
+                        />
+                      </div>
+                   );
+               }
+            }
 
             return (
               <div className={styles['form-group']} key={fieldLabel}>

@@ -8,6 +8,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Reports.module.css';
 import { useDialog } from '../contexts/DialogContext';
 import AutocompleteInput from './AutocompleteInput';
+import { COLUMN_OPTIONS } from '../utils/columnData';
 import JSZip from 'jszip';
 
 import { FiFileText, FiDownload, FiSearch, FiRefreshCw, FiActivity, FiCheckCircle, FiClock, FiChevronRight, FiChevronDown, FiChevronUp, FiZoomIn, FiZoomOut, FiEyeOff, FiEye, FiSave, FiAlertTriangle, FiLoader, FiDownloadCloud, FiClipboard, FiSun, FiPlus, FiInbox, FiX, FiEdit2, FiTrash2 } from 'react-icons/fi';
@@ -714,36 +715,59 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
    * Example: Select "Room 1" -> Auto select "ECN-..." for "Code note"
    */
   const handleDynamicFieldChange = useCallback((fieldName: string, value: string) => {
-    // ✅ [Fix] Force Uppercase AND Trim to match Backend exactly
-    // Note: We trim here to ensure state consistency, but user might want to type space? 
-    // Actually, for Room/Floor, space at the end is usually an error.
-    const upperValue = value ? value.toUpperCase().trim() : '';
+    // 🚨 เอาระบบ .trim() ออกตอนพิมพ์สดๆ เพื่อให้ User สามารถกด Spacebar พิมพ์เว้นวรรคได้
+    let finalValue = value ? value : '';
+    if (fieldName !== 'โซน') {
+        finalValue = finalValue.toUpperCase();
+    }
 
     setDynamicFields(prev => {
-      const newFields = { ...prev, [fieldName]: upperValue };
+      const newFields = { ...prev, [fieldName]: finalValue };
+
+      // 💥 [MODIFIED] Auto-fill Logic for COLUMN_OPTIONS
+      if (formData.subCategory === 'งานเสา' && fieldName === 'เสาเบอร์') {
+          const options = COLUMN_OPTIONS[finalValue];
+          if (options) {
+              if (options.length === 1) {
+                  // 1:1 match -> Auto fill and lock
+                  newFields['Gridline'] = options[0].gridline;
+                  newFields['โซน'] = options[0].zone;
+              } else {
+                  // 1:N match -> Clear them so user is forced to pick new Gridline
+                  newFields['Gridline'] = '';
+                  newFields['โซน'] = '';
+              }
+          } else {
+              // Not a valid column
+              newFields['Gridline'] = '';
+              newFields['โซน'] = '';
+          }
+      }
+
+      // If they manually pick a Gridline (for 1:N), auto-fill the Zone correctly
+      if (formData.subCategory === 'งานเสา' && fieldName === 'Gridline' && newFields['เสาเบอร์']) {
+          const options = COLUMN_OPTIONS[newFields['เสาเบอร์']];
+          if (options) {
+             const matched = options.find(o => o.gridline === finalValue);
+             if (matched) {
+                 newFields['โซน'] = matched.zone;
+             }
+          }
+      }
 
       // 1. Find current SubCategory config
-      // [FIX] Use qcTopics directly to avoid "used before declaration" error
       const selectedMain = qcTopics.find(m => m.name === formData.mainCategory);
       const currentSubCats = selectedMain ? selectedMain.subCategories : [];
       const subCat = currentSubCats.find(s => s.name === formData.subCategory);
 
-      // DEBUG: Check if we have dependencies
-      // console.log('Handling change:', fieldName, upperValue);
-      // console.log('Current SubCat:', subCat);
-
       // 2. Check for dependencies
       if (subCat && subCat.fieldDependencies) {
         const dependency = subCat.fieldDependencies[fieldName];
-        // console.log('Found dependency:', dependency);
-
         if (dependency) {
-          const targetValue = dependency.mapping[upperValue];
-          // console.log('Target Value:', targetValue);
-
+          const targetValue = dependency.mapping[finalValue];
           if (targetValue) {
             newFields[dependency.targetField] = targetValue;
-          } else if (upperValue === '' || upperValue === null) {
+          } else if (finalValue === '' || finalValue === null) {
             newFields[dependency.targetField] = '';
           }
         }
@@ -1155,14 +1179,103 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
               <div className={styles.formGroup}>
                 <h4 className={styles.subheading}>ข้อมูลเพิ่มเติม:</h4>
                 <div className={styles.smallGridContainer}>
-                  {requiredDynamicFields.map((fieldConfig: any) => { // Fixed type any for simplicity or keep original
-                    const fieldLabel = typeof fieldConfig === 'string' ? fieldConfig : fieldConfig.label;
-                    const staticOptions = (typeof fieldConfig === 'object' && fieldConfig.options) ? fieldConfig.options : [];
-                    const suggestions = [
+                  {(() => {
+                      let fieldsToRender = [...requiredDynamicFields];
+                      if (formData.subCategory === 'งานเสา') {
+                          const getLabel = (f: any) => typeof f === 'string' ? f : f?.label;
+                          
+                          if (!fieldsToRender.find(f => getLabel(f) === 'โซน')) {
+                              fieldsToRender.push('โซน');
+                          }
+                          
+                          const floorIndex = fieldsToRender.findIndex(f => getLabel(f) === 'ชั้น');
+                          const colIndex = fieldsToRender.findIndex(f => getLabel(f) === 'เสาเบอร์');
+                          if (floorIndex > -1 && colIndex > -1 && floorIndex > colIndex) {
+                              const temp = fieldsToRender[floorIndex];
+                              fieldsToRender[floorIndex] = fieldsToRender[colIndex];
+                              fieldsToRender[colIndex] = temp;
+                          }
+                      }
+                      return fieldsToRender;
+                  })().map((fieldConfig: any) => { // Fixed type any for simplicity or keep original
+                    const fieldLabel = typeof fieldConfig === 'string' ? fieldConfig : fieldConfig?.label;
+                    const staticOptions = (typeof fieldConfig === 'object' && fieldConfig?.options) ? fieldConfig.options : [];
+                    let suggestions = [
                       ...staticOptions,
                       ...(fieldSuggestions[fieldLabel] || [])
                     ];
+
+                    if (fieldLabel === 'ชั้น') {
+                        suggestions = suggestions.map(s => s.replace(/\s*(โซน|zone)\s*[a-zA-Z0-9-]+\s*/ig, ' ').trim()).filter(Boolean);
+                    }
+
                     const uniqueSuggestions = Array.from(new Set(suggestions));
+
+                    if (formData.subCategory === 'งานเสา') {
+                       if (fieldLabel === 'เสาเบอร์') {
+                           return (
+                              <div key={fieldLabel}>
+                                <label className={styles.smallLabel}>{fieldLabel}:</label>
+                                <AutocompleteInput
+                                  strict={true}
+                                  value={dynamicFields[fieldLabel] || ''}
+                                  onChange={(value) => handleDynamicFieldChange(fieldLabel, value)}
+                                  suggestions={Object.keys(COLUMN_OPTIONS)}
+                                  placeholder="ค้นหาหรือเลือกเสาเบอร์..."
+                                  className={styles.formInput}
+                                />
+                              </div>
+                           );
+                       }
+                       if (fieldLabel === 'Gridline') {
+                           const selCol = dynamicFields['เสาเบอร์'];
+                           const colOpts = COLUMN_OPTIONS[selCol] || [];
+                           const isLocked = colOpts.length <= 1;
+
+                           return (
+                              <div key={fieldLabel}>
+                                <label className={styles.smallLabel}>{fieldLabel}:</label>
+                                {isLocked ? (
+                                    <input 
+                                      type="text" 
+                                      className={styles.formInput} 
+                                      style={{ backgroundColor: '#f5f5f5', color: '#666' }}
+                                      value={dynamicFields[fieldLabel] || ''} 
+                                      disabled 
+                                      placeholder="ออโต้" 
+                                    />
+                                ) : (
+                                    <select 
+                                      className={styles.formInput} 
+                                      style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+                                      value={dynamicFields[fieldLabel] || ''} 
+                                      onChange={(e) => handleDynamicFieldChange(fieldLabel, e.target.value)}
+                                    >
+                                       <option value="">-- เลือก Gridline --</option>
+                                       {colOpts.map((opt, i) => (
+                                           <option key={opt.gridline + '-' + i} value={opt.gridline}>{opt.gridline}</option>
+                                       ))}
+                                    </select>
+                                )}
+                              </div>
+                           );
+                       }
+                       if (fieldLabel === 'โซน') {
+                           return (
+                              <div key={fieldLabel}>
+                                <label className={styles.smallLabel}>{fieldLabel}:</label>
+                                <input 
+                                  type="text" 
+                                  className={styles.formInput} 
+                                  style={{ backgroundColor: '#f5f5f5', color: '#666' }}
+                                  value={dynamicFields[fieldLabel] || ''} 
+                                  disabled 
+                                  placeholder="ออโต้" 
+                                />
+                              </div>
+                           );
+                       }
+                    }
 
                     return (
                       <div key={fieldLabel}>
@@ -1285,8 +1398,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
                 matchesDynamic = Object.entries(dynamicFields).every(([key, value]) => {
                   if (!value) return true; // Skip empty fields
                   const itemValue = item.dynamicFields[key];
-                  // Partial match (case-insensitive)
-                  return itemValue && String(itemValue).toLowerCase().includes(String(value).toLowerCase());
+                  // Exact match (case-insensitive and trimmed)
+                  return itemValue && String(itemValue).toLowerCase().trim() === String(value).toLowerCase().trim();
                 });
               }
 

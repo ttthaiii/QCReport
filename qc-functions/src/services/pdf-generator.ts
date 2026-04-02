@@ -20,7 +20,7 @@ function createStableQcId(
   dynamicFields: Record<string, string>
 ): string {
   const sortedFields = Object.keys(dynamicFields || {}).sort()
-    .map(key => `${key}=${(dynamicFields[key] || '').toLowerCase().trim()}`) // <-- ✅ ต้องแก้บรรทัดนี้
+    .map(key => `${key}=${(dynamicFields[key] || '').toUpperCase().trim()}`) // <-- ✅ เปลี่ยนเป็น toUpperCase
     .join('&');
   const rawId = `${projectId}|${category}|${topic}|${sortedFields}`;
   return createHash('md5').update(rawId).digest('hex');
