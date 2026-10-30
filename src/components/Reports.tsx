@@ -798,10 +798,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
 
     try {
       // ✅ แก้ไข: รวม projectId เข้าไปใน object
-      // ✅ [Fix] ส่ง selectedPhotoIds ที่เหมาะสมกับประเภทรายงานไปให้ Backend
-      const finalSelectedPhotos = filterData.reportType === 'QC'
-        ? (selectedQcPhotoIds.size > 0 ? Array.from(selectedQcPhotoIds) : undefined)
-        : filterData.selectedPhotoIds;
+      // ✅ [Fix] ส่ง selectedPhotoIds ที่ถูกส่งมาใน filterData เท่านั้น (ไม่แอบดึงจาก selectedQcPhotoIds อีกแล้ว)
+      const finalSelectedPhotos = filterData.selectedPhotoIds;
 
       const response = await api.generateReport({
         projectId,      // ← เพิ่มบรรทัดนี้
@@ -849,7 +847,8 @@ const Reports: React.FC<ReportsProps> = ({ projectId, projectName, projectConfig
       mainCategory: report.mainCategory,
       subCategory: report.subCategory,
       dynamicFields: report.dynamicFields,
-      date: report.reportDate
+      date: report.reportDate,
+      selectedPhotoIds: [] // <-- ข้ามการเช็ค selectedQcPhotoIds เพื่ออัปเดตเอารูปใหม่ทั้งหมด
     };
     await runGenerateReport(filterDataFromReport);
   };

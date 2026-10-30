@@ -1482,8 +1482,8 @@ const Camera: React.FC<CameraProps> = ({ qcTopics, projectId, projectName }) => 
                       setModalState(null);
                       if (response.success && response.data) {
                         setPreviewData({
-                          url: response.data.driveUrl, // ✅ Changed to driveUrl
-                          timestamp: response.data.createdAt, // ✅ Changed to createdAt
+                          url: response.data.driveUrl || (response.data as any).url || (response.data as any).publicUrl || '',
+                          timestamp: response.data.createdAt,
                           location: response.data.location || null,
                           addWatermark: false
                         });

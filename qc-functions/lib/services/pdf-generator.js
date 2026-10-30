@@ -811,7 +811,7 @@ async function generateOptimizedPDF(finalHtml) {
         page = await browser.newPage();
         await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 2 });
         await page.setJavaScriptEnabled(false);
-        await page.setContent(finalHtml, { waitUntil: ['domcontentloaded'], timeout: 45000 });
+        await page.setContent(finalHtml, { waitUntil: ['networkidle0', 'load', 'domcontentloaded'], timeout: 45000 });
         const pdfUint8Array = await page.pdf({
             format: 'A4',
             printBackground: true,
@@ -878,7 +878,7 @@ async function uploadPDFToStorage(pdfBuffer, reportData, reportType, filename) {
         await file.save(pdfBuffer, {
             metadata: {
                 contentType: 'application/pdf',
-                cacheControl: 'public, max-age=604800', // ✅ Cache 1 สัปดาห์ (ประหยัด Bandwidth)
+                cacheControl: 'public, max-age=0, must-revalidate', // ✅ เปลียนเป็นไม่ cache เพื่อให้เวลาเปิดลิงก์เดิมได้ไฟล์ล่าสุดเสมอ
             },
             public: true,
         });

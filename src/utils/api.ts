@@ -823,7 +823,6 @@ export const api = {
   // [ใหม่] 6. เพิ่มฟังก์ชัน 'getPhotosByProject' ที่หายไป
   getPhotosByProject: async (projectId: string): Promise<ApiResponse<Photo[]>> => {
     try {
-      // (Endpoint นี้อ้างอิงจาก index.ts ของคุณ `app.get("/photos/:projectId", ...)` )
       const data = await fetchWithAuth(`/photos/${projectId}`, { method: 'GET' });
       return data;
     } catch (error: any) {
@@ -885,50 +884,20 @@ export const api = {
   },
 
   // [ใหม่] 7. ดึงรูปภาพล่าสุดของ Topic (สำหรับปุ่ม "ดูรูป" ใน Camera)
+  // ✅ [แก้ไข] Query ตรงที่ Firestore ด้วย filter (topic/category/dynamicFields) แทนการดึงรูปทั้งโปรเจกต์มา filter ที่ browser
+  //    (โปรเจกต์ที่มีรูปสะสมหลักหมื่น เคยทำให้ endpoint เดิมช้าจนหลุด/ตัด connection)
   getLatestPhotoForTopic: async (projectId: string, topicName: string, category: string, dynamicFields: Record<string, string> = {}): Promise<ApiResponse<Photo>> => {
     try {
-      const allPhotosRes = await api.getPhotosByProject(projectId);
-      if (!allPhotosRes.success || !allPhotosRes.data) {
-        throw new Error(allPhotosRes.error || 'Failed to fetch photos');
-      }
-
-      // หา Topic ที่ตรงกัน และใหม่ที่สุด
-      // หมายเหตุ: category ใน Photo saved format คือ "Main > Sub"
-      const matchedPhotos = allPhotosRes.data.filter((p: any) => { // Cast as any because dynamicFields might not be fully typed in allPhotosRes yet
-        const isTopicMatch = p.topic === topicName;
-        const isCategoryMatch = p.reportType === 'QC' ? (p.category === category) : true;
-
-        // ✅ [แก้ไข] Check Dynamic Fields
-        let isFieldsMatch = true;
-        if (p.reportType === 'QC' && p.dynamicFields) {
-          // Compare provided dynamicFields with photo's dynamicFields
-          const photoFields = p.dynamicFields as Record<string, string>;
-          const requestFields = dynamicFields;
-
-          // Check if all requested fields match the photo's fields
-          // (Simple JSON stringify comparison might work if keys are sorted, but strict key checking is safer)
-          if (Object.keys(requestFields).length > 0) {
-            for (const key of Object.keys(requestFields)) {
-              if (photoFields[key] !== requestFields[key]) {
-                isFieldsMatch = false;
-                break;
-              }
-            }
-          }
-        }
-
-        return isTopicMatch && isCategoryMatch && isFieldsMatch;
+      const params = new URLSearchParams({
+        topic: topicName,
+        category: category.replace(/\s*>\s*/g, ' > ').trim(),
       });
-
-      if (matchedPhotos.length === 0) {
-        return { success: false, error: 'Photo not found' };
+      if (dynamicFields && Object.keys(dynamicFields).length > 0) {
+        params.set('dynamicFields', JSON.stringify(dynamicFields));
       }
 
-      // เรียงจากใหม่ไปเก่า
-      matchedPhotos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-      return { success: true, data: matchedPhotos[0] };
-
+      const data = await fetchWithAuth(`/projects/${projectId}/latest-photo?${params.toString()}`, { method: 'GET' });
+      return data;
     } catch (error: any) {
       return { success: false, error: error.message };
     }

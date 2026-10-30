@@ -56,6 +56,7 @@ export async function uploadPhotoToStorage(uploadData: UploadData): Promise<Uplo
     
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath)}`;
 
+
     console.log(`Successfully uploaded file. Public URL: ${publicUrl}`);
 
     return {

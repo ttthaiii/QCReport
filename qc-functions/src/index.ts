@@ -1091,6 +1091,78 @@ apiRouter.get("/projects/:projectId/qc-photos", async (req: Request, res: Respon
   }
 });
 
+// ✅ [ใหม่] ดึงรูปล่าสุดของ Topic เดียว ด้วย Firestore query filter ตรงๆ
+// (แทนที่การดึงรูปทั้งโปรเจกต์มา filter ที่ browser ซึ่งช้ามากถ้าโปรเจกต์มีรูปสะสมหลักหมื่น)
+apiRouter.get("/projects/:projectId/latest-photo", async (req: Request, res: Response): Promise<Response> => {
+  const user = (req as any).user;
+  const { projectId } = req.params;
+  const { topic, category, dynamicFields: dynamicFieldsStr } = req.query;
+
+  if (user.role !== 'god' && user.assignedProjectId !== projectId) {
+    return res.status(403).json({ success: false, error: 'Access denied.' });
+  }
+
+  if (!topic || !category || typeof topic !== 'string' || typeof category !== 'string') {
+    return res.status(400).json({ success: false, error: 'Missing required parameters (topic, category).' });
+  }
+
+  let dynamicFields: Record<string, string> = {};
+  if (typeof dynamicFieldsStr === 'string' && dynamicFieldsStr.trim() !== '') {
+    try {
+      dynamicFields = JSON.parse(dynamicFieldsStr);
+    } catch (e) {
+      return res.status(400).json({ success: false, error: 'Invalid dynamicFields format.' });
+    }
+  }
+
+  try {
+    let query = db.collection('qcPhotos')
+      .where('projectId', '==', projectId)
+      .where('category', '==', category)
+      .where('topic', '==', topic);
+
+    Object.keys(dynamicFields).forEach(key => {
+      const value = dynamicFields[key];
+      if (value) {
+        query = query.where(`dynamicFields.${key}`, '==', value);
+      }
+    });
+
+    const snapshot = await query.get();
+
+    if (snapshot.empty) {
+      return res.status(404).json({ success: false, error: 'Photo not found' });
+    }
+
+    let latestDoc: any = null;
+    snapshot.forEach(doc => {
+      if (!latestDoc) {
+        latestDoc = doc;
+        return;
+      }
+      const existingTime = latestDoc.data().createdAt?.toMillis?.() || 0;
+      const newTime = doc.data().createdAt?.toMillis?.() || 0;
+      if (newTime > existingTime) {
+        latestDoc = doc;
+      }
+    });
+
+    const data = latestDoc.data();
+
+    return res.json({
+      success: true,
+      data: {
+        id: latestDoc.id,
+        ...data,
+        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching latest photo for topic:", error);
+    return res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 // ✅ [แก้ไข] Generate PDF report (v8 - with Dynamic Settings)
 apiRouter.post("/generate-report", async (req: Request, res: Response): Promise<Response> => {
   const user = (req as any).user;
@@ -1348,7 +1420,7 @@ apiRouter.get("/photos/:projectId", async (req: Request, res: Response): Promise
       photos.push({
         id: doc.id,
         ...data,
-        createdAt: data.createdAt.toDate().toISOString()
+        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
       });
     });
 
@@ -1357,7 +1429,7 @@ apiRouter.get("/photos/:projectId", async (req: Request, res: Response): Promise
       photos.push({
         id: doc.id,
         ...data,
-        createdAt: data.createdAt.toDate().toISOString()
+        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
       });
     });
 
